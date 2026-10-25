@@ -50,7 +50,9 @@ namespace YLFramework.Editor.Help
             });
         }
 
+        /// <summary>确认方法或访问器属于帮助窗口展示的 public、protected 或 protected internal 范围。</summary>
         private static bool Accessible(MethodBase method) => method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly;
+        /// <summary>将已选定可见方法的访问级别转换为声明前缀。</summary>
         private static string Access(MethodBase method) => method.IsPublic ? "public " : method.IsFamilyOrAssembly ? "protected internal " : "protected ";
 
         /// <summary>格式化类型名；指定的模块命名空间使用短名，其他外部类型保留限定名。</summary>
@@ -228,11 +230,13 @@ namespace YLFramework.Editor.Help
             throw new ArgumentException("不支持的 API 成员：" + member);
         }
 
+        /// <summary>从方法元数据选择静态、覆写或虚方法修饰符，接口成员不额外展示隐含的 abstract。</summary>
         private static string Modifiers(MethodInfo method) => method.IsStatic ? "static " :
             method.GetBaseDefinition() != method ? (method.IsFinal ? "sealed override " : "override ") :
             method.IsAbstract && !method.DeclaringType.IsInterface ? "abstract " :
             method.IsVirtual && !method.IsFinal && !method.DeclaringType.IsInterface ? "virtual " : "";
 
+        /// <summary>组织声明参数列表，从元数据读取扩展接收者、参数数组、引用方式与可选默认值。</summary>
         private static string Parameters(MethodBase method, string[] shortNamespaces)
         {
             var extension = method.IsDefined(typeof(ExtensionAttribute), false);
@@ -243,6 +247,7 @@ namespace YLFramework.Editor.Help
                 (parameter.HasDefaultValue ? " = " + Literal(parameter.DefaultValue, shortNamespaces) : "")));
         }
 
+        /// <summary>按泛型参数元数据组织 where 子句，避免为 struct 再重复输出 ValueType 或 new()。</summary>
         private static string Constraints(Type[] arguments, string[] shortNamespaces)
         {
             var result = "";
@@ -275,6 +280,7 @@ namespace YLFramework.Editor.Help
             return result;
         }
 
+        /// <summary>把编译元数据中的常量或默认值转为展示文本，使用固定区域格式避免本机语言影响数值。</summary>
         private static string Literal(object value, string[] shortNamespaces)
         {
             if (value == null)
@@ -320,6 +326,7 @@ namespace YLFramework.Editor.Help
         /// <summary>模块覆盖优先于 XML 的字段级合并说明。</summary>
         public readonly HelpDocumentation Help;
 
+        /// <summary>为一个真实成员建立展示签名和类别，保存已由索引构建流程合并的说明。</summary>
         internal HelpApiMember(MemberInfo member, string[] shortNamespaces, HelpDocumentation help)
         {
             Member = member;
@@ -335,6 +342,7 @@ namespace YLFramework.Editor.Help
         public string SearchText => Signature + "\n" + HelpApiIndex.DocumentationText(Help);
 
         /// <summary>把成员名、所属类型、说明与签名按权重加入评分字段。</summary>
+        /// <param name="fields">追加搜索字段的调用方缓冲；本方法不清空已有内容。</param>
         /// <param name="owner">声明类型的短名；为空时跳过。</param>
         /// <param name="includeDocumentation">false 时只加入名称类字段，用于判断查询词是否已被类型上下文覆盖。</param>
         internal void AppendSearchFields(List<HelpSearchField> fields, string owner, bool includeDocumentation = true)
@@ -384,6 +392,7 @@ namespace YLFramework.Editor.Help
         /// <summary>跨程序集不冲突的类型身份。</summary>
         public string Id => Type.AssemblyQualifiedName;
 
+        /// <summary>为明确选定的类型建立直接声明成员索引，合并真实文档并按实际 Type 关联页面。</summary>
         internal HelpApiType(HelpApiTypeDefinition definition, string[] shortNamespaces, HelpPage[] pages,
             HelpXmlDocumentation xml, Func<MemberInfo, HelpDocumentation> documentation)
         {
@@ -408,6 +417,7 @@ namespace YLFramework.Editor.Help
         public bool Matches(string search) => HelpSearch.Contains(SearchText, search);
 
         /// <summary>把类型名、限定名、分组、说明与声明按权重加入评分字段；可选纳入成员字段供全局搜索。</summary>
+        /// <param name="fields">追加搜索字段的调用方缓冲；本方法不清空已有内容。</param>
         /// <param name="includeMembers">true 时加入成员名、成员说明与签名，使命中成员的查询能显示该类型。</param>
         /// <param name="includeDocumentation">false 时只加入名称与声明等身份字段，用于判断查询词是否已被类型上下文覆盖。</param>
         internal void AppendSearchFields(List<HelpSearchField> fields, bool includeMembers, bool includeDocumentation = true)
@@ -478,6 +488,7 @@ namespace YLFramework.Editor.Help
             return definitions.Select(definition => new HelpApiType(definition, shortNamespaces, pages, xml, module.Documentation)).ToArray();
         }
 
+        /// <summary>组合摘要与其他已提供的说明，供字面搜索使用，不补造缺失文档。</summary>
         internal static string DocumentationText(HelpDocumentation help) => help.Summary + "\n" + DocumentationNotes(help);
 
         /// <summary>摘要之外的说明文本：返回值、备注与参数/类型参数说明。</summary>

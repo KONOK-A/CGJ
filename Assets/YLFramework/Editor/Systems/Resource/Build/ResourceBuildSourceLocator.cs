@@ -5,8 +5,10 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>用报告保存的来源身份重新定位当前定义，不按旧列表下标误选其他内容。</summary>
     internal static class ResourceBuildSourceLocator
     {
+        /// <summary>复验项目、目录和选择或规则定义后返回当前索引，不适用的选择或规则索引为 -1。</summary>
         internal static (int Group, int Selection, int Rule) Resolve(ResourceProject project, ResourceBuildSource source)
         {
             if (!project || source == null || AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) != source.ProjectGuid ||

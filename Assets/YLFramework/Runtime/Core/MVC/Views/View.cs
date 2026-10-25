@@ -7,6 +7,11 @@ using ApplicationTool = YLFramework.Foundation.ApplicationTool;
 
 namespace YLFramework.Core
 {
+    /// <summary>由 Module 显式纳管的表现组件，以会话区分同一 Unity 实例的多次加载与退出。</summary>
+    /// <remarks>
+    /// Model 绑定仅借用已完成的注册，不取得数据所有权。
+    /// 在 Awake 中通过 RegisterEvent 声明监听；仅加载完成且启用时订阅，停用或退出时退订，重新启用会建立新一轮订阅。
+    /// </remarks>
     [DisallowMultipleComponent]
     public abstract class View : MonoBehaviour
     {
@@ -43,12 +48,12 @@ namespace YLFramework.Core
         #region 属性
 
         /// <summary>
-        /// 唯一标识(只读)
+        /// 当前注册使用的 Unity 实例 ID；无会话时直接读取组件实例 ID，不作为跨实例的业务 ID。
         /// </summary>
         public int Id => Session != null ? RegisteredId : GetInstanceID();
 
         /// <summary>
-        /// 当前View所在的模块
+        /// 当前表现会话的所属模块；场景层级或父对象不会自动决定归属，解除注册后为 null。
         /// </summary>
         public Module Module
         {
@@ -166,6 +171,7 @@ namespace YLFramework.Core
 
         #region 事件
 
+        /// <summary>已加载会话移除时的实例内通知；发生在解绑及索引撤销前，退出后清空，不沿用到下一会话。</summary>
         [Tooltip("View被移除时触发")]
         public Action ViewRemoved;
 
@@ -173,12 +179,13 @@ namespace YLFramework.Core
 
         #region 生命周期
 
+        /// <summary>保留派生类的 Unity 启动扩展点，不在此根据层级自动纳管 View。</summary>
         [MustCallBase("在重写Start方法时,请通过 base.Start() 调用父类中的Start方法!")]
         protected virtual void Start()
         {
-            // 场景及动态新增对象由Module显式挂载，Start不推断业务归属。
         }
 
+        /// <summary>运行期销毁时结束仍有效的表现会话；初始化中的销毁交由持有事务的加载入口回滚。</summary>
         private void OnDestroy()
         {
             if (!ApplicationTool.IsPlaying)
@@ -193,17 +200,18 @@ namespace YLFramework.Core
 
             if (Module != null && Session != null)
             {
-                // 移除View
                 ViewManager.RemoveView(Module, this, Session, true);
             }
         }
 
 
+        /// <summary>启用时尝试恢复已加载会话的事件；早于加载发生时暂不订阅。</summary>
         private void OnEnable()
         {
             RegisterEvents();
         }
 
+        /// <summary>停用时结束当前订阅轮次，不移除表现会话或 Model 绑定。</summary>
         private void OnDisable()
         {
             UnregisterEvents();
@@ -254,7 +262,7 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 加载完成的回调(可以在当前方法中做一些数据更新的逻辑)
+        /// 初始化中的旧版参数回调，先于 LoadViewArgs 回调执行；返回后仍须通过会话有效性检查。
         /// </summary>
         /// <param name="param">加载View时传递的参数</param>
         public virtual void OnLoaded(params object[] param)
@@ -268,7 +276,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// View被回收 或 被移除时调用
+        /// 正常退出或初始化失败回滚时执行的业务清理钩子；此时已停止表现事件，但归属尚未撤销。
         /// </summary>
         public virtual void OnRemove()
         {
@@ -288,8 +296,8 @@ namespace YLFramework.Core
         private readonly List<(EventKey Key, Type Signature, Func<Func<bool>, IUnregister> Subscribe)> _eventDeclarations = new();
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的无参监听，供表现会话启用时订阅。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent(string eventName, Action callback)
         {
@@ -303,8 +311,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的无参监听，供表现会话启用时订阅。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent(int eventId, Action callback)
         {
@@ -318,8 +326,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的单参监听，参数类型须与该键的通道签名一致。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1>(string eventName, Action<T1> callback)
         {
@@ -333,8 +341,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的单参监听，参数类型须与该键的通道签名一致。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1>(int eventId, Action<T1> callback)
         {
@@ -348,8 +356,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的双参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2>(string eventName, Action<T1, T2> callback)
         {
@@ -363,8 +371,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的双参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2>(int eventId, Action<T1, T2> callback)
         {
@@ -378,8 +386,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的三参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3>(string eventName, Action<T1, T2, T3> callback)
         {
@@ -393,8 +401,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的三参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3>(int eventId, Action<T1, T2, T3> callback)
         {
@@ -408,8 +416,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的四参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4>(string eventName, Action<T1, T2, T3, T4> callback)
         {
@@ -423,8 +431,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的四参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4>(int eventId, Action<T1, T2, T3, T4> callback)
         {
@@ -438,8 +446,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的五参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4, T5>(string eventName, Action<T1, T2, T3, T4, T5> callback)
         {
@@ -453,8 +461,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的五参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4, T5>(int eventId, Action<T1, T2, T3, T4, T5> callback)
         {
@@ -468,8 +476,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的六参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4, T5, T6>(string eventName, Action<T1, T2, T3, T4, T5, T6> callback)
         {
@@ -483,8 +491,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的六参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4, T5, T6>(int eventId, Action<T1, T2, T3, T4, T5, T6> callback)
         {
@@ -498,8 +506,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 string 键的七参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4, T5, T6, T7>(string eventName, Action<T1, T2, T3, T4, T5, T6, T7> callback)
         {
@@ -513,8 +521,8 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 注册事件,通过该方法注册的事件会在 View.OnDisable 时自动移除!
-        /// </summary> 
+        /// 声明 int 键的七参监听，参数类型及顺序共同确定签名。
+        /// </summary>
         [RestrictedCall("Awake")]
         protected void RegisterEvent<T1, T2, T3, T4, T5, T6, T7>(int eventId, Action<T1, T2, T3, T4, T5, T6, T7> callback)
         {
@@ -527,6 +535,7 @@ namespace YLFramework.Core
             }));
         }
 
+        /// <summary>校验声明签名并保存逐目标的订阅工厂，不在声明时注册全局监听。</summary>
         private void DeclareEvent<TCallback>(EventKey key, TCallback callback, Func<TCallback, Func<bool>, IUnregister> subscribe)
             where TCallback : Delegate
         {
@@ -552,6 +561,7 @@ namespace YLFramework.Core
         }
 
 
+        /// <summary>为可用表现会话建立一轮精确订阅，并在本轮激活失败时撤销对应监听。</summary>
         private void RegisterEvents()
         {
             if (!IsSessionLoaded || IsRemoving || !isActiveAndEnabled || _hasRegisteredEvents || (this is Panel panel && panel.DefersEvents))
@@ -564,6 +574,7 @@ namespace YLFramework.Core
             _hasRegisteredEvents = true;
             var subscriptions = new List<IUnregister>();
             _eventSubscriptions = subscriptions;
+            // 退订不能撤回 EventBus 的在途快照，业务回调还须核对会话与订阅轮次，避免旧快照进入重开的 View。
             bool IsCurrent() => this && _hasRegisteredEvents && ReferenceEquals(Session, session) && _eventEpoch == epoch &&
                 IsSessionLoaded && !IsRemoving && isActiveAndEnabled;
             try
@@ -613,6 +624,7 @@ namespace YLFramework.Core
         }
 
 
+        /// <summary>先使旧轮次失效，再逐项退订及通知停用；重入建立的新轮次不接收旧停用钩子。</summary>
         private void UnregisterEvents()
         {
             if (!_hasRegisteredEvents)

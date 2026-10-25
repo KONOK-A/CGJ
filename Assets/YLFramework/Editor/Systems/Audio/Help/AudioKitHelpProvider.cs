@@ -8,16 +8,21 @@ using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>显式注册 AudioKit 帮助工厂，连接静态指南、公开类型和 Runtime 源码 XML。</summary>
     [InitializeOnLoad]
     internal static class AudioKitHelpProvider
     {
+        /// <summary>帮助注册表和窗口定位 AudioKit 时使用的稳定标识。</summary>
         internal const string ModuleId = "audiokit";
 
+        /// <summary>在 Editor 程序集初始化时登记内容工厂，不提前构建页面或初始化音频。</summary>
         static AudioKitHelpProvider() => HelpRegistry.Register(ModuleId, "AudioKit", CreateModule);
 
+        /// <summary>打开帮助窗口并选中 AudioKit 模块。</summary>
         [MenuItem("YLFramework/Audio/帮助")]
         private static void Open() => HelpWindow.Open(ModuleId);
 
+        /// <summary>建立 Audio 命名空间的公开 API 与指南定义，XML 缺失时提示而不生成或伪造文档。</summary>
         internal static HelpModule CreateModule()
         {
             var runtime = typeof(AudioKit).Assembly;
@@ -50,9 +55,16 @@ namespace YLFramework.Editor.Audio
             };
         }
 
+        /// <summary>组合指南页，并将指定类型同时作为关联类型和优先展示类型。</summary>
+        /// <param name="id">稳定页面标识。</param>
+        /// <param name="title">页面标题。</param>
+        /// <param name="summary">指南简介。</param>
+        /// <param name="types">关联及优先展示的 API 类型。</param>
+        /// <param name="blocks">按显示顺序排列的内容块。</param>
         private static HelpPage Guide(string id, string title, string summary, Type[] types, params HelpBlock[] blocks) =>
             new HelpPage(id, title, "使用指南", summary, blocks) { RelatedTypes = types, FeaturedTypes = types };
 
+        /// <summary>建立播放、配置、Provider 接入与诊断指南；示例仅作为文本展示，不在此执行。</summary>
         private static HelpPage[] CreateGuides() => new[]
         {
             Guide("overview", "入门", "提供 Clip 与场景 Listener 即可播放，无需初始化、Mixer 或配置资产；从代码、背景音乐组件或按钮点击音开始。",
@@ -403,6 +415,7 @@ namespace YLFramework.Editor.Audio
                     "SoundConcurrency 是独立运行时并发配置，SoundCount 包含暂停、Mute 与 Loop；Music 查询为最新目标而非旧尾轨。SoundCacheCapacity 默认 10 不是并发上限，不宣称零 GC。打开诊断不创建 Settings/AudioManager/Source/Listener。"))
         };
 
+        /// <summary>建立模块归属、程序集版本和 XML 文档来源的说明页。</summary>
         private static HelpPage[] CreateAbout() => new[]
         {
             new HelpPage("usage", "使用与版本", "关于", "",

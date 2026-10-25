@@ -4,9 +4,11 @@ using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>编辑分类 Mixer 路由资产；保存配置与应用全局路由是不同操作。</summary>
     [CustomEditor(typeof(AudioMixerConfig)), CanEditMultipleObjects]
     public sealed class AudioMixerConfigEditor : UnityEditor.Editor
     {
+        /// <summary>以支持 Undo 的序列化方式提交 Mixer 与组引用，逐资产校验但不应用路由。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();

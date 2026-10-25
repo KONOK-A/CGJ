@@ -8,16 +8,20 @@ using YLFramework.Serialization;
 
 namespace YLFramework.Editor.Help
 {
+    /// <summary>显式提供 Foundation 与工具精选帮助，不自动收集全工程 API 或运行工具操作。</summary>
     [InitializeOnLoad]
     internal static class FoundationToolsHelpProvider
     {
         private const string ModuleId = "foundation-tools";
 
+        /// <summary>在 Editor 初始化时注册内容工厂，内容留到模块被选中时才建立。</summary>
         static FoundationToolsHelpProvider() => HelpRegistry.Register(ModuleId, "Foundation / Tools", CreateModule);
 
+        /// <summary>从 Toolkit 菜单打开公共帮助窗口并选中本模块。</summary>
         [MenuItem("YLFramework/Toolkit/帮助")]
         private static void Open() => HelpWindow.Open(ModuleId);
 
+        /// <summary>建立指南与明确选定的类型，并按实际程序集指定 XML 读取路径；不生成缺失 XML。</summary>
         private static HelpModule CreateModule()
         {
             var guides = new[]
@@ -71,9 +75,11 @@ namespace YLFramework.Editor.Help
             };
         }
 
+        /// <summary>建立工具指南，将所选类型登记为关联 API 与正文精选入口。</summary>
         private static HelpPage Guide(string id, string title, string summary, Type[] types, params HelpBlock[] blocks) =>
             new HelpPage(id, title, "Foundation / Tools 指南", summary, blocks) { RelatedTypes = types, FeaturedTypes = types };
 
+        /// <summary>为框架文档建立本地链接，不在创建帮助数据时读取或打开文档。</summary>
         private static HelpBlock Document(string title, string path) => HelpBlock.Link(title,
             new Uri(Path.GetFullPath("Assets/YLFramework/Documentation/" + path)).AbsoluteUri);
     }

@@ -9,8 +9,10 @@ using YLFramework.Equipment;
 
 namespace YLFramework.Editor.Equipment
 {
+    /// <summary>为装备作者工具解析数据类型与资源地址，并维护所属资产的编辑操作。</summary>
     internal static class EquipmentAuthoring
     {
+        /// <summary>解析配表绑定的具体数据类型；空绑定使用基础类型，失效绑定抛错。</summary>
         internal static Type GetDataType(this EquipmentsConfig root)
         {
             if (string.IsNullOrEmpty(root.typeScriptGuid))
@@ -27,6 +29,7 @@ namespace YLFramework.Editor.Equipment
 
             return type;
         }
+        /// <summary>按 ID 重命名所属配表拥有的条目并清缓存，不改动外部借用资产的名称。</summary>
         internal static void Rename(this EquipmentConfigData data)
         {
             if (!data.parent || data.name == data.id.ToString())
@@ -37,6 +40,7 @@ namespace YLFramework.Editor.Equipment
             DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), EquipmentsConfigController.GetEquipmentConfigDataPath(data.parent));
             data.parent.ClearCache();
         }
+        /// <summary>校验 Assets 相对目录的层级写法，并通过 AssetDatabase 逐层补建目录。</summary>
         internal static void EnsureFolder(string path)
         {
             if (!path.StartsWith("Assets/", StringComparison.Ordinal))
@@ -61,6 +65,7 @@ namespace YLFramework.Editor.Equipment
                 current = next;
             }
         }
+        /// <summary>按目标对象和属性路径重新建立序列化包装，应用菜单选择的字符串值。</summary>
         internal static void SetString(SerializedProperty property, string value)
         {
             var target = property.serializedObject.targetObject;
@@ -74,6 +79,7 @@ namespace YLFramework.Editor.Equipment
             serialized.FindProperty(path).stringValue = value;
             serialized.ApplyModifiedProperties();
         }
+        /// <summary>绘制资源项目字段，并列出项目内 ResourceProject 的项目标识供选择。</summary>
         internal static void DrawProject(SerializedProperty property)
         {
             EditorGUILayout.PropertyField(property);
@@ -96,6 +102,7 @@ namespace YLFramework.Editor.Equipment
             }
             menu.ShowAsContext();
         }
+        /// <summary>从唯一匹配项目的正式构建映射中按资产类型列出地址，不在此验证 Prefab 装备组件。</summary>
         internal static void DrawAddress(SerializedProperty project, SerializedProperty address, Type type)
         {
             EditorGUILayout.PropertyField(address);

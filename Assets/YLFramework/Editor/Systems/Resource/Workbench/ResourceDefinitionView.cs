@@ -9,6 +9,7 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>编辑项目的选择定义并展示可失效的解析预览，源资产与发布版本不归此视图管理。</summary>
     internal sealed class ResourceDefinitionView : IDisposable
     {
         private ResourceBuildMap _map;
@@ -41,6 +42,7 @@ namespace YLFramework.Editor.Resource
         private bool _hasRestoredUI;
         private string _restoredNotice;
 
+        /// <summary>清除当前项目的预览、选择和待定改名上下文，准备绑定另一项目。</summary>
         internal void Reset()
         {
             _group = 0;
@@ -63,6 +65,7 @@ namespace YLFramework.Editor.Resource
             _hasRestoredUI = false;
             _restoredNotice = null;
         }
+        /// <summary>标记列表待刷新和旧解析结果过期，保留旧快照供明确区分。</summary>
         internal void Invalidate()
         {
             _isDirty = true;
@@ -73,6 +76,7 @@ namespace YLFramework.Editor.Resource
 
             _atlas.Invalidate();
         }
+        /// <summary>同时清空搜索输入和表格过滤条件，不改变行选择。</summary>
         internal void ClearSearch()
         {
             _search = "";
@@ -81,7 +85,9 @@ namespace YLFramework.Editor.Resource
                 _table.searchString = "";
             }
         }
+        /// <summary>只清空 UI 行选择，不移除资源登记。</summary>
         internal void ClearSelection() => _table?.SetSelection(Array.Empty<int>());
+        /// <summary>优先清除搜索，搜索为空时再清除选择。</summary>
         internal void Escape()
         {
             if (!string.IsNullOrEmpty(_search))
@@ -93,6 +99,7 @@ namespace YLFramework.Editor.Resource
                 ClearSelection();
             }
         }
+        /// <summary>必要时离开图集页，并请求下一次重绘聚焦资源搜索框。</summary>
         internal void FocusSearch()
         {
             if (_mode == 2)
@@ -102,7 +109,9 @@ namespace YLFramework.Editor.Resource
             }
             _focusSearch = true;
         }
+        /// <summary>当前分组改名输入是否尚未应用到定义。</summary>
         internal bool HasPendingRename => _renameProject && _renameGroup != null && _renameText != null && _renameText != _renameOriginal;
+        /// <summary>复核原分组及名称后通过正式入口应用改名，支持 Undo 但不保存资产。</summary>
         internal bool CommitRename()
         {
             if (!HasPendingRename)
@@ -132,8 +141,10 @@ namespace YLFramework.Editor.Resource
             _isDirty = true;
             return true;
         }
+        /// <summary>释放视图持有的快照和 UI 引用，不销毁借用资产，也不代为提交待定改名。</summary>
         public void Dispose() => Reset();
 
+        /// <summary>接收同次解析的分包、目录和模拟器，切到解析页并更新列表。</summary>
         internal void SetPreview(ResourceBuildMap value, ResourceCatalog index, ResourceEditorSimulation resolver)
         {
             _map = value;
@@ -150,6 +161,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>选取未冲突的默认技术标识建立空组，并转到该组的主资源编辑。</summary>
         internal void AddGroup(ResourceProject project)
         {
             var number = project.groups.Count + 1;
@@ -164,6 +176,7 @@ namespace YLFramework.Editor.Resource
             _isDirty = true;
         }
 
+        /// <summary>协调定义、解析和图集三种模式的绘制，按脏计数刷新列表并处理待定改名。</summary>
         internal void Draw(ResourceProject project, EditorWindow window, float availableWidth, Action changed, Action<Func<string>> run, Action<Func<string>> queue = null, Action refresh = null)
         {
             var layout = (window as ResServiceEditorWindow)?.Layout ?? _fallbackLayout;
@@ -253,6 +266,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>组织模式、搜索和资源添加入口，窄窗口通过菜单保留分组选择。</summary>
         private void DrawToolbar(ResourceProject project, ResourceWorkbenchLayout layout, float width, Action changed, Action<Func<string>> run, Action refresh)
         {
             EditorGUILayout.BeginHorizontal(ResourceWorkbenchGui.Toolbar);
@@ -337,6 +351,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>编辑当前组的改名草稿与分包设置，并在用户确认后移除组定义。</summary>
         private void DrawGroup(ResourceProject project, Action changed, Action<Func<string>> run)
         {
             if (_group < 0 || _group >= project.groups.Count)
@@ -419,6 +434,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>提供具体分组及全部分组只读聚合的切换菜单。</summary>
         private void GroupMenu(ResourceProject project)
         {
             var menu = new GenericMenu();
@@ -431,6 +447,7 @@ namespace YLFramework.Editor.Resource
             menu.ShowAsContext();
         }
 
+        /// <summary>切换分组上下文并重置选择和滚动位置，等待列表刷新。</summary>
         private void ChooseGroup(int index)
         {
             _group = index;
@@ -440,6 +457,7 @@ namespace YLFramework.Editor.Resource
             _detailScroll = Vector2.zero;
         }
 
+        /// <summary>按模式与脏状态重建行，并仅在项目、定义和地址身份仍匹配时恢复旧选择。</summary>
         private void RefreshRows(ResourceProject project, ResourceWorkbenchLayout layout)
         {
             var restore = !_hasRestoredUI && layout.selectionProjectGuid == AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
@@ -512,6 +530,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按可用宽度安排分组、表格和详情，并在 TreeView 消费前接管外部资产拖放。</summary>
         private void DrawBody(float width, ResourceProject project, EditorWindow window, ResourceWorkbenchLayout layout, Action changed, Action<Func<string>> run)
         {
             var wide = width >= 1000;
@@ -574,6 +593,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>只记录主资源模式的搜索与选择身份，不把解析结果保存为另一份资源定义。</summary>
         internal void StoreUIState(ResourceProject project, ResourceWorkbenchLayout layout)
         {
             if (!project || _table == null || _mode != 0)
@@ -587,6 +607,7 @@ namespace YLFramework.Editor.Resource
             layout.selectedRows = _table.CaptureSelection(project);
         }
 
+        /// <summary>只绘制滚动可见的分组行，组内数量表示选择定义数而非解析资产数。</summary>
         private void DrawGroups(Rect rect, ResourceProject project)
         {
             GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
@@ -607,6 +628,7 @@ namespace YLFramework.Editor.Resource
             GUI.EndScrollView();
         }
 
+        /// <summary>按唯一 GUID 定位可编辑定义；聚合与解析模式仅展示详情，子资产不单独编辑。</summary>
         private void DrawInspector(float width, ResourceProject project, Action changed, Action<Func<string>> run)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox, GUILayout.Width(width), GUILayout.ExpandHeight(true));
@@ -685,6 +707,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndVertical();
         }
 
+        /// <summary>在 Project 窗口定位源资产，解析行通过模拟器重验后取得借用对象。</summary>
         private string Locate(ResourceEntryTable.Row row)
         {
             Selection.activeObject = row.Entry == null ? AssetDatabase.LoadMainAssetAtPath(row.Path) : _simulation.Load(row.Entry.Address, row.Entry.Location.AssetType);
@@ -692,6 +715,7 @@ namespace YLFramework.Editor.Resource
             return "已在Unity Project窗口定位源资产；未执行运行时加载。";
         }
 
+        /// <summary>为可编辑组提供拖放范围提示；接收后仍由添加服务检查类型、路径和重复登记。</summary>
         private void HandleDrop(Rect rect, ResourceProject project, Action changed, Action<Func<string>> run)
         {
             var current = Event.current;
@@ -738,6 +762,7 @@ namespace YLFramework.Editor.Resource
             current.Use();
         }
 
+        /// <summary>委托正式入口加入主文件或目录定义，随后清搜索并定位新条目。</summary>
         private void Add(ResourceProject project, Object[] assets, Action changed, Action<Func<string>> run) => run(() =>
         {
             ResourceEditorOperations.AddSelections(project, _group, assets);
@@ -750,6 +775,7 @@ namespace YLFramework.Editor.Resource
             return "已加入主文件/目录选择定义，尚未保存；子资产由主文件派生，未修改Importer。";
         });
 
+        /// <summary>展示总选择与可见选择差异，仅在具体组的定义模式提供批量编辑。</summary>
         private void DrawBatch(ResourceProject project, Action changed, Action<Func<string>> run, EditorWindow window)
         {
             EditorGUILayout.BeginHorizontal(ResourceWorkbenchGui.Toolbar);
@@ -785,6 +811,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>捕获完整选择并在菜单执行时重解组与条目身份，移动包含搜索隐藏项的集合。</summary>
         private void MoveMenu(ResourceProject project, Action changed, Action<Func<string>> run)
         {
             var source = _group;
@@ -824,6 +851,7 @@ namespace YLFramework.Editor.Resource
             menu.ShowAsContext();
         }
 
+        /// <summary>经当前定义索引复核后移除完整选择集合，不删除源文件。</summary>
         private void Remove(ResourceProject project, Action changed, Action<Func<string>> run) => run(() =>
         {
             ResourceEditorOperations.RemoveSelections(project, _group, _table.GetSelectedIndices(project, _group));
@@ -833,6 +861,7 @@ namespace YLFramework.Editor.Resource
             return "已移除完整选择定义集合（含隐藏项），未删除源文件，可Undo。";
         });
 
+        /// <summary>按聚合或编辑模式提供定位、复制及完整选择集合的操作入口。</summary>
         private void ContextMenu(ResourceEntryTable.Row row, ResourceProject project, Action changed, Action<Func<string>> run)
         {
             var menu = new GenericMenu();
@@ -857,6 +886,7 @@ namespace YLFramework.Editor.Resource
             menu.ShowAsContext();
         }
 
+        /// <summary>复核分包报告中的来源身份后跳转到原选择项或图集规则，不用当前近似项替代。</summary>
         internal void LocateSource(ResourceProject project, ResourceBuildSource source)
         {
             var location = ResourceBuildSourceLocator.Resolve(project, source);

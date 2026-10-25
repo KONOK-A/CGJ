@@ -6,23 +6,37 @@ namespace YLFramework.Audio
     /// <summary>命名请求阶段；Accepted 不保证启播，Started 表示 Source.Play 已提交而非可听见。</summary>
     public enum AudioPlayState
     {
+        /// <summary>等待 Provider 交付资产，播放句柄尚不可用。</summary>
         Loading,
+        /// <summary>已取得资产，可能仍在等待音频数据或播放提交。</summary>
         Ready,
+        /// <summary>已绑定原 Voice 并交付句柄，但不保证已经调用 Source.Play。</summary>
         Accepted,
+        /// <summary>至少提交过一次 Source.Play，不代表当前可听见。</summary>
         Started,
+        /// <summary>请求已经终结，后续加载结果不再用于播放。</summary>
         Ended
     }
     /// <summary>命名请求的稳定终态；只有 Completed 表示自然完成。</summary>
     public enum AudioPlayEnd
     {
+        /// <summary>尚未确定终态。</summary>
         None,
+        /// <summary>非循环播放被内核判定为自然结束。</summary>
         Completed,
+        /// <summary>由句柄、通道或分类停止操作结束。</summary>
         Stopped,
+        /// <summary>被较新的独占请求、音乐过渡或容量抢占替换。</summary>
         Replaced,
+        /// <summary>原宿主、通道、Clip、Source 或跟随目标已不可用。</summary>
         Unavailable,
+        /// <summary>加载、数据准备或播放提交失败；可结合 Error 查看捕获的异常。</summary>
         Failed,
+        /// <summary>原 Audio 宿主或会话关闭时结束。</summary>
         Shutdown,
+        /// <summary>调用 Cancel 或 Dispose 逻辑取消本请求。</summary>
         Canceled,
+        /// <summary>未获播放接纳，例如分类关闭、去重或容量规则拒绝。</summary>
         Rejected
     }
 
@@ -92,6 +106,7 @@ namespace YLFramework.Audio
         }
         internal bool IsPending => State == AudioPlayState.Loading || State == AudioPlayState.Ready;
 
+        /// <summary>记录本次命名播放的配置快照、原会话及可选借源，不在构造时加载或播放。</summary>
         internal AudioPlayRequest(AudioManager owner, AudioClipAddress address, AudioCategory category, AudioChannel channel,
             AudioPlaybackOptions options, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             bool waitForData, float crossfade, AudioSource source = null, bool borrowed = false)
@@ -109,6 +124,7 @@ namespace YLFramework.Audio
             _isBorrowed = borrowed;
             _session = AudioKit.SoundSession;
         }
+        /// <summary>取得缓存租约；异步完成允许同步重入，只有仍在等待时才保留等待者责任。</summary>
         internal void Load(bool asynchronous)
         {
             if (IsDone)
@@ -146,6 +162,7 @@ namespace YLFramework.Audio
             }
         }
         private bool Available => _owner && _owner.IsAvailable && _session == AudioKit.SoundSession && (Channel == null || Channel.IsValid);
+        /// <summary>接收后端交付并尝试推进请求；已结束或失去原会话时只归还迟到租约。</summary>
         private void Receive(AudioClipLease lease, Exception error)
         {
             if (IsDone || !Available)
@@ -177,6 +194,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>检查宿主与数据就绪条件，将 Clip 责任移交给原播放内核后撤销等待登记。</summary>
         internal void Tick()
         {
             if (IsDone || !IsPending || _isSubmitting)
@@ -279,11 +297,13 @@ namespace YLFramework.Audio
                 End(AudioPlayEnd.Rejected);
             }
         }
+        /// <summary>保留捕获的错误并尝试以失败原因终结本请求。</summary>
         internal void Fail(Exception exception)
         {
             Error = exception;
             End(AudioPlayEnd.Failed);
         }
+        /// <summary>先确定一次性终态，再撤销等待、归还未绑定资源并按需停止原播放。</summary>
         internal void End(AudioPlayEnd reason, bool stopPlayback = true)
         {
             if (IsDone)

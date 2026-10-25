@@ -19,20 +19,29 @@ namespace YLFramework.Resource
         private int _nativeBundleLoads;
         private int _nativeBundleUnloads;
 
+        /// <summary>一个 Bundle 图节点从依赖等待到生产和回收的内部状态。</summary>
         internal enum BundleState
         {
+            /// <summary>等待依赖节点完成。</summary>
             Waiting,
+            /// <summary>依赖已就绪，等待异步并发槽。</summary>
             Queued,
+            /// <summary>正在准备输入或执行原生加载。</summary>
             Loading,
+            /// <summary>原生 Bundle 已通过交付检查。</summary>
             Ready,
+            /// <summary>依赖、内容或原生生产失败。</summary>
             Failed,
+            /// <summary>节点已回收，依赖入边已归还。</summary>
             Released
         }
+        /// <summary>分离图根请求的终态准备和完成通知。</summary>
         internal sealed class BundleWaiter
         {
             internal Action Prepare;
             internal Action Notify;
         }
+        /// <summary>单个快照 Bundle 的共享节点，持有输入、原生操作、图根及依赖入边账本。</summary>
         internal sealed class BundleRecord
         {
             internal readonly ResourceSystem Owner;
@@ -52,11 +61,13 @@ namespace YLFramework.Resource
             internal bool IsInputRegistered;
             internal bool IsAdmissionInFlight;
             internal ResourceException Error;
+            // 总引用由图根租约和依赖者入边组成；RootPins 是其中的图根部分。
             internal int References;
             internal int RootPins;
             internal Action<AsyncOperation> NativeCompletion;
             internal readonly List<BundleWaiter> Waiters = new();
             internal bool IsDone => State == BundleState.Ready || State == BundleState.Failed;
+            /// <summary>为冻结快照中的 Bundle 建立待依赖就绪的节点。</summary>
             internal BundleRecord(ResourceSystem owner, ResourceLocalSnapshot snapshot, ResourceCatalogBundle descriptor)
             {
                 Owner = owner;
@@ -66,13 +77,22 @@ namespace YLFramework.Resource
         }
 
         /// <summary>取得明确 Catalog BundleId 的低层图租约，不加载 Scene 或创建实例。</summary>
+        /// <param name="projectId">已挂载快照的项目标识。</param>
+        /// <param name="bundleId">快照中的逻辑 Bundle 标识。</param>
+        /// <returns>调用方负责归还的图根租约；其依赖闭包由同一系统保活。</returns>
+        /// <remarks>同步入口不等待在途图；原生 Bundle 只供租约有效期间借读，不得自行 Unload。</remarks>
         public BundleLease AcquireBundle(string projectId, string bundleId)
         {
             using var request = AcquireBundleRequest(projectId, bundleId, true, true);
             return request.TakeResult();
         }
+        /// <summary>异步取得一份独立 Bundle 图根租约，共享图节点和原生生产。</summary>
+        /// <param name="projectId">已挂载快照的项目标识。</param>
+        /// <param name="bundleId">快照中的逻辑 Bundle 标识。</param>
+        /// <returns>成功后可单次领取图根租约的请求；取消只归还本请求的图根责任。</returns>
         public ResourceRequest<BundleLease> AcquireBundleAsync(string projectId, string bundleId) => AcquireBundleRequest(projectId, bundleId, false, true);
 
+        /// <summary>验证依赖闭包并取得独立图根，先登记全部入边再驱动同步或异步生产。</summary>
         internal ResourceRequest<BundleLease> AcquireBundleRequest(string projectId, string bundleId, bool synchronous, bool publicLease,
             BundleLeaseOrigin origin = default)
         {
@@ -248,6 +268,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>同步驱动本次新建 Bundle 节点并传播依赖失败。</summary>
         private void DriveSynchronousBundles(List<BundleRecord> added)
         {
             // 只驱动本次冷图，不等待/接管异步队列；观察者重入也复用同一 records 和 native 权威。
@@ -287,9 +308,11 @@ namespace YLFramework.Resource
             CheckDrain();
         }
 
+        /// <summary>将依赖节点失败包装为当前节点的资源错误并保留原始原因。</summary>
         private static ResourceException DependencyFailure(BundleRecord record, BundleRecord failed) => new(failed.Error?.Kind ?? ResourceError.LoadFailed,
             $"Bundle '{record.Descriptor.LogicalId}' dependency '{failed.Descriptor.LogicalId}' failed.", failed.Error);
 
+        /// <summary>传播依赖失败并按并发上限启动就绪节点，重入只请求再次推进。</summary>
         private void PumpBundles()
         {
             if (_isPumpingBundles)
@@ -341,6 +364,7 @@ namespace YLFramework.Resource
             CheckDrain();
         }
 
+        /// <summary>完成内容准入及密钥捕获，接管输入准备并启动后续原生生产。</summary>
         private void StartBundle(BundleRecord record, bool synchronous)
         {
             if (!IsAvailable)
@@ -442,6 +466,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>核验并打开 Bundle 输入，转交文件所有权且在结束时擦除密钥副本。</summary>
         private static ResourceBundleInput OpenBundleInput(BundleRecord record, byte[] key, CancellationToken cancellation)
         {
             FileStream file = null;
@@ -475,6 +500,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>将输入交给原图节点保管，并将后台认证故障排入主线程处理队列。</summary>
         private void AttachBundleInput(BundleRecord record, ResourceBundleInput input)
         {
             record.Input = input;
@@ -484,6 +510,7 @@ namespace YLFramework.Resource
             input.SetFaultNotification(error => _contentFaults.Enqueue((record, error)));
         }
 
+        /// <summary>拒绝外部占用的原生身份，并从已接管输入启动 Unity Bundle 加载。</summary>
         private void StartNativeBundle(BundleRecord record, bool synchronous)
         {
             RequireHealthyBundle(record.Snapshot, record.Descriptor.LogicalId);
@@ -517,6 +544,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>移除原生完成订阅，提取结果并结算图节点终态。</summary>
         private void CompleteNativeBundle(BundleRecord record)
         {
             if (record.Native == null)
@@ -541,6 +569,7 @@ namespace YLFramework.Resource
             PumpBundles();
         }
 
+        /// <summary>核对内容、原生身份和会话，准备全部图根消费者后再回收与通知。</summary>
         private void FinishBundle(BundleRecord record, AssetBundle bundle, Exception cause)
         {
             if (record.State == BundleState.Released && !bundle)
@@ -593,6 +622,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>归还一个公共或内部图根引用，尝试回收无主闭包并检查关闭进度。</summary>
         internal void ReleaseBundle(BundleLease lease, BundleRecord record)
         {
             if (lease.IsPublic)
@@ -606,6 +636,7 @@ namespace YLFramework.Resource
             CheckDrain();
         }
 
+        /// <summary>回收无引用且无在途操作的节点，清理成功后才归还依赖入边。</summary>
         private void CollectBundle(BundleRecord first)
         {
             var collect = new Stack<BundleRecord>();
@@ -670,6 +701,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>要求冻结快照的平台及 Unity 兼容版本与当前运行环境完全匹配。</summary>
         private static void ValidateSnapshotPlatform(ResourceLocalSnapshot snapshot)
         {
 #if UNITY_EDITOR

@@ -15,7 +15,7 @@ namespace YLFramework.Timing
         private readonly TimerRun _storage = new();
         private bool _isDisposed;
 
-        /// <summary>绑定当前执行 session，但不创建默认宿主；同会话 Shutdown 后可显式重新 Start。</summary>
+        /// <summary>绑定当前执行会话，但不创建默认宿主；同会话 Shutdown 后可显式重新 Start。</summary>
         public ReusableTimer() => _session = SingletonSessionState.ExecutionSession;
         /// <summary>绑定显式手动内核，不读取 Unity 时间，不创建默认宿主。</summary>
         public ReusableTimer(TimerScheduler scheduler) => _manual = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
@@ -61,6 +61,7 @@ namespace YLFramework.Timing
             return StartRun(TimerClock.RenderedFrame, 0, Math.Max(1, firstDelay), 0, interval, count, null, callback, onCancelled);
         }
 
+        /// <summary>核对槽生命周期、执行会话及旧任务责任后，在原手动内核或当前默认内核上复用存储。</summary>
         private TimerHandle StartRun(TimerClock clock, double delay, long frames, double intervalSeconds,
             long intervalFrames, int? count, Action callback, Action<long> tickCallback, Action<TimerCancellationReason> onCancelled)
         {

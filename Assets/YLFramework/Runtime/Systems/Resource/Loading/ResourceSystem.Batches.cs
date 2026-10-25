@@ -7,6 +7,10 @@ namespace YLFramework.Resource
     public sealed partial class ResourceSystem
     {
         /// <summary>枚举此 Bundle 在正式 Catalog 中的可赋值 typed 资产（含子资产），等待各自 producer 完成后交割；不取得未登记内容。</summary>
+        /// <typeparam name="T">筛选及借读的 Unity 资源类型。</typeparam>
+        /// <param name="projectId">已挂载目录的项目标识。</param>
+        /// <param name="bundleId">目录中的逻辑 Bundle 标识，不接受场景 Bundle。</param>
+        /// <returns>持有全部成功成员的批次请求；任一成员失败则归还本批责任。</returns>
         public ResourceRequest<AssetBatchLease<T>> AcquireAllAsync<T>(string projectId, string bundleId) where T : UnityEngine.Object
         {
             CheckThread();
@@ -36,6 +40,9 @@ namespace YLFramework.Resource
         }
 
         /// <summary>按 canonical AssetId 取得 Catalog Group；required 失败归还整个批次，optional 失败保留 cause。不创建实例、不加载 Scene。</summary>
+        /// <param name="projectId">已登记目录的项目标识。</param>
+        /// <param name="groupId">目录中的资源组标识。</param>
+        /// <returns>普通资产批次请求；等待全部子请求结束后交割，成功结果保留可选项错误。</returns>
         public ResourceRequest<AssetBatchLease<UnityEngine.Object>> AcquireGroupAsync(string projectId, string groupId)
         {
             CheckThread();
@@ -67,6 +74,9 @@ namespace YLFramework.Resource
 
         /// <summary>普通成员取得AssetLease；Bundle Scene仅保活图，Editor Scene只验证路径；均不调用SceneManager。</summary>
         /// <remarks>每批等待和取消独立；必需项失败立即释放本批责任，迟到 native 结果仍由原 producer 收尾。</remarks>
+        /// <param name="projectId">已登记目录的项目标识。</param>
+        /// <param name="groupId">待预加载的目录组标识。</param>
+        /// <returns>组责任聚合的请求，成功后须显式领取并归还组租约。</returns>
         public ResourceRequest<ResourceGroupLease> PreloadGroupAsync(string projectId, string groupId)
         {
             CheckThread();
@@ -100,6 +110,7 @@ namespace YLFramework.Resource
             var starting = true;
             var finishing = false;
             Track(request);
+            // 逐项关闭本组子请求并汇总清理异常，不接管其他消费者的责任。
             void ReleaseChildren()
             {
                 List<Exception> errors = null;
@@ -128,6 +139,7 @@ namespace YLFramework.Resource
                 }
             }
             request.Attach(ReleaseChildren, () => children.Count == 0 ? 0 : children.Average(x => x.Asset?.Progress ?? x.SceneBundle?.Progress ?? 1));
+            // 在组可交割时复核准入并转移租约，失败则归还本组已取得的责任。
             void Finish()
             {
                 if (starting || finishing || request.IsDone)
@@ -335,6 +347,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>保存一个组成员的解析结果及资产或场景 Bundle 子请求。</summary>
         private sealed class GroupPreloadChild
         {
             internal string AssetId;
@@ -347,12 +360,16 @@ namespace YLFramework.Resource
             internal ResourceException ResolutionError;
             internal bool IsDone => ResolutionError != null || (Asset?.IsDone ?? SceneBundle?.IsDone ?? true);
             internal ResourceException Error => ResolutionError ?? Asset?.Error ?? SceneBundle?.Error;
+            /// <summary>复制该成员当前可观察结果，不转移子请求或租约责任。</summary>
             internal ResourceGroupItemResult Result() => new(AssetId, Address, Required, Kind, BundleId, Error);
         }
 
+        /// <summary>建立带标准错误终态的独立资产批次请求。</summary>
         private static ResourceRequest<AssetBatchLease<T>> BatchFailure<T>(ResourceError kind, string message) where T : UnityEngine.Object =>
             Fail(new ResourceRequest<AssetBatchLease<T>>(value => value.Dispose()), kind, message);
 
+        /// <summary>聚合普通资产子请求，按必需项规则交付批次或归还本批责任。</summary>
+        /// <remarks>直接归还子项时不逐项隔离清理异常，异常可能中断后续归还或通知。</remarks>
         private ResourceRequest<AssetBatchLease<T>> AcquireBatch<T>((ResourceCatalogEntry Entry, bool Required)[] entries, string label) where T : UnityEngine.Object
         {
             var request = new ResourceRequest<AssetBatchLease<T>>(value => value.Dispose());
@@ -368,6 +385,7 @@ namespace YLFramework.Resource
                 }
             },
                 () => children.Count == 0 ? 0 : children.Sum(x => x.Request.Progress) / children.Count);
+            // 全部子请求终结后复核可交付项，成功结果只转移给本批一次。
             void Finish()
             {
                 if (starting || finishing || request.IsDone || children.Any(x => !x.Request.IsDone))

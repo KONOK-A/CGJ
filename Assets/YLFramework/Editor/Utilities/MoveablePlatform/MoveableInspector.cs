@@ -10,6 +10,7 @@ using YLFramework.Platform2D;
 namespace YLFramework.Editor.Platform2D
 {
 
+    /// <summary>编辑移动对象的世界坐标路径或 Transform 路径，并提供路径校验、事件配置和 Scene 操作柄。</summary>
     [CustomEditor(typeof(Moveable), true)]
     public class MoveableInspector : UnityEditor.Editor
     {
@@ -37,6 +38,7 @@ namespace YLFramework.Editor.Platform2D
 
         private Vector3 _snap = new Vector3(0.1f, 0.1f, 0.01f);
 
+        /// <summary>缓存序列化属性，为本 Inspector 新建坐标列表并挂接绘制、添加与选择回调。</summary>
         private void OnEnable()
         {
             _serializedProperties = serializedObject.GetAllSerializedProperty();
@@ -62,6 +64,7 @@ namespace YLFramework.Editor.Platform2D
 
 
 
+        /// <summary>绘制通用属性、当前路径模式及事件，应用序列化修改后显示路径校验结果。</summary>
         public override void OnInspectorGUI()
         {
 
@@ -148,6 +151,7 @@ namespace YLFramework.Editor.Platform2D
             }
         }
 
+        /// <summary>编辑指定世界坐标路径点，值变化时应用到移动对象。</summary>
         private void OnDrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
             EditorGUI.BeginChangeCheck();
@@ -162,6 +166,7 @@ namespace YLFramework.Editor.Platform2D
 
         }
 
+        /// <summary>添加世界坐标路径点，起点取对象当前位置，后续点沿已有方向外推并应用。</summary>
         private void OnAddCallback(ReorderableList list)
         {
             Vector3 target = Vector3.zero;
@@ -191,6 +196,7 @@ namespace YLFramework.Editor.Platform2D
             serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>为坐标模式下选中的有效路径点显示位置操作柄，通过序列化属性提交拖动结果。</summary>
         private void OnSceneGUI()
         {
 
@@ -214,6 +220,7 @@ namespace YLFramework.Editor.Platform2D
             //Handles.color = Color.green;
             //property.vector3Value = Handles.FreeMoveHandle(property.vector3Value, Quaternion.identity, size, snap, Handles.CubeHandleCap);
 
+            // 路径点本身就是世界坐标，不像平台捕获区域那样需要经对象 Transform 转回局部坐标。
             property.vector3Value = Handles.PositionHandle(property.vector3Value, Quaternion.identity);
 
             if (EditorGUI.EndChangeCheck())
@@ -225,6 +232,7 @@ namespace YLFramework.Editor.Platform2D
 
         }
 
+        /// <summary>选择列表项后请求活动 Scene 视图重绘，以更新对应位置操作柄。</summary>
         private void OnSelect(ReorderableList list)
         {
             if (SceneView.lastActiveSceneView)

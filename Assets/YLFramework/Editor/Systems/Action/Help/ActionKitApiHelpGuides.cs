@@ -2,6 +2,7 @@ using Topic = YLFramework.Editor.Actions.ActionKitApiHelpContent.Topic;
 
 namespace YLFramework.Editor.Actions
 {
+    /// <summary>保存 ActionKit 帮助指南的静态内容和示例文本，不负责执行示例。</summary>
     internal static class ActionKitApiHelpGuides
     {
         private const string MethodContext =
@@ -10,6 +11,7 @@ namespace YLFramework.Editor.Actions
             "其 GameObject 应处于激活状态；请在 Unity 主线程调用。" +
             "若业务命名空间或其他导入使 ActionKit 名称冲突，使用完整类型名 YLFramework.Actions.ActionKit，不使用通用 Kit 别名。";
 
+        /// <summary>按指南顺序声明的主题；类型名用于建立 API 关联，而不是运行时调用。</summary>
         internal static readonly Topic[] Topics =
         {
             new Topic("overview", "从一个动作序列开始", "入门与生命周期",

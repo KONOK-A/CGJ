@@ -6,17 +6,22 @@ using YLFramework.Overlap;
 
 namespace YLFramework.Editor.Overlap
 {
+    /// <summary>在通用二维检测 Inspector 上补充矩形尺寸校正及四侧操作柄，通过序列化属性提交编辑。</summary>
+    /// <remarks>四侧调节直接采用世界轴位移，只修正负缩放的符号，不作完整的旋转和缩放换算。</remarks>
     [CustomEditor(typeof(OverlapBox2D))]
     public class OverlapBox2DInspector : OverlapBase2DInspector
     {
 
         private OverlapBox2D _box2D;
 
+        /// <summary>矩形中心相对检测器的局部偏移属性，供派生 Inspector 共用。</summary>
         protected SerializedProperty Offset;
 
+        /// <summary>矩形在局部坐标中的宽高属性，供派生 Inspector 校正与编辑。</summary>
         protected SerializedProperty Size;
 
 
+        /// <summary>初始化通用属性后，缓存矩形检测器及其偏移、尺寸属性。</summary>
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -27,6 +32,7 @@ namespace YLFramework.Editor.Overlap
         }
 
 
+        /// <summary>绘制通用配置和结果，再将尺寸的负分量归零并应用。</summary>
         public override void OnInspectorGUI()
         {
             base.OnInspectorGUI();
@@ -46,6 +52,7 @@ namespace YLFramework.Editor.Overlap
 
         }
 
+        /// <summary>显示矩形局部四侧对应的世界操作柄，并将世界 X/Y 位移交给各侧调整入口。</summary>
         protected virtual void OnSceneGUI()
         {
             Vector3 top = _box2D.transform.localToWorldMatrix.MultiplyPoint(_box2D.Offset + new Vector2(0, _box2D.Size.y / 2));
@@ -83,6 +90,8 @@ namespace YLFramework.Editor.Overlap
         }
 
 
+        /// <summary>按上侧位移调整中心 Y 与高度，候选尺寸通过校验后成对应用。</summary>
+        /// <param name="detalY">上侧操作柄的世界 Y 位移。</param>
         public void SetTop(float detalY)
         {
 
@@ -105,6 +114,8 @@ namespace YLFramework.Editor.Overlap
             serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>按下侧位移调整中心 Y 与高度，候选尺寸通过校验后成对应用。</summary>
+        /// <param name="detalY">下侧操作柄的世界 Y 位移。</param>
         public void SetDown(float detalY)
         {
             if (_box2D.transform.lossyScale.y < 0)
@@ -126,6 +137,8 @@ namespace YLFramework.Editor.Overlap
             serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>按左侧位移调整中心 X 与宽度，候选尺寸通过校验后成对应用。</summary>
+        /// <param name="detalX">左侧操作柄的世界 X 位移。</param>
         public void SetLeft(float detalX)
         {
             if (_box2D.transform.lossyScale.x < 0)
@@ -147,6 +160,8 @@ namespace YLFramework.Editor.Overlap
             serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>按右侧位移调整中心 X 与宽度，候选尺寸通过校验后成对应用。</summary>
+        /// <param name="detalX">右侧操作柄的世界 X 位移。</param>
         public void SetRight(float detalX)
         {
             if (_box2D.transform.lossyScale.x < 0)
@@ -169,6 +184,9 @@ namespace YLFramework.Editor.Overlap
         }
 
 
+        /// <summary>校验调边后的候选尺寸，默认只允许宽高均严格为正。</summary>
+        /// <param name="size">尚未提交的局部宽高。</param>
+        /// <returns>是否允许应用该尺寸及配套偏移。</returns>
         protected virtual bool LimitSize(Vector2 size)
         {
 

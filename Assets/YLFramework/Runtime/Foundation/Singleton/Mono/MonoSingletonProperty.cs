@@ -17,13 +17,14 @@ namespace YLFramework.Singletons
         private static readonly HashSet<T> _disposedInstances = new();
         private static readonly object _lock = new();
 
+        /// <summary>为当前组件类型登记新 Play 会话的缓存重置。</summary>
         static MonoSingletonProperty()
         {
             SingletonSessionState.RegisterSessionReset(ResetSessionState);
         }
 
         /// <summary>
-        /// 单例实例；首次访问时查找或创建，非播放模式返回 null。
+        /// 单例实例；缓存缺失时查找或创建，非播放模式或退出阶段不创建。
         /// </summary>
         public static T Instance
         {
@@ -36,8 +37,9 @@ namespace YLFramework.Singletons
         /// <param name="allowEditMode">非播放模式下是否允许查找/创建。</param>
         /// <param name="includeInactive">查找时是否包含未激活对象。</param>
         /// <param name="persistent">采用/创建顶级实例时是否 DontDestroyOnLoad。</param>
-        /// <param name="onCreated">仅新建实例后调用一次的回调。</param>
-        /// <returns>单例实例；不可用（非播放模式或退出流程）时返回 null。</returns>
+        /// <param name="onCreated">走路径或新建流程后调用的回调；直接采用场景候选时不调用，路径复用组件时也会调用。</param>
+        /// <returns>已有缓存或取得的实例；缓存缺失且当前模式不允许查找/创建时返回 null。</returns>
+        /// <remarks>查找选项仅在缓存缺失时生效；初始化回调返回后才写入缓存，回调中重入可能递归创建。</remarks>
         public static T GetInstance(bool allowEditMode = false, bool includeInactive = false,
             bool persistent = false, Action<T> onCreated = null)
         {
@@ -148,10 +150,11 @@ namespace YLFramework.Singletons
             }
         }
 
+        /// <summary>清空新 Play 会话的实例缓存，仅移除已销毁的排除项，保留仍存活的已处置宿主。</summary>
         private static void ResetSessionState()
         {
             _instance = null;
-            // 会话重置只清理已销毁的占位；仍存活但已退休的宿主继续被排除，防止模块在重置前自行清理后又被认领
+            // 模块可能先于本回调清理宿主；仍存活的退休对象不能在新会话中被重新认领。
             _disposedInstances.RemoveWhere(instance => instance == null);
         }
     }

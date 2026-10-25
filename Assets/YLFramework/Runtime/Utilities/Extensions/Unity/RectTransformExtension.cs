@@ -3,7 +3,7 @@ using UnityEngine;
 namespace YLFramework.Extensions
 {
     /// <summary>
-    /// RectTransform 扩展。
+    /// 以 anchoredPosition 链式修改 RectTransform 相对于锚点参考点的位置，而非世界坐标。
     /// </summary>
     public static class RectTransformExtension
     {

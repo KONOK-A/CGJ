@@ -5,15 +5,17 @@ using UnityEngine;
 
 namespace YLFramework.Extensions
 {
+    /// <summary>
+    /// 原地修改层掩码的指定位，或用当前物理层碰撞关系生成掩码；不修改物理设置。
+    /// </summary>
     public static class LayerMaskExtensions
     {
-        // Fix编码
         /// <summary>
         /// 打开或关闭某个层级；未定义层名抛 ArgumentOutOfRangeException，掩码不变。
         /// </summary>
-        /// <param name="layerMask"></param>
+        /// <param name="layerMask">按引用修改的层掩码。</param>
         /// <param name="layerName">层级名称</param>
-        /// <param name="open"></param>
+        /// <param name="open">true 表示置位，false 表示清除该位。</param>
         public static void Set(this ref LayerMask layerMask, string layerName, bool open)
         {
             layerMask.Set(LayerMask.NameToLayer(layerName), open);
@@ -22,9 +24,9 @@ namespace YLFramework.Extensions
         /// <summary>
         /// 打开或关闭 0..31 的层级；非法层号抛 ArgumentOutOfRangeException，掩码不变。
         /// </summary>
-        /// <param name="layerMask"></param>
+        /// <param name="layerMask">按引用修改的层掩码。</param>
         /// <param name="layer">层级</param>
-        /// <param name="open"></param>
+        /// <param name="open">true 表示置位，false 表示清除该位。</param>
         public static void Set(this ref LayerMask layerMask, int layer, bool open)
         {
             ValidateLayer(layer);
@@ -42,10 +44,11 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 获取ProjectSetting Physics2D中某一个层级和其他层级的碰撞关系
+        /// 遍历 32 层，用当前 Physics2D 设置中与 layer 可碰撞且已命名的层覆盖掩码。
+        /// 非法层号抛 ArgumentOutOfRangeException，原掩码不变；未命名的层不会纳入结果。
         /// </summary>
-        /// <param name="layerMask"></param>
-        /// <param name="layer"></param>
+        /// <param name="layerMask">接收碰撞层集合的掩码，原有位不保留。</param>
+        /// <param name="layer">待查询碰撞关系的层号，范围为 0..31。</param>
         public static void Physics2DSetting(this ref LayerMask layerMask, int layer)
         {
             ValidateLayer(layer);
@@ -76,10 +79,11 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 获取ProjectSetting Physics中某一个层级和其他层级的碰撞关系
+        /// 遍历 32 层，用当前 Physics 设置中与 layer 可碰撞且已命名的层覆盖掩码。
+        /// 非法层号抛 ArgumentOutOfRangeException，原掩码不变；未命名的层不会纳入结果。
         /// </summary>
-        /// <param name="layerMask"></param>
-        /// <param name="layer"></param>
+        /// <param name="layerMask">接收碰撞层集合的掩码，原有位不保留。</param>
+        /// <param name="layer">待查询碰撞关系的层号，范围为 0..31。</param>
         public static void PhysicsSetting(this ref LayerMask layerMask, int layer)
         {
             ValidateLayer(layer);
@@ -109,6 +113,7 @@ namespace YLFramework.Extensions
             layerMask = LayerMask.GetMask(layers.ToArray());
         }
 
+        /// <summary>在位运算或物理查询前校验层号属于 0..31，越界时抛出异常。</summary>
         private static void ValidateLayer(int layer)
         {
             if (layer < 0 || layer > 31)

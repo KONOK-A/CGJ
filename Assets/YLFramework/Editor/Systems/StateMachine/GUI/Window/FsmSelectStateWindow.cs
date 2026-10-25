@@ -14,11 +14,11 @@ namespace YLFramework.Editor.StateMachine
 
 
 
+    /// <summary>节点脚本选择弹窗，支持绑定已有状态脚本，或创建新文件并等待编译后绑定。</summary>
     public class FsmSelectStateWindow : PopupWindowContent
     {
 
 
-        // Fix编码
         #region 字段
 
         private RuntimeFsmController _controller;
@@ -47,6 +47,10 @@ namespace YLFramework.Editor.StateMachine
         #endregion
 
 
+        /// <summary>绑定目标配置和节点，并以传入矩形尺寸建立脚本选择弹窗。</summary>
+        /// <param name="rect">弹窗尺寸来源，位置不参与窗口大小计算。</param>
+        /// <param name="controller">拥有目标节点的配置。</param>
+        /// <param name="nodeData">接收脚本绑定的节点。</param>
         public FsmSelectStateWindow(Rect rect, RuntimeFsmController controller, FsmStateNodeData nodeData)
         {
             //this.width = width;
@@ -57,11 +61,15 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>返回构造时指定的弹窗宽高。</summary>
+        /// <returns>弹窗尺寸。</returns>
         public override Vector2 GetWindowSize()
         {
             return new Vector2(this._rect.width, this._rect.height);
         }
 
+        /// <summary>根据当前模式绘制已有脚本搜索页或新脚本创建页。</summary>
+        /// <param name="rect">弹窗内容区域。</param>
         public override void OnGUI(Rect rect)
         {
             if (!_showCreateScriptGui)
@@ -75,6 +83,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>建立可搜索的状态脚本树，并提供切换到新脚本创建页的入口。</summary>
         private void OnGuiSearchScripts(Rect rect)
         {
             if (_stateTree == null)
@@ -113,6 +122,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>绘制脚本名称输入，将名称提交及回车产生的创建请求延后到编辑器回调执行。</summary>
         private void OnGuiCreateScripts(Rect rect)
         {
 
@@ -170,6 +180,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>在搜索页请求重绘，弹窗不再聚焦时解除此更新订阅。</summary>
         private void Update()
         {
 
@@ -185,18 +196,21 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>弹窗打开时订阅编辑器更新以刷新脚本搜索显示。</summary>
         public override void OnOpen()
         {
             base.OnOpen();
             EditorApplication.update += Update;
         }
 
+        /// <summary>弹窗关闭时解除本窗口的编辑器更新订阅。</summary>
         public override void OnClose()
         {
             base.OnClose();
             EditorApplication.update -= Update;
         }
 
+        /// <summary>解除更新订阅并关闭弹窗，随后终止当前 IMGUI 绘制流程。</summary>
         public void Close()
         {
             EditorApplication.update -= Update;
@@ -210,6 +224,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>仅在弹窗仍聚焦时于配置目录新建脚本，保存节点选择并登记编译后的延迟绑定。</summary>
         private void CreateAndAddScript()
         {
 
@@ -240,6 +255,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>移除文本输入焦点，使延迟文本字段提交名称并走统一创建入口。</summary>
         private void OnButtonClick()
         {
             GUI.FocusControl(null);

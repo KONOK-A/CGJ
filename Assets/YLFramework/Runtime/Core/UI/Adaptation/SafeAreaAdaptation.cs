@@ -124,6 +124,7 @@ namespace YLFramework.Core
             return true;
         }
 
+        /// <summary>保存最近校验错误并返回失败，相同连续错误不重复报告。</summary>
         private bool Reject(string error)
         {
             if (_lastError != error)
@@ -135,11 +136,16 @@ namespace YLFramework.Core
             return false;
         }
 
+        /// <summary>排除无法用于安全区坐标转换的 NaN 与无限值。</summary>
         private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
+        /// <summary>检查屏幕、安全区或父布局尺寸是否为正且有限。</summary>
         private static bool IsPositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 && IsFinite(value.x) && IsFinite(value.y);
 
+        /// <summary>重新启用内容容器时立即按当前设备安全区适配。</summary>
         private void OnEnable() => Refresh();
+        /// <summary>跟随设备安全区、显示尺寸和父布局变化更新内容锚点。</summary>
         private void LateUpdate() => Refresh();
+        /// <summary>启用期间换父级后重新转换安全区，避免继续沿用旧父坐标。</summary>
         private void OnTransformParentChanged()
         {
             if (isActiveAndEnabled)

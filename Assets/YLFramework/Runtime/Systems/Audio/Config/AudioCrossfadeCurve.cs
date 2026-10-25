@@ -1,11 +1,11 @@
 namespace YLFramework.Audio
 {
-    /// <summary>Transition gain mapping for music CrossFadeMusic.</summary>
+    /// <summary>音乐交叉淡变时两条轨道的过渡增益映射。</summary>
     public enum AudioCrossfadeCurve
     {
-        /// <summary>Gain changes linearly. Zero value retained for serialized compatibility; use explicitly for legacy behavior.</summary>
+        /// <summary>增益线性变化；保留零值以兼容既有序列化数据，需要旧映射时显式选择。</summary>
         Linear = 0,
-        /// <summary>Default for new music transitions. Sine/cosine gains keep uncorrelated full-gain material closer to constant power, not equal loudness.</summary>
+        /// <summary>新音乐过渡的默认映射；正弦/余弦增益使不相关的满增益素材更接近恒功率，不保证等响度。</summary>
         EqualPower = 1
     }
 }

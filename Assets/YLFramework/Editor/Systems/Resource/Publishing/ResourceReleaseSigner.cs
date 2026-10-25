@@ -12,6 +12,11 @@ namespace YLFramework.Editor.Resource
     /// <summary>签名只读取已发布的完整制品；RSA由调用方/外部安全提供者拥有，不导出或保存私钥。</summary>
     public static class ResourceReleaseSigner
     {
+        /// <summary>
+        /// 复验完整发布文件后签发绑定确切 Catalog 与完成记录字节的 RSA-SHA256-PKCS1 元数据，并用公钥自验。
+        /// 序号仅校验正数，到期时间须晚于当前且不超过 31 天；不检查历史递增、不安装信任公钥或部署资源。
+        /// </summary>
+        /// <remarks>渠道加密能力由调用方明确确认，不代替渠道隔离或内容解密验证。</remarks>
         public static byte[] Create(ResourceRelease release, string channel, long sequence, string keyId, RSA signingKey, DateTimeOffset expires,
             bool channelSupportsContentEncryption = false)
         {
@@ -110,7 +115,10 @@ namespace YLFramework.Editor.Resource
             }
         }
 
-        /// <summary>显式新增元数据文件，不覆盖已发布目录或任何现有文件；部署由调用方负责。</summary>
+        /// <summary>
+        /// 检查信封结构后在允许的绝对路径新增文件，不覆盖现有文件；本入口不重新验证签名或部署资源。
+        /// 写入或刷新失败可能留下部分文件，不承诺撤销导出；调用方须检查目标后再重试。
+        /// </summary>
         public static void Export(string path, byte[] envelope)
         {
             ResourceReleaseSignature.ReadEnvelope(envelope);

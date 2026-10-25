@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace YLFramework.Extensions
 {
+    /// <summary>
+    /// 根据世界空间目标和恒定重力求解抛体初速度，并可将结果写入三维或二维刚体。
+    /// </summary>
     public static class RigidbodyExtensions
     {
         /// <summary>
@@ -11,6 +14,9 @@ namespace YLFramework.Extensions
         /// 零重力可按直线求解；无正到达时间/时间不唯一或结果不可表示时抛 InvalidOperationException。
         /// 非有限输入抛 ArgumentException，本方法不改变刚体。
         /// </summary>
+        /// <param name="rigidbody">提供世界起点和重力开关的有效刚体。</param>
+        /// <param name="upSpeed">沿世界 Y 轴的初速度，可为负值。</param>
+        /// <param name="targetPosition">世界空间目标位置。</param>
         public static Vector3 ParabolicMotionVelocity(this Rigidbody rigidbody, float upSpeed, Vector3 targetPosition)
         {
             if (rigidbody == null)
@@ -23,6 +29,9 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>计算成功后才设置刚体速度；不可达或非法输入时保留原速度。</summary>
+        /// <param name="rigidbody">接收世界空间初速度的有效刚体。</param>
+        /// <param name="upSpeed">沿世界 Y 轴的初速度。</param>
+        /// <param name="targetPosition">世界空间目标位置。</param>
         public static void ParabolicMotion(this Rigidbody rigidbody, float upSpeed, Vector3 targetPosition)
         {
             Vector3 velocity = rigidbody.ParabolicMotionVelocity(upSpeed, targetPosition);
@@ -37,6 +46,9 @@ namespace YLFramework.Extensions
         /// 二维恒定重力、无阻力及无运动约束的速度计算；使用 Physics2D.gravity * gravityScale（保留方向）。
         /// 忽略目标 Z，取最晚正到达时间；异常与零重力契约同 Rigidbody 重载，不改变刚体。
         /// </summary>
+        /// <param name="rigidbody">提供世界起点和 gravityScale 的有效二维刚体。</param>
+        /// <param name="upSpeed">沿世界 Y 轴的初速度，可为负值。</param>
+        /// <param name="targetPosition">世界空间目标位置，仅使用 x/y。</param>
         public static Vector2 ParabolicMotionVelocity(this Rigidbody2D rigidbody, float upSpeed, Vector3 targetPosition)
         {
             if (rigidbody == null)
@@ -50,6 +62,9 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>计算成功后才设置二维刚体速度；失败时保留原速度。</summary>
+        /// <param name="rigidbody">接收世界空间初速度的有效二维刚体。</param>
+        /// <param name="upSpeed">沿世界 Y 轴的初速度。</param>
+        /// <param name="targetPosition">世界空间目标位置，仅使用 x/y。</param>
         public static void ParabolicMotion(this Rigidbody2D rigidbody, float upSpeed, Vector3 targetPosition)
         {
             Vector2 velocity = rigidbody.ParabolicMotionVelocity(upSpeed, targetPosition);
@@ -60,6 +75,7 @@ namespace YLFramework.Extensions
 #endif
         }
 
+        /// <summary>用竖直方程确定最晚正到达时间，再求解横向初速度，并拒绝非有限或不可达的结果。</summary>
         private static Vector3 CalculateVelocity(Vector3 origin, float upSpeed, Vector3 target, Vector3 acceleration)
         {
             if (!Finite(origin) || !Finite(target) || !Finite(acceleration) || float.IsNaN(upSpeed) || float.IsInfinity(upSpeed))
@@ -109,6 +125,7 @@ namespace YLFramework.Extensions
             return velocity;
         }
 
+        /// <summary>判断向量的三个分量是否都既非 NaN 也非无穷大。</summary>
         private static bool Finite(Vector3 value) =>
             !float.IsNaN(value.x) && !float.IsInfinity(value.x)
             && !float.IsNaN(value.y) && !float.IsInfinity(value.y)

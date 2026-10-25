@@ -5,7 +5,7 @@ namespace YLFramework.Actions
     public partial class ActionKit
     {
         /// <summary>创建使用共享遮罩画布的屏幕过渡动作。</summary>
-        /// <remarks>需要可用的画布与 ColorImage 引用；无场景画布时按资源键 <c>ActionKit/ScreenTransitionCanvas</c> 加载。</remarks>
+        /// <remarks>需要可用的画布与 colorImage 引用；无场景画布时按资源键 <c>ActionKit/ScreenTransitionCanvas</c> 加载。</remarks>
         public static class ScreenTransition
         {
             /// <summary>创建默认黑色遮罩在一秒内由透明变为不透明的动作。</summary>

@@ -8,9 +8,10 @@ using System.Threading;
 
 namespace YLFramework.Resource
 {
-    // 获取应用 key 的调用边界与后台纯 IO/认证分开；输入句柄保持至提交或取消真正收尾。
+    /// <summary>获取应用 key 的调用边界与后台纯 IO/认证分开；输入句柄保持至提交或取消真正收尾。</summary>
     internal sealed class ResourceContentValidation : IDisposable
     {
+        /// <summary>一份已打开内容文件及其认证上下文，密钥副本可由同组输入共享。</summary>
         private sealed class Input
         {
             internal ResourceCatalogFile File;
@@ -30,8 +31,10 @@ namespace YLFramework.Resource
         internal bool HasEncryptedContent => _inputs.Any(x => x.Header != null);
         internal bool HasContentFiles => _inputs.Count != 0;
 
+        /// <summary>确定验证全量内容或每个项目密钥的代表输入，不在构造时打开文件。</summary>
         private ResourceContentValidation(bool representativesOnly) => this._representativesOnly = representativesOnly;
 
+        /// <summary>打开内容输入、检查封装并从应用复制密钥，必要时取得一份串行验证预算。</summary>
         internal static ResourceContentValidation Capture(IEnumerable<ResourceLocalSnapshot> snapshots, ResourceDecryptionOptions options,
             bool representativesOnly = false, ResourceContentBudget budget = null)
         {
@@ -112,6 +115,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>在持有的输入上核验文件哈希及认证内容，支持后台取消和检查点通知。</summary>
         internal void Validate(CancellationToken cancellation = default, Action<string> checkpoint = null)
         {
             if (_hasStartedDisposal)
@@ -166,6 +170,7 @@ namespace YLFramework.Resource
             _isValidated = true;
         }
 
+        /// <summary>在提交前要求验证已经完成，且原输入仍可读、长度未变。</summary>
         internal void RequireStable()
         {
             if (_hasStartedDisposal || !_isValidated)
@@ -182,13 +187,16 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>枚举需要内容验证的 Bundle 和清单文件，不包含其他支持文件。</summary>
         internal static IEnumerable<ResourceCatalogFile> ContentFiles(ResourceLocalSnapshot snapshot) => snapshot.Document.Bundles
             .Cast<ResourceCatalogFile>().Concat(snapshot.Document.SupportFiles.Where(x => x.RelativeFile == snapshot.Document.ManifestFile));
 
+        /// <summary>由冻结快照及文件身份构造认证绑定上下文。</summary>
         internal static ResourceBundleContext Context(ResourceLocalSnapshot snapshot, ResourceCatalogFile file) => new(
             snapshot.Document.ProjectId, snapshot.Document.Platform, snapshot.Document.UnityCompatibility,
             file is ResourceCatalogBundle ? "Bundle" : "Manifest", file is ResourceCatalogBundle bundle ? bundle.LogicalId : "manifest");
 
+        /// <summary>短暂打开文件检查内容封装头，并将失败归类为资源域错误。</summary>
         internal static ResourceBundleEnvelopeHeader Inspect(ResourceLocalSnapshot snapshot, ResourceCatalogFile file)
         {
             try
@@ -202,6 +210,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>显式向应用复制 32 字节密钥；失败时清空临时副本并隐藏敏感异常原文。</summary>
         internal static byte[] CopyKey(ResourceDecryptionOptions options, string project, string keyId)
         {
             if (options?.KeyProvider == null)
@@ -236,16 +245,18 @@ namespace YLFramework.Resource
             }
         }
 
-        // 保留诊断因果对象，但常规Exception/历史日志不能串出应用provider的敏感原文。
+        /// <summary>保留诊断因果对象，但常规Exception/历史日志不能串出应用provider的敏感原文。</summary>
         private sealed class ProviderFailure : Exception
         {
             internal Exception OriginalCause
             {
                 get;
             }
+            /// <summary>私下保存应用异常，不将它挂入常规 InnerException 链。</summary>
             internal ProviderFailure(Exception cause) : base("Application key provider failure; sensitive cause retained privately.") => OriginalCause = cause;
         }
 
+        /// <summary>保留已有资源错误，或依据封装、认证和取消原因映射为资源域错误。</summary>
         internal static ResourceException Failure(Exception cause, string message)
         {
             if (cause is ResourceException resource)
@@ -272,6 +283,8 @@ namespace YLFramework.Resource
             return new ResourceException(kind, message, cause, source: ResourceSourceId.AssetBundle);
         }
 
+        /// <summary>清空密钥副本并尝试关闭全部输入，只有全部成功后才归还预算。</summary>
+        /// <remarks>关闭失败的输入仍被保留，可再次尝试释放，但不能再进行验证或提交检查。</remarks>
         public void Dispose()
         {
             if (_isDisposed)

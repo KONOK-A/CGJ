@@ -21,7 +21,7 @@ namespace YLFramework.Save
         /// <summary>备份文件后缀；写入替换时旧内容保留于此。</summary>
         public const string BackupSuffix = ".bak";
 
-        /// <summary>原子写入使用的临时文件后缀；正常写入完成后不存在。</summary>
+        /// <summary>临时文件名中追加唯一标识前的固定片段，正常提交后移走该临时文件。</summary>
         public const string TempSuffix = ".tmp";
         private const string CorruptSuffix = ".corrupt-";
         private const int MaxFileNameLength = 200;
@@ -95,6 +95,7 @@ namespace YLFramework.Save
             return !_reservedDeviceNames.Contains(baseName);
         }
 
+        /// <summary>将文件名校验失败转为参数异常，阻止对象或设置名称携带路径穿越内容。</summary>
         internal static void ValidateFileName(string name)
         {
             if (!IsValidFileName(name))
@@ -103,6 +104,7 @@ namespace YLFramework.Save
             }
         }
 
+        /// <summary>以显式 JsonSerializer 配置生成 JSON 文本，不使用全局默认配置。</summary>
         internal static string Serialize(object value, JsonSerializerSettings settings, Formatting formatting)
         {
             using (var text = new StringWriter(CultureInfo.InvariantCulture))
@@ -114,13 +116,13 @@ namespace YLFramework.Save
         }
 
         /// <summary>
-        /// 读取 JSON：仅 JSON / UTF8 内容损坏时尝试备份；IO 与权限错误不伪装成缺失或损坏。
+        /// 读取 JSON：主件缺失或 JSON / UTF-8 内容无效时尝试备份；其他 IO 与权限错误直接向外传播。
         /// </summary>
         /// <typeparam name="T">反序列化目标类型（引用类型）。</typeparam>
         /// <param name="path">主文件路径。</param>
         /// <param name="settings">JSON 序列化设置。</param>
         /// <param name="value">读取成功时的结果；失败为 null。</param>
-        /// <param name="error">失败原因；成功为 null。主文件与备份都失败时包含两段错误。</param>
+        /// <param name="error">主件失败原因；主件成功为 null，备份成功时仍可能保留主件错误，两者失败时合并可用原因。</param>
         /// <returns>读取状态，见 <see cref="SaveReadStatus"/>。</returns>
         /// <remarks>
         /// 读取备份不修改任何文件，避免读操作消耗唯一良好备份或覆盖损坏证据。
@@ -166,7 +168,7 @@ namespace YLFramework.Save
             }
         }
 
-        // 只将真正的 FileNotFound / DirectoryNotFound 视作缺失，不能用 File.Exists 吞掉权限/IO 错误。
+        /// <summary>严格读取单个 UTF-8 JSON 文件，拒绝重复属性与 JSON null；内容错误返回失败，其他 IO 错误抛出。</summary>
         internal static SaveReadStatus ReadJsonFile<T>(string path, JsonSerializerSettings settings, out T value, out string error, out string json)
             where T : class
         {
@@ -208,6 +210,7 @@ namespace YLFramework.Save
             }
             catch (FileNotFoundException)
             {
+                // 仅真实的文件或目录缺失按 Missing 处理，不能用 File.Exists 隐藏权限或其他 IO 失败。
                 return SaveReadStatus.Missing;
             }
             catch (DirectoryNotFoundException)
@@ -216,6 +219,7 @@ namespace YLFramework.Save
             }
         }
 
+        /// <summary>覆盖前确认主件可读或主备均缺失，拒绝覆盖需要显式恢复的数据。</summary>
         internal static void ValidateWritableJson(string path)
         {
             var status = ReadJson<JToken>(path, null, out _, out var error);
@@ -225,6 +229,7 @@ namespace YLFramework.Save
             }
         }
 
+        /// <summary>校验备份后显式替换主件，先另存已有主件并保留原备份，返回被保留主件的路径或 null。</summary>
         internal static string RestoreBackup<T>(string path, JsonSerializerSettings settings,
             CancellationToken cancellationToken, Action<T> validate = null) where T : class
         {
@@ -246,6 +251,8 @@ namespace YLFramework.Save
             return preserved;
         }
 
+        /// <summary>独占写入并刷新唯一临时文件，再以替换或移动提交单文件；失败只尝试清理本次临时文件。</summary>
+        /// <remarks>不提供多文件崩溃事务；取消只在提交前检查，提交完成后不会将成功改报取消。</remarks>
         internal static void WriteTextAtomic(string path, string content,
             CancellationToken cancellationToken = default, bool overwrite = true, bool keepBackup = true)
         {
@@ -292,6 +299,7 @@ namespace YLFramework.Save
             }
         }
 
+        /// <summary>取得显式根目录的绝对路径并拒绝文件系统根及已有链接，不创建目录。</summary>
         internal static string NormalizeRoot(string root)
         {
             if (string.IsNullOrWhiteSpace(root))
@@ -310,6 +318,8 @@ namespace YLFramework.Save
             return normalized;
         }
 
+        /// <summary>向上检查已有路径及祖先，拒绝符号链接或目录联接；缺失节点留待后续操作创建。</summary>
+        /// <remarks>这是操作前的路径检查，不是抵御并发替换路径的文件系统沙箱。</remarks>
         internal static void EnsureNoLinks(string path)
         {
             for (var current = Path.GetFullPath(path); !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))

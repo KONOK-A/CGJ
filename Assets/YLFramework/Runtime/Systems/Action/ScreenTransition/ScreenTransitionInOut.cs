@@ -8,6 +8,7 @@ namespace YLFramework.Actions
     /// <remarks>
     /// 内部通过 StartGlobal 启动独立序列，需要播放模式下的全局宿主。
     /// 父动作暂停或取消不会控制已启动的子序列；取消不触发正常完成，子序列结束也不会自动完成父动作。
+    /// 当前类型不在回收时清除配置回调与子动作引用；带参 Allocate 仅覆盖传入的两个子动作，不重置已有回调。
     /// </remarks>
     public class ScreenTransitionInOut<TIn, TOut> : AbstractAction<ScreenTransitionInOut<TIn, TOut>>
         where TIn : IAction

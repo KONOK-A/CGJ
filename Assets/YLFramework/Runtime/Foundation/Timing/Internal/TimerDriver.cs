@@ -4,7 +4,7 @@ using YLFramework.Singletons;
 
 namespace YLFramework.Timing.Internal
 {
-    // 唯一默认运行宿主；只提供渲染样本和 owner 生命周期，不广播 Update 或执行 Action。
+    /// <summary>默认计时服务的独立宿主，提供渲染样本和调度器生命周期，不接管 Update 广播或 Action 系统推进。</summary>
     internal sealed class TimerDriver : MonoBehaviour
     {
         private static TimerDriver _instance;
@@ -19,10 +19,13 @@ namespace YLFramework.Timing.Internal
         private double _scaled;
         private double _unscaled;
 
+        /// <summary>登记新 Play 会话的默认计时宿主清理。</summary>
         static TimerDriver() => SingletonSessionState.RegisterSessionReset(ResetSession);
+        /// <summary>自身是否仍是当前未释放宿主，且属于当前执行会话。</summary>
         private bool IsCurrent => !_isReleased && ReferenceEquals(_instance, this) &&
             ReferenceEquals(_session, SingletonSessionState.ExecutionSession);
 
+        /// <summary>取得或惰性创建默认内核；门禁关闭时拒绝，停用或释放的存活宿主须先 Shutdown 才能重建。</summary>
         internal static TimerScheduler GetScheduler()
         {
             if (_isShuttingDown || !SingletonSessionState.CanRunExecution)
@@ -51,6 +54,7 @@ namespace YLFramework.Timing.Internal
             return _instance._scheduler;
         }
 
+        /// <summary>在激活前建立会话身份、自动内核与缓存，创建失败时回收本次宿主。</summary>
         private static void CreateHost()
         {
             GameObject obj = null;
@@ -87,7 +91,9 @@ namespace YLFramework.Timing.Internal
             }
         }
 
+        /// <summary>为登记或句柄操作刷新合法样本，不直接派发到期任务。</summary>
         private void Synchronize() => Synchronize(false);
+        /// <summary>核对执行权限后同步渲染帧和可用秒样本；宿主失效则结束其调度责任。</summary>
         private void Synchronize(bool update)
         {
             if (!IsCurrent || !SingletonSessionState.CanRunExecution || !this || !isActiveAndEnabled)
@@ -119,6 +125,7 @@ namespace YLFramework.Timing.Internal
             _scheduler.Sample(_scaled, _unscaled, _frame, validSeconds);
         }
 
+        /// <summary>采集本次 Update 的合法渲染样本，再由自动内核推进一次到期派发。</summary>
         private void Update()
         {
             Synchronize(true);
@@ -130,6 +137,7 @@ namespace YLFramework.Timing.Internal
             _scheduler.AdvanceAutomatic();
         }
 
+        /// <summary>先标记释放再幂等关闭内核，取消通知重入时不能继续使用本宿主。</summary>
         private void ReleaseOwner()
         {
             if (_isReleased)
@@ -141,6 +149,7 @@ namespace YLFramework.Timing.Internal
             _scheduler?.Dispose();
         }
 
+        /// <summary>先撤下缓存并禁止关闭期间重建，再失效旧任务和销毁旧宿主；不改变执行会话令牌。</summary>
         internal static void Shutdown()
         {
             if (_isShuttingDown)
@@ -171,8 +180,11 @@ namespace YLFramework.Timing.Internal
             }
         }
 
+        /// <summary>新 Play 会话初始化时关闭旧默认宿主，不恢复旧任务。</summary>
         private static void ResetSession() => Shutdown();
+        /// <summary>宿主停用即永久结束本内核的责任，重新启用不恢复旧任务。</summary>
         private void OnDisable() => ReleaseOwner();
+        /// <summary>外部销毁时释放内核，并且仅移除自身仍占据的缓存。</summary>
         private void OnDestroy()
         {
             ReleaseOwner();
@@ -181,6 +193,7 @@ namespace YLFramework.Timing.Internal
                 _instance = null;
             }
         }
+        /// <summary>仅由当前会话宿主关闭执行门禁并释放内核，忽略旧宿主的迟到退出通知。</summary>
         private void OnApplicationQuit()
         {
             if (!IsCurrent)

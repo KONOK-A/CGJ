@@ -6,9 +6,10 @@ using YLFramework.Pooling;
 namespace YLFramework.Core
 {
 
+    /// <summary>管理 Module 内 Model 的类型与 ID 索引、自动编号及注册失败回滚，不使用 Model 对象池。</summary>
     internal class ModelManager
     {
-        // 添加
+        /// <summary>建立数据归属后执行初始化；失败时解除注册并恢复传入时的业务 ID。</summary>
         public static void AddModel(Module module, Model model)
         {
             if (module == null)
@@ -94,7 +95,7 @@ namespace YLFramework.Core
             }
         }
 
-        // 移除
+        /// <summary>仅退出归属与索引均匹配的实例；初始化期间拒绝移除，重复退出不再执行钩子。</summary>
         public static void RemoveModel(Module module, Model model)
         {
             if (module == null)
@@ -126,6 +127,7 @@ namespace YLFramework.Core
             ExitModel(module, model);
         }
 
+        /// <summary>在旧归属仍有效时调用退出钩子，并在 finally 中清除匹配索引与注册身份。</summary>
         private static void ExitModel(Module module, Model model)
         {
             model.IsExiting = true;
@@ -151,10 +153,10 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>查询本模块精确类型的唯一实例，不创建；缺失返回 null，多实例要求调用方指定 ID。</summary>
         public static Model GetModel(Module module, Type modelType)
         {
             ValidateModelType(modelType);
-            // 从当前模块中查询
             if (module.Models.ContainsKey(modelType) && module.Models[modelType].Count > 1)
             {
                 throw new Exception(string.Format("数据:{0}存在多份，请根据id查询!", modelType.FullName));
@@ -171,7 +173,7 @@ namespace YLFramework.Core
             return null;
         }
 
-        // 查询
+        /// <summary>按本模块的精确类型与业务 ID 查询，不存在时返回 null。</summary>
         public static Model GetModel(Module module, Type modelType, long id)
         {
             ValidateModelType(modelType);
@@ -185,7 +187,7 @@ namespace YLFramework.Core
 
 
 
-        // 清空模块中所有的数据
+        /// <summary>用临时列表保存本模块数据快照并逐个移除；退出异常会中断后续处理，但仍归还列表。</summary>
         public static void ClearModel(Module module)
         {
 
@@ -212,6 +214,7 @@ namespace YLFramework.Core
 
         }
 
+        /// <summary>快照筛选指定类型及派生类型的数据后逐个移除，所有临时列表均在 finally 归还。</summary>
         public static void ClearModel(Module module, Type modelType)
         {
             ValidateModelType(modelType);
@@ -262,6 +265,7 @@ namespace YLFramework.Core
 
         }
 
+        /// <summary>复制本模块中指定类型及派生类型的注册实例，不改变任何实例的归属。</summary>
         public static List<Model> GetModels(Module module, Type modelType)
         {
             ValidateModelType(modelType);
@@ -282,6 +286,7 @@ namespace YLFramework.Core
             return models;
         }
 
+        /// <summary>复用本模块精确类型的唯一实例，缺失时构造并初始化；退出中拒绝复用。</summary>
         public static Model LoadModel(Module module, Type modelType)
         {
             ValidateModelType(modelType);
@@ -319,11 +324,13 @@ namespace YLFramework.Core
             return model;
         }
 
+        /// <summary>以泛型具体类型加载本模块的唯一数据实例，不向其他模块回退。</summary>
         public static T LoadModel<T>(Module module) where T : Model
         {
             return LoadModel(module, typeof(T)) as T;
         }
 
+        /// <summary>拒绝空类型及非 Model 类型，不在查询入口要求类型可构造。</summary>
         private static void ValidateModelType(Type modelType)
         {
             if (modelType == null)

@@ -43,6 +43,7 @@ namespace YLFramework.Core
             return null;
         }
 
+        /// <summary>停用自有系统；与外部模块共享默认 actions 时，在自身 OnDisable 期间临时保护其所有权。</summary>
         internal static void DisableOwnedSystem(GameObject owned)
         {
 #if ENABLE_INPUT_SYSTEM
@@ -113,6 +114,7 @@ namespace YLFramework.Core
             owned.SetActive(false);
         }
 
+        /// <summary>从扩展指针数据解析鼠标按钮、笔尖或对应触点的按压控件，无法取得时返回 null。</summary>
         internal static object GetPointerButton(PointerEventData data)
         {
 #if ENABLE_INPUT_SYSTEM
@@ -156,6 +158,7 @@ namespace YLFramework.Core
         internal static object GetPointerDevice(PointerEventData data) => data.GetType().GetProperty("device")?.GetValue(data);
         internal static int GetTouchId(PointerEventData data) => (int?)data.GetType().GetProperty("touchId")?.GetValue(data) ?? 0;
 
+        /// <summary>按 Input System 的 added 状态确认设备移除；Legacy 无设备对象不视为已移除。</summary>
         internal static bool IsPointerDeviceRemoved(object device)
         {
             if (device == null)
@@ -172,6 +175,7 @@ namespace YLFramework.Core
             return !(bool)added.GetValue(device);
         }
 
+        /// <summary>经字段类型核验的 Input System 指针状态访问表，用于精确写回嵌套值类型。</summary>
         private sealed class PointerAdapter
         {
             internal readonly FieldInfo States;
@@ -187,6 +191,7 @@ namespace YLFramework.Core
             internal readonly FieldInfo ClickTime;
             internal readonly FieldInfo SameObject;
             internal readonly FieldInfo PressRaycast;
+            /// <summary>解析并校验当前模块的内部布局，成员缺失或类型变化时拒绝建立适配器。</summary>
             internal PointerAdapter(Type moduleType)
             {
                 FieldInfo Field(Type type, string name) => type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) ??
@@ -220,6 +225,7 @@ namespace YLFramework.Core
         private static PointerAdapter _pointerAdapter;
         private static FieldInfo _pendingInputFieldActivation;
 
+        /// <summary>清除 InputField 已排队的下一帧激活，防止门禁生效后旧选择重新激活输入框。</summary>
         internal static void CancelPendingInputFieldActivation(UnityEngine.UI.InputField input)
         {
             var field = _pendingInputFieldActivation ?? (_pendingInputFieldActivation = typeof(UnityEngine.UI.InputField).GetField("m_ShouldActivateNextUpdate", BindingFlags.NonPublic | BindingFlags.Instance));
@@ -231,6 +237,7 @@ namespace YLFramework.Core
             field.SetValue(input, false);
         }
 
+        /// <summary>只撤销匹配设备、触点、按钮及目标的捕获，返回是否已找到可清理的原状态。</summary>
         // 对应 Input System 1.14.0 的 ButtonState。所有值类型逐层写回，物理 isPressed/framePressState/pressTime 保留。
         internal static bool CancelPointer(BaseInputModule module, PointerEventData data, int pointerId,
             PointerEventData.InputButton button, object device, int touchId, GameObject target, bool acceptingDown = false)
@@ -323,6 +330,7 @@ namespace YLFramework.Core
             return matched;
         }
 
+        /// <summary>读取原按压控件或 Legacy 指针的真实按压状态；无法查询的自定义模块不臆造释放。</summary>
         internal static bool PointerStillPressed(BaseInputModule module, object buttonControl, int pointerId, PointerEventData.InputButton button)
         {
             if (buttonControl != null)
@@ -358,6 +366,7 @@ namespace YLFramework.Core
             return true;
         }
 
+        /// <summary>随执行会话重置警告与反射缓存，不跨运行沿用指针适配器和鼠标访问结果。</summary>
         static InputSystemBridge() => SingletonSessionState.RegisterSessionReset(() =>
         {
             _hasWarnedAboutInputModuleFallback = _hasWarnedAboutMouseReflection = false;
@@ -378,7 +387,7 @@ namespace YLFramework.Core
 #endif
 
         /// <summary>
-        /// 幂等：确保场景中的 EventSystem 拥有输入模块。
+        /// 为框架自建 EventSystem 补充缺少的输入模块。
         /// 仅供自建系统配置；已有模块不替换。Both 优先 Input System，只有 Legacy 可用时才允许回退。
         /// </summary>
         public static void EnsureEventSystemInputModule(EventSystem eventSystem)
@@ -450,6 +459,7 @@ namespace YLFramework.Core
 #endif
         }
 
+        /// <summary>按当前运行模式销毁本次尝试创建的组件，供输入模块安装失败时收尾。</summary>
         private static void DestroyComponent(Component component)
         {
             if (component == null)
@@ -467,6 +477,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>每轮执行最多报告一次 Input System 模块不可用及其回退限制。</summary>
         private static void WarnInputModuleFallbackOnce(string reason)
         {
             if (_hasWarnedAboutInputModuleFallback)
@@ -478,6 +489,7 @@ namespace YLFramework.Core
             Debug.LogWarning($"[InputSystemBridge] InputSystem 输入模块不可用（{reason}）。仅启用 Legacy 时允许回退 StandaloneInputModule。");
         }
 
+        /// <summary>每轮执行最多报告一次鼠标反射失败，不把失败结果伪装为有效零坐标。</summary>
         private static void WarnMouseReflectionOnce(string reason)
         {
             if (_hasWarnedAboutMouseReflection)
@@ -490,6 +502,7 @@ namespace YLFramework.Core
         }
 
 #if ENABLE_INPUT_SYSTEM
+        /// <summary>反射安装 Input System UI 模块，必要时分配默认 actions；失败则销毁本次组件并报告原因。</summary>
         private static bool TryAddInputSystemModule(EventSystem eventSystem)
         {
             var moduleType = Type.GetType(InputSystemModuleTypeName);
@@ -533,6 +546,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>每轮执行只解析一次鼠标位置访问成员；缺失时保留不可用结果供调用方明确返回失败。</summary>
         private static bool EnsureMouseReflection()
         {
             if (_hasInitializedMouseReflection)

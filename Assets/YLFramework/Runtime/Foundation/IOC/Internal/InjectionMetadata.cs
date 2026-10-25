@@ -15,6 +15,7 @@ namespace YLFramework.DependencyInjection
 
         internal string InjectName;
 
+        // 属性只要任一访问器公开就归入公开成员，实际写入仍使用其 setter。
         internal bool IsPublic;
 
         internal bool CanInject;
@@ -25,7 +26,7 @@ namespace YLFramework.DependencyInjection
     }
 
     /// <summary>
-    /// 单个类型的可注入成员清单（按声明层级 base→derived、字段→属性排列，顺序确定但非公开契约）。
+    /// 单个类型的可注入成员清单（按声明层级从基类到派生类、同层字段先于属性排列，顺序确定但非公开契约）。
     /// 按注入模式惰性缓存过滤结果，避免每次 Inject 重新扫描反射。
     /// </summary>
     internal sealed class InjectionMetadata
@@ -34,6 +35,7 @@ namespace YLFramework.DependencyInjection
         private InjectableMember[] _onlyPublic;
         private InjectableMember[] _onlyNonPublic;
 
+        /// <summary>保存已排序的成员描述，后续只按可见性筛选，不重复扫描反射。</summary>
         internal InjectionMetadata(InjectableMember[] orderedMembers)
         {
             _orderedMembers = orderedMembers;
@@ -55,6 +57,7 @@ namespace YLFramework.DependencyInjection
             }
         }
 
+        /// <summary>按可见性生成筛选结果，并保留原清单的注入顺序。</summary>
         private InjectableMember[] Filter(bool isPublic) =>
             _orderedMembers.Where(member => member.IsPublic == isPublic).ToArray();
     }

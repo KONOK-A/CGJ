@@ -5,9 +5,11 @@ using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>编辑 Mixer 控制组件的显式路由、参数和 Snapshot 配置，不直接应用共享 Mixer 状态。</summary>
     [CustomEditor(typeof(AudioMixerController)), CanEditMultipleObjects]
     public sealed class AudioMixerControllerEditor : UnityEditor.Editor
     {
+        /// <summary>绘制并提交序列化配置以支持 Undo 和 Prefab Override，然后显示各组件的配置告警。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -35,6 +37,8 @@ namespace YLFramework.Editor.Audio
             }
         }
 
+        /// <summary>检查配置引用、快照归属、过渡时长和权重，不试写 Mixer 参数或执行过渡。</summary>
+        /// <param name="serialized">单个 AudioMixerController 的序列化视图。</param>
         private static void DrawWarnings(SerializedObject serialized)
         {
             var config = serialized.FindProperty("config").objectReferenceValue as AudioMixerConfig;

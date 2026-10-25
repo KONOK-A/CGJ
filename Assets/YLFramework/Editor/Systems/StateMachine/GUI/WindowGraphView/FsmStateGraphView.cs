@@ -9,23 +9,29 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>当前配置父层的节点图视图，协调选择、拖动、连线预览及工厂作者操作，不执行状态逻辑。</summary>
     public class FsmStateGraphView : GraphView
     {
 
+        /// <summary>当前显示层按节点名称建立的视图索引，不包含其他浏览层的节点。</summary>
         public Dictionary<string, FsmNodeView> StateNodes = new Dictionary<string, FsmNodeView>();
 
         internal FsmTransitionBackground Transition = null;
 
 
+        /// <summary>是否正在从来源节点预览新连线，尚未写入过渡数据。</summary>
         public bool IsMakingTransition = false;
 
+        /// <summary>当前预览连线的来源节点。</summary>
         public FsmNodeView MakeTransitionFrom = null;
 
+        /// <summary>最近一次鼠标移动命中的节点，用于连线预览和边命中选择。</summary>
         public FsmNodeView HoverNode = null;
 
         private RuntimeFsmController _controller = null;
 
 
+        /// <summary>拥有此视图的窗口，供布局相关坐标修正使用。</summary>
         public FsmEditorWindow Window
         {
             get; set;
@@ -33,6 +39,7 @@ namespace YLFramework.Editor.StateMachine
 
         //private FSMNodeView selectNode = null;
 
+        /// <summary>建立网格及过渡背景，注册删除和鼠标输入，并安装平移、拖动、框选和缩放操纵器。</summary>
         public FsmStateGraphView()
         {
             styleSheets.Add(AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/YLFramework/Editor/Systems/StateMachine/Styles/FSMGraph.uss"));
@@ -64,6 +71,7 @@ namespace YLFramework.Editor.StateMachine
             RefreshView();
         }
 
+        /// <summary>切换配置时恢复其视口平移及缩放，随后重建当前父层节点。</summary>
         private void RefreshView()
         {
             if (Context.Instance.RuntimeFsmController != null)
@@ -85,6 +93,7 @@ namespace YLFramework.Editor.StateMachine
             RefreshNodes();
         }
 
+        /// <summary>将变化的视口缩放和平移写入当前配置并标脏，不记录 Undo 或立即落盘。</summary>
         private void SaveScaleAndPosition()
         {
 
@@ -120,6 +129,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>由宿主窗口转发编辑器更新，响应当前配置变化并保存视口状态。</summary>
         public void Update()
         {
             if (_controller != Context.Instance.RuntimeFsmController)
@@ -131,6 +141,7 @@ namespace YLFramework.Editor.StateMachine
             SaveScaleAndPosition();
         }
 
+        /// <summary>移除旧视图后按当前浏览父层重建节点，并消费偏好设置中的一次性选择恢复标记。</summary>
         public void RefreshNodes()
         {
 
@@ -172,6 +183,9 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>仅更新图索引的名称键；节点数据与关联引用须先由节点工厂完成改名。</summary>
+        /// <param name="oldName">图中既有名称。</param>
+        /// <param name="newName">图中尚未占用的新名称。</param>
         public void RenameState(string oldName, string newName)
         {
             //Debug.LogFormat("重命名:old:{0} new:{1} cn:{2} co:{3}",oldName,newName, StateNodes.ContainsKey(newName), StateNodes.ContainsKey(oldName));
@@ -190,6 +204,9 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>按名称查询当前显示层中的节点视图。</summary>
+        /// <param name="name">节点名称。</param>
+        /// <returns>对应视图；名称为空或未显示时为 null。</returns>
         public FsmNodeView GetNode(string name)
         {
             if (string.IsNullOrEmpty(name))
@@ -206,6 +223,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>处理非文本编辑场景的 Delete 键，删除图选择后阻止事件重复传播。</summary>
         private void KeyDownControl(KeyDownEvent evt)
         {
             if (evt.keyCode != KeyCode.Delete || evt.target is TextElement ||
@@ -218,6 +236,7 @@ namespace YLFramework.Editor.StateMachine
             evt.StopImmediatePropagation();
         }
 
+        /// <summary>非运行期删除选中普通节点和有效边，以一个 Undo 组合并工厂操作，再重建图。</summary>
         internal void DeleteSelectedElements()
         {
             var controller = Context.Instance.RuntimeFsmController;
@@ -262,18 +281,20 @@ namespace YLFramework.Editor.StateMachine
             RefreshNodes();
         }
 
+        /// <summary>左键单击时选中最近悬停边，并尝试结束未提交的连线预览。</summary>
         private void MouseDownControl(MouseDownEvent evt)
         {
             //BehaviourTreeView.TreeWindow.WindowRoot.InspectorView.UpdateInspector();
             if (evt.button == 0 && evt.clickCount == 1)
             {
-                // 左键单击
                 Transition.OnTransitionSelection(Transition.CloseTransition);
                 StopMakeTransition(null);
             }
         }
 
 
+        /// <summary>替换默认图菜单，空白处提供新建入口，节点处委托节点菜单；新建项在运行期禁用。</summary>
+        /// <param name="evt">上下文菜单构建事件。</param>
         public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
         {
 
@@ -314,6 +335,8 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>将菜单携带的鼠标位置转换到内容坐标，创建普通状态节点。</summary>
+        /// <param name="action">userData 为鼠标位置的菜单动作。</param>
         public void CreateState(DropdownMenuAction action)
         {
             Vector2 mousePosition = (Vector2)(action.userData);
@@ -321,6 +344,8 @@ namespace YLFramework.Editor.StateMachine
             CreateState(false, position);
         }
 
+        /// <summary>将菜单鼠标位置转换到内容坐标，创建子状态机容器及内部导航节点。</summary>
+        /// <param name="action">userData 为鼠标位置的菜单动作。</param>
         public void CreateSubStateMachine(DropdownMenuAction action)
         {
             Vector2 mousePosition = (Vector2)(action.userData);
@@ -329,6 +354,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>复制当前浏览祖先链创建节点，按当前层已有节点判断默认状态，并为新容器补齐内置节点。</summary>
         private void CreateState(bool isSubStateMachine, Vector3 mousePosition)
         {
 
@@ -367,13 +393,10 @@ namespace YLFramework.Editor.StateMachine
 
             if (isSubStateMachine)
             {
-                // 给当前子状态机创建 Entry 状态
                 Rect r = new Rect(0, 300, FsmConst.StateNodeWith, FsmConst.StateNodeHeight);
                 CreateSubState(controller, FsmConst.EntryState, state, parents, r, FsmConst.EntryState);
-                // 给当前子状态机创建 Any 状态
                 r = new Rect(0, 100, FsmConst.StateNodeWith, FsmConst.StateNodeHeight);
                 CreateSubState(controller, FsmConst.AnyState, state, parents, r, FsmConst.AnyState);
-                // 给当前子状态机创建 Entry 状态
                 r = new Rect(600, 300, FsmConst.StateNodeWith, FsmConst.StateNodeHeight);
                 CreateSubState(controller, FsmConst.Up, state, parents, r, FsmConst.Up);
             }
@@ -382,9 +405,9 @@ namespace YLFramework.Editor.StateMachine
             RefreshNodes();
         }
 
+        /// <summary>复制并追加新容器的祖先链，以完整路径命名并创建一个内部内置节点。</summary>
         private void CreateSubState(RuntimeFsmController controller, string name, FsmStateNodeData state, List<string> parents, Rect rect, string buildInName)
         {
-            // 创建三个内置状态
             List<string> parentsTemp = new List<string>();
             parentsTemp.AddRange(parents);
             parentsTemp.Add(state.name);
@@ -400,12 +423,16 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>登记连线来源并进入预览模式，不立即创建过渡数据。</summary>
+        /// <param name="node">连线来源节点。</param>
         public void StartMakeTransition(FsmNodeView node)
         {
             IsMakingTransition = true;
             MakeTransitionFrom = node;
         }
 
+        /// <summary>非来源节点点击时结束预览，有效端点交由工厂创建过渡；再次点击来源则保持预览。</summary>
+        /// <param name="node">目标节点；null 表示取消，正常预览中不创建过渡。</param>
         public void StopMakeTransition(FsmNodeView node)
         {
             if (node == MakeTransitionFrom)
@@ -431,6 +458,7 @@ namespace YLFramework.Editor.StateMachine
             FsmTransitionFactory.CreateTransition(controller, from.Data.name, node.Data.name);
         }
 
+        /// <summary>在内容坐标中查找鼠标命中节点，命中后清除边悬停以避免节点下方的边抢选。</summary>
         private void UpdateHoverState(MouseMoveEvent evt)
         {
             Vector2 point = contentViewContainer.WorldToLocal(evt.mousePosition);
@@ -449,6 +477,9 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>读取并消费配置及节点对应的一次性选择标记。</summary>
+        /// <param name="name">节点名称。</param>
+        /// <returns>存在待恢复选择标记时为 true。</returns>
         internal static bool GetPrefsSelection(string name)
         {
             string key = PrefsSelectionKey(name);
@@ -466,6 +497,8 @@ namespace YLFramework.Editor.StateMachine
             return v;
         }
 
+        /// <summary>记录下一次图重建需要恢复的节点选择，供脚本编译重载后继续检查。</summary>
+        /// <param name="name">需要恢复选择的节点名称。</param>
         internal static void SavePrefsSelection(string name)
         {
             string key = PrefsSelectionKey(name);
@@ -477,6 +510,9 @@ namespace YLFramework.Editor.StateMachine
             EditorPrefs.SetBool(key, true);
         }
 
+        /// <summary>以当前配置资产 GUID 和节点名称构造选择偏好键。</summary>
+        /// <param name="name">节点名称。</param>
+        /// <returns>对应偏好键；没有当前配置时为空字符串。</returns>
         internal static string PrefsSelectionKey(string name)
         {
             RuntimeFsmController controller = Context.Instance.RuntimeFsmController;

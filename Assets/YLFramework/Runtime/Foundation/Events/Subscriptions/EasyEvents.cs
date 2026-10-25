@@ -16,6 +16,7 @@ namespace YLFramework.Events
     {
         private static readonly EasyEvents _globalEasyEvents = new();
 
+        /// <summary>为全局事件集合登记 Play 会话重置入口。</summary>
         static EasyEvents()
         {
             // Domain Reload disabled 时静态字段会跨 Play 会话保留，
@@ -41,6 +42,7 @@ namespace YLFramework.Events
             _globalEasyEvents.AddEvent<T>();
         }
 
+        /// <summary>结束全局标准事件的旧代次并清理映射，将清理异常记录到日志而不阻断其他会话重置。</summary>
         private static void ClearGlobalEvents()
         {
             try
@@ -96,7 +98,7 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 移除指定类型的事件映射。
+        /// 移除指定类型的事件映射，不注销其监听或回收实例；持有该事件的调用方仍可继续使用它。
         /// </summary>
         /// <typeparam name="T">事件类型。</typeparam>
         /// <returns>存在并被移除时返回 true。</returns>
@@ -122,6 +124,7 @@ namespace YLFramework.Events
             ClearListeners(false);
         }
 
+        /// <summary>先摘除本轮映射再逐事件清理，按需结束标准通道代次，并在全部尝试后统一报告异常。</summary>
         private void ClearListeners(bool resetOwners)
         {
             var events = new List<IEasyEvent>(_eventTypeDict.Values);

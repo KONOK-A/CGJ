@@ -13,6 +13,7 @@ namespace YLFramework.Core.RoslynAnalyzers
     /// 调用者可写方法名、Type.Method 或 Namespace.Outer.Type.Method，按声明类型及名称精确匹配。
     /// Lambda/local 是独立调用体，不能借用外层或同名 local 的身份；标记按有效覆写链继承，不叠加实现接口。
     /// </summary>
+    /// <remarks>允许名单由分析器从 Attribute 实参读取；构造器不保存名单，也不执行运行时调用检查。</remarks>
     public class RestrictedCallAttribute : Attribute
     {
 

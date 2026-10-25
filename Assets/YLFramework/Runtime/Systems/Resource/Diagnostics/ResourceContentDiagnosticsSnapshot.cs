@@ -1,6 +1,7 @@
 namespace YLFramework.Resource
 {
     /// <summary>显式解密数据预算与额外native成本分列；不是密码模块或进程总内存硬上限。</summary>
+    /// <remarks>保存采样时的数值副本，不持有运行中输入或密码句柄；进程计数逐项读取，不是全局同一时刻快照。</remarks>
     public readonly struct ResourceContentDiagnosticsSnapshot
     {
         /// <summary>本主体配置的显式数据缓冲上限。</summary>
@@ -64,6 +65,7 @@ namespace YLFramework.Resource
             get;
         }
 
+        /// <summary>保存主体预算与工作计数，并读取进程适配器的 CNG 逻辑成本计数。</summary>
         internal ResourceContentDiagnosticsSnapshot(long maximum, long allocated, long reserved, long peak, int inputs, int work,
             long nativeBuffers, int retained)
         {

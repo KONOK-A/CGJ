@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>提供当前项目的定位、身份复制和文档入口，不编辑或保存项目配置。</summary>
     internal sealed class ResourceProjectActionsPopup : PopupWindowContent
     {
         private const float Width = 220;
@@ -16,6 +17,7 @@ namespace YLFramework.Editor.Resource
         private readonly string[] _labels;
         private int _highlighted = -1;
 
+        /// <summary>捕获打开菜单时的项目标识和路径，供后续复制而非重新推断目标。</summary>
         internal ResourceProjectActionsPopup(ResourceProject selected, Action<string> error)
         {
             _project = selected;
@@ -33,9 +35,12 @@ namespace YLFramework.Editor.Resource
 
         // 使用已知弹层宽度右对齐，而不是猜测原生系统菜单的实际宽度。
         internal static Rect GetAnchor(Rect button) => new(button.xMax - Width, button.y + 4, Width, button.height);
+        /// <summary>按当前可用动作数量计算弹层高度。</summary>
         public override Vector2 GetWindowSize() => new(Width, _labels.Length * RowHeight + 12 + (_labels.Length > 1 ? 9 : 0));
+        /// <summary>启用鼠标移动事件以更新菜单高亮。</summary>
         public override void OnOpen() => editorWindow.wantsMouseMove = true;
 
+        /// <summary>处理键盘和鼠标导航，将选中动作交给统一菜单执行入口。</summary>
         public override void OnGUI(Rect rect)
         {
             var input = Event.current;
@@ -83,6 +88,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>关闭菜单后执行定位、复制或打开文档，不触发构建和发布。</summary>
         private void Execute(int index)
         {
             editorWindow.Close();

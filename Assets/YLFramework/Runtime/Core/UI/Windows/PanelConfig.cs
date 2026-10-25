@@ -34,6 +34,7 @@ namespace YLFramework.Core
         /// <summary>轻量窗口默认：Layer/Priority 为 0，非模态、不覆盖、参与 Top、单实例且可缓存。</summary>
         public static PanelConfig Default => new PanelConfig { participatesInTop = true, cacheOnClose = true };
 
+        /// <summary>依次按 Layer、Modal、Priority 和接受顺序升序比较；序号只打破前三项的平局。</summary>
         internal static int Compare(PanelConfig a, long aSequence, PanelConfig b, long bSequence)
         {
             int result = a.layer.CompareTo(b.layer);
@@ -50,6 +51,7 @@ namespace YLFramework.Core
             return result == 0 ? aSequence.CompareTo(bSequence) : result;
         }
 
+        /// <summary>检查配置自身的层索引和实例模式；不在此判断实际根是否提供对应层。</summary>
         internal void Validate()
         {
             if (layer < 0)

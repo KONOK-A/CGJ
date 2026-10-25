@@ -46,23 +46,28 @@ namespace YLFramework.Audio
         [SerializeField] private AudioAutoFade autoFade;
         [SerializeField] private UnityEvent onStarted = new UnityEvent();
 
-        /// <summary>Invoked once after each accepted sound starts and its lease is tracked by this emitter.</summary>
+        /// <summary>每次音效接纳并启动、原句柄纳入本组件追踪后通知一次；允许同步停止或停用组件。</summary>
         public UnityEvent Started => onStarted;
 
+        /// <summary>本组件追踪的一次播放身份及停用时是否应停止的责任。</summary>
         private struct Playback
         {
+            /// <summary>仅控制原代次的播放句柄。</summary>
             public AudioHandle Handle;
+            /// <summary>循环或跟随请求在组件停用时需要停止。</summary>
             public bool StopOnDisable;
         }
 
         private readonly List<Playback> _playbacks = new List<Playback>();
         private Action<AudioClip, AudioHandle> _startedCallback;
 
+        /// <summary>为新添加的 Editor 组件默认启用全局去重模式继承，不改旧资产缺省字段值。</summary>
         private void Reset()
         {
             useGlobalPlaySoundMode = true;
         }
 
+        /// <summary>按配置只在首次 Start 自动播放，不在每次启用时重复触发。</summary>
         private void Start()
         {
             if (playOnAwake)
@@ -92,7 +97,7 @@ namespace YLFramework.Audio
 
             options.Validate(positionMode != PositionMode.TwoDimensional);
 
-            // Choose once and validate all input before replacing an owned loop.
+            // 先选定一次并完成全部输入校验，再替换自有循环，避免坏候选或配置截断旧播放。
             AudioClip selectedClip;
             if (!(useWeightedRandom
                     ? AudioKit.TrySelectWeightedRandomClip(weightedClips, out selectedClip)
@@ -138,6 +143,7 @@ namespace YLFramework.Audio
                 target: positionMode == PositionMode.FollowTransform ? target : null);
         }
 
+        /// <summary>先追踪实际开始的句柄再投递事件，失败时停止并移除原播放身份。</summary>
         private void OnPlaybackStarted(AudioClip clip, AudioHandle handle)
         {
             _playbacks.Add(new Playback
@@ -161,6 +167,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>按 Voice 引用和原代次移除追踪，不误删复用后的新播放。</summary>
         private void RemovePlayback(AudioHandle handle)
         {
             for (var i = _playbacks.Count - 1; i >= 0; i--)
@@ -184,9 +191,10 @@ namespace YLFramework.Audio
             _playbacks.Clear();
         }
 
+        /// <summary>停用时只停止循环和跟随请求，清理失效追踪，允许固定位置和 2D 单次音效继续。</summary>
         private void OnDisable()
         {
-            // UI and fixed-position one-shots outlive the object that triggered them.
+            // UI 与固定位置单次音效允许比触发对象活得更久，不随该组件停用而截断。
             for (var i = _playbacks.Count - 1; i >= 0; i--)
             {
                 var playback = _playbacks[i];

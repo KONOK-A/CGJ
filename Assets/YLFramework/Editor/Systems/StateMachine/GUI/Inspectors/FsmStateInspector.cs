@@ -6,6 +6,7 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>检查节点名称与脚本绑定；以配置资产记录修改，不把状态脚本作为组件绘制。</summary>
     [CustomEditor(typeof(FsmStateInspectorHelper))]
     public class FsmStateInspector : UnityEditor.Editor
     {
@@ -28,6 +29,7 @@ namespace YLFramework.Editor.StateMachine
 
         private Vector2 _scroll;
 
+        /// <summary>检查启用时的选择代理；脚本列表由实际 Inspector 绘制流程读取。</summary>
         private void OnEnable()
         {
             FsmStateInspectorHelper helper = target as FsmStateInspectorHelper;
@@ -43,6 +45,7 @@ namespace YLFramework.Editor.StateMachine
             //reorderableList.drawElementCallback += this.DrawItem;
         }
 
+        /// <summary>按 GUID 显示绑定脚本和缺失诊断，提供脚本添加与移除入口；运行期和内置节点禁用编辑。</summary>
         public override void OnInspectorGUI()
         {
             //base.OnInspectorGUI();
@@ -80,7 +83,6 @@ namespace YLFramework.Editor.StateMachine
             foreach (var item in helper.node.stateScripts)
             {
 
-                // 根据guid加载到脚本信息
                 string path = AssetDatabase.GUIDToAssetPath(item.guid);
                 MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
                 if (script == null)
@@ -191,6 +193,7 @@ namespace YLFramework.Editor.StateMachine
             EditorGUI.EndDisabledGroup();
         }
 
+        /// <summary>绘制节点名称，改名成功后同步图索引；失效选择不继续绘制。</summary>
         protected override void OnHeaderGUI()
         {
             //base.OnHeaderGUI();
@@ -240,6 +243,7 @@ namespace YLFramework.Editor.StateMachine
 
 
 
+        /// <summary>显示脚本编辑与解绑菜单；解绑记录配置 Undo 并标脏，不删除脚本文件。</summary>
         private void ShowMenu(MonoScript script)
         {
             FsmStateInspectorHelper helper = target as FsmStateInspectorHelper;

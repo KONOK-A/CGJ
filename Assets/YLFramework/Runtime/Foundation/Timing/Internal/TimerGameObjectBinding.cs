@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace YLFramework.Timing.Internal
 {
-    // 持有精确 run 身份；清理旧快照不能取消重新启用或复用后产生的新代次。
+    /// <summary>连接计时任务与 GameObject 生命周期监听器，仅持有被绑定的精确任务代次。</summary>
     internal sealed class TimerGameObjectBinding
     {
         private TimerHandle _handle;
@@ -11,6 +11,7 @@ namespace YLFramework.Timing.Internal
         private TimerLifetimeListener _listener;
         private readonly TimerGameObjectLifetime _lifetime;
 
+        /// <summary>捕获任务句柄、所属调度器与对象监听器；两侧集合的登记由绑定入口负责。</summary>
         internal TimerGameObjectBinding(TimerHandle handle, GameObject owner,
             TimerGameObjectLifetime lifetime, TimerLifetimeListener listener)
         {
@@ -21,6 +22,7 @@ namespace YLFramework.Timing.Internal
             _listener = listener;
         }
 
+        /// <summary>按销毁或停用策略取消捕获代次，旧快照不会接管复用后产生的新任务。</summary>
         internal void OwnerEnded(bool destroyed)
         {
             if (_scheduler != null && (destroyed || _lifetime == TimerGameObjectLifetime.CancelOnDisable))
@@ -29,6 +31,7 @@ namespace YLFramework.Timing.Internal
             }
         }
 
+        /// <summary>幂等解除调度器、监听器和任务之间的绑定引用，本操作不主动取消任务。</summary>
         internal void Detach()
         {
             if (_scheduler == null)

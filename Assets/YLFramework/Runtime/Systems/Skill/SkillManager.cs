@@ -11,6 +11,7 @@ using YLFramework.Update;
 namespace YLFramework.Skill
 {
     /// <summary>保留技能装备/释放流程。CLR宿主退出显式CloseHost，整个会话由Shutdown归还。</summary>
+    /// <remarks>源配表只提供定义；每次装备分配池化技能及配置副本，并在移除时统一清理。批量操作不保证原子回滚。</remarks>
     public static class SkillManager
     {
         private static readonly Dictionary<string, SkillsConfig> _configs = new(StringComparer.Ordinal);
@@ -25,17 +26,23 @@ namespace YLFramework.Skill
         private static IUnregister _update;
         private static IUnregister _fixed;
         private static IUnregister _late;
+        // 管理器的遍历和增删流程嵌套时延后归还，防止同一派发快照中的旧实例过早复用。
         private static int _depth;
         private static bool _isStopping;
+        /// <summary>已登记的技能源配表数量。</summary>
         public static int ConfigCount => _configs.Count;
+        /// <summary>当前纳入更新派发的宿主数量，不包含尚未装备技能的宿主。</summary>
         public static int HostCount => _hosts.Count;
 
+        /// <summary>登记执行会话重置和应用退出时的统一清理入口。</summary>
         static SkillManager()
         {
             SingletonSessionState.RegisterSessionReset(Shutdown);
             Application.quitting += Shutdown;
         }
 
+        /// <summary>校验技能 ID 和运行类型后登记源配表；同一资产重复登记无操作，不同同名资产会抛错。</summary>
+        /// <remarks>本入口不创建技能实例，也不接管调用方的资源租约。</remarks>
         public static void AddConfig(SkillsConfig config)
         {
             if (!config)
@@ -76,6 +83,7 @@ namespace YLFramework.Skill
         }
 
         /// <summary>Acquire的根Lease由Manager接管，直到RemoveConfig或Shutdown。</summary>
+        /// <remarks>同一资产已有管理器租约时释放本次取得的租约；登记失败也释放本次租约。</remarks>
         public static void LoadConfig(ResourceSystem resources, ResourceAddress address)
         {
             var lease = resources.Acquire<SkillsConfig>(address);
@@ -98,7 +106,10 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>按登记时的资产名称取得源配表；未登记或名称为 null 时返回 null。</summary>
         public static SkillsConfig GetConfig(string name) => name != null && _configs.TryGetValue(name, out var config) ? config : null;
+        /// <summary>先取消配表登记，再移除各宿主中归属该配表的技能，并释放管理器持有的资源租约。</summary>
+        /// <remarks>逐宿主收集移除异常后继续清理，最后汇总抛出；不会恢复已移除的技能。</remarks>
         public static void RemoveConfig(SkillsConfig config)
         {
             if (!config)
@@ -180,6 +191,7 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>遍历已登记配表，取得指定 ID 的源技能定义。</summary>
         private static SkillConfigData GetSkillInfo(int id)
         {
             foreach (var config in _configs.Values)
@@ -196,6 +208,7 @@ namespace YLFramework.Skill
             return null;
         }
 
+        /// <summary>解析技能类型并要求其为带公共无参构造器的非抽象 SkillBase 派生类。</summary>
         private static Type ResolveType(string name, int id, string config)
         {
             var type = AssemblyTool.GetType(name);
@@ -207,6 +220,9 @@ namespace YLFramework.Skill
             return type;
         }
 
+        /// <summary>为宿主装备技能，建立独立配置副本和运行状态，登记字典与更新后调用 OnAdd。</summary>
+        /// <returns>仍在宿主字典中的本次实例；添加期间被关闭或移除时可返回 null。</returns>
+        /// <remarks>宿主须预先初始化 Skills；失败会清理本次实例，但不撤销构造器或 OnAdd 的外部业务副作用。</remarks>
         public static SkillBase AddSkills(IEquippableSkill host, int skillId)
         {
             if (host == null || host.Skills == null)
@@ -307,6 +323,7 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>按输入 ID 快照逐项装备；中途异常不会撤销已成功项，关闭宿主会停止剩余添加。</summary>
         public static void AddSkills(IEquippableSkill host, IList<int> skills)
         {
             if (host == null)
@@ -336,6 +353,7 @@ namespace YLFramework.Skill
                 }
             }
         }
+        /// <summary>按宿主实例快照移除选中 ID，跳过回调中已失效或被替换的实例，并汇总逐项异常。</summary>
         public static void RemoveSkills(IEquippableSkill host, IList<int> skills)
         {
             var selected = new HashSet<int>(skills);
@@ -348,11 +366,13 @@ namespace YLFramework.Skill
             });
         }
 
+        /// <summary>记录宿主的嵌套添加深度，让关闭流程能够取消当前添加链。</summary>
         private static void BeginAdd(IEquippableSkill host)
         {
             _addingDepth.TryGetValue(host, out var depth);
             _addingDepth[host] = depth + 1;
         }
+        /// <summary>退出一层宿主添加流程，在最外层退出时清除该宿主的添加取消标记。</summary>
         private static void EndAdd(IEquippableSkill host)
         {
             if (_addingDepth[host] == 1)
@@ -366,6 +386,7 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>按 ID、对象和版本快照遍历仍归属宿主的技能，逐项收集异常并延后归还实例。</summary>
         private static void ForEachOwnedSkill(IEquippableSkill host, Action<int, SkillBase> action)
         {
             if (host?.Skills == null)
@@ -414,6 +435,8 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>先从宿主字典摘除技能并标记移除，再尝试中断、调用 OnRemove，最后安排归还池。</summary>
+        /// <remarks>即使中断抛错也尝试 OnRemove；移除后不应继续持有实例，因为它可能被其他装备请求复用。</remarks>
         public static void RemoveSkills(IEquippableSkill host, int id)
         {
             if (host == null || host.Skills == null || !host.Skills.TryGetValue(id, out var skill))
@@ -450,6 +473,8 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>关闭宿主当前技能，取消该宿主尚在进行的添加链，并在无宿主时解除更新订阅。</summary>
+        /// <remarks>可供普通 CLR 宿主显式结束使用；不永久封禁宿主，关闭流程结束后仍可重新装备。</remarks>
         public static void CloseHost(IEquippableSkill host)
         {
             if (host == null || !_closing.Add(host))
@@ -474,10 +499,12 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>中断快照中仍归属宿主的技能，不卸下技能；逐项异常在遍历后汇总抛出。</summary>
         public static void InterruptAllSkill(IEquippableSkill host)
         {
             ForEachOwnedSkill(host, (_, skill) => skill.Interrupt());
         }
+        /// <summary>查询宿主字典中是否有释放中的技能；宿主或字典为空时为 false。</summary>
         public static bool IsAnySkillReleasing(IEquippableSkill host)
         {
             if (host?.Skills != null)
@@ -493,6 +520,7 @@ namespace YLFramework.Skill
             return false;
         }
 
+        /// <summary>首次装备时订阅帧更新、固定步和延迟更新的统一派发。</summary>
         private static void EnsureUpdates()
         {
             if (_update != null)
@@ -505,6 +533,7 @@ namespace YLFramework.Skill
             _late = UpdateManager.AddLateUpdateEvent(() => Dispatch(2));
         }
 
+        /// <summary>按宿主和技能快照派发指定阶段，清理已销毁宿主，跳过未激活的 Component 宿主及失效实例。</summary>
         private static void Dispatch(int phase)
         {
             if (_isStopping)
@@ -564,6 +593,7 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>归还待回收实例并销毁配置副本；会话停止时进一步释放池、租约与配置登记。</summary>
         private static void FlushReturns()
         {
             foreach (var entry in _pending)
@@ -596,6 +626,7 @@ namespace YLFramework.Skill
             }
         }
 
+        /// <summary>没有登记宿主时归还三阶段更新订阅。</summary>
         private static void ReleaseIdleUpdates()
         {
             if (_hosts.Count != 0)
@@ -609,6 +640,8 @@ namespace YLFramework.Skill
             _update = _fixed = _late = null;
         }
 
+        /// <summary>关闭全部已登记宿主并请求释放整个技能会话；嵌套调用中会延后到最外层退出时完成归还。</summary>
+        /// <remarks>逐宿主收集关闭异常，清理后汇总抛出；不承诺撤销业务回调或恢复先前状态。</remarks>
         public static void Shutdown()
         {
             if (_isStopping)

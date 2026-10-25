@@ -14,6 +14,7 @@ namespace YLFramework.Actions
         private static ActionPool<ConditionAction> _pool =
             new ActionPool<ConditionAction>(() => new ConditionAction(), null, 10);
 
+        /// <summary>仅供对象池创建条件动作，条件及回调由 Allocate 设置。</summary>
         private ConditionAction()
         {
         }

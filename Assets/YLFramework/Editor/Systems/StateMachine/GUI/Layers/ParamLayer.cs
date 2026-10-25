@@ -7,6 +7,7 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>图窗口左侧的配置切换和参数编辑区域，运行时可通过参数 Value 通知驱动过渡。</summary>
     internal class ParamLayer : GraphLayer
     {
 
@@ -37,6 +38,8 @@ namespace YLFramework.Editor.StateMachine
 
         #region 重写方法
 
+        /// <summary>绘制配置与参数页签，并按当前页签显示对应列表。</summary>
+        /// <param name="rect">左侧区域的绘制范围。</param>
         public override void OnGUI(Rect rect)
         {
             rect.Set(rect.x + 2, rect.y, rect.width, rect.height);
@@ -53,7 +56,6 @@ namespace YLFramework.Editor.StateMachine
             //Handles.color = Color.black;
             //Handles.DrawLine(new Vector2(rect.x, rect.y + headerRect.height), new Vector2(rect.x + rect.width, rect.y + headerRect.height));
             //Handles.DrawLine(new Vector2(rect.x + rect.width, rect.y), new Vector2(rect.x + rect.width, rect.y + rect.height));
-            // 偏移20, 用来绘制 States 和 Parmaters
             rect.Set(rect.x, rect.y + 20, rect.width, rect.height);
 
             //EditorGUI.DrawRect(rect, ColorConst.ParaBackground);
@@ -71,6 +73,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>延迟创建参数列表控件并绑定当前配置参数，没有配置时绘制禁用的空列表。</summary>
         private void DrawParamters(Rect rect)
         {
             if (_reorderableList == null)
@@ -113,6 +116,7 @@ namespace YLFramework.Editor.StateMachine
             EditorGUI.EndDisabledGroup();
         }
 
+        /// <summary>绘制上下文中的可用配置列表，并通过行选择切换当前配置索引。</summary>
         private void DrawStates(Rect rect)
         {
             if (_reorderableListStates == null)
@@ -143,6 +147,7 @@ namespace YLFramework.Editor.StateMachine
             GUILayout.EndArea();
         }
 
+        /// <summary>在左侧区域单击时清空图的上下文选择。</summary>
         public override void ProcessEvents()
         {
             base.ProcessEvents();
@@ -154,6 +159,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>沿用基础层的选择处理，并终止当前参数重命名状态。</summary>
         public override void OnLostFocus()
         {
             base.OnLostFocus();
@@ -163,12 +169,14 @@ namespace YLFramework.Editor.StateMachine
         #endregion
 
         #region 方法
+        /// <summary>为宿主窗口建立参数区域，列表控件在首次绘制时创建。</summary>
+        /// <param name="editorWindow">拥有此区域的窗口。</param>
         public ParamLayer(EditorWindow editorWindow) : base(editorWindow)
         {
 
         }
 
-        // 添加
+        /// <summary>显示参数类型菜单，选择后由参数工厂创建对应定义。</summary>
         private void OnAddDropdownCallback(Rect buttonRect, ReorderableList list)
         {
             GenericMenu menu = new GenericMenu();
@@ -186,13 +194,13 @@ namespace YLFramework.Editor.StateMachine
             menu.ShowAsContext();
         }
 
-        // 移除
+        /// <summary>将当前行删除请求交给参数工厂处理引用确认及 Undo。</summary>
         private void OnRemoveCallback(ReorderableList list)
         {
             FsmParameterFactory.RemoveParamter(Context.Instance.RuntimeFsmController, list.index);
         }
 
-        // 绘制每一条数据
+        /// <summary>绘制参数名称、类型和值；非运行期记录值修改 Undo，运行期写 Value 同步触发条件通知。</summary>
         private void DrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
             if (Context.Instance.RuntimeFsmController == null)
@@ -231,7 +239,6 @@ namespace YLFramework.Editor.StateMachine
                 GUI.FocusControl(null);
             }
 
-            // 按下回车键的时候 也需要取消重命名
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return)
             {
                 EditorApplication.delayCall += () =>
@@ -243,7 +250,6 @@ namespace YLFramework.Editor.StateMachine
 
             if (_isRenaming && index == _reorderableList.index)
             {
-                // 绘制输入框
                 EditorGUI.BeginChangeCheck();
                 _newName = EditorGUI.DelayedTextField(rect, parameter.name);
                 if (EditorGUI.EndChangeCheck() && this._index == index)
@@ -298,6 +304,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>将参数语义类型转换为界面使用的固定标签，未知类型显示空文本。</summary>
         private string GetParameterType(FsmParameterData parameter)
         {
             switch (parameter.parameterType)
@@ -315,6 +322,7 @@ namespace YLFramework.Editor.StateMachine
             return string.Empty;
         }
 
+        /// <summary>绘制配置行的当前项标记、图标和名称，不切换执行状态。</summary>
         private void DrawStateElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
             if (index < 0 || index >= Context.Instance.RuntimeFsmControllers.Count)
@@ -346,12 +354,14 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>仅在非运行期允许列表增删参数定义。</summary>
         private bool OnCanRemoveCallback(ReorderableList list)
         {
             return Application.isPlaying == false;
         }
 
 
+        /// <summary>把配置列表选择同步到上下文索引，供图视图在更新时切换显示。</summary>
         private void OnStateChanged(ReorderableList list)
         {
             if (Context.Instance.RuntimeFsmControllers == null || Context.Instance.RuntimeFsmControllers.Count == 0)
@@ -368,6 +378,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>绘制参数名称、类型和值三列的标题。</summary>
         private void HeaderCallbackDelegate(Rect rect)
         {
             rect.width *= 0.6f;

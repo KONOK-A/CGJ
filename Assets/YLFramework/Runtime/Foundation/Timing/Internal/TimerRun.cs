@@ -2,8 +2,11 @@ using System;
 
 namespace YLFramework.Timing.Internal
 {
-    // 普通 run 不池化；句柄保留历史终态，而终态清除调度归属及用户委托。
-    // 显式复用槽更换代次；旧回调栈只允许收尾捕获的代次。
+    /// <summary>保存一次计时任务的状态、队列位置和取消责任，供调度器与精确句柄共享。</summary>
+    /// <remarks>
+    /// 普通任务不池化，终态保留观察数据但清除调度归属及用户委托。
+    /// 显式复用槽通过更换代次隔离旧句柄和旧回调栈的收尾。
+    /// </remarks>
     internal sealed class TimerRun
     {
         internal TimerScheduler Owner;

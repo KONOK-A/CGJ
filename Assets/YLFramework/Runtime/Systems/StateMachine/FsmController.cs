@@ -5,6 +5,7 @@ using UnityEngine.Serialization;
 
 namespace YLFramework.StateMachine
 {
+    /// <summary>宿主中的命名配置层；执行前指向源资产，活动层列表中指向本层克隆。</summary>
     [Serializable]
     public class RuntimeFsmControllerLayer
     {
@@ -13,11 +14,13 @@ namespace YLFramework.StateMachine
         /// </summary>
         public string name;
         /// <summary>
-        /// 状态配置文件
+        /// 此层使用的配置引用。
         /// </summary>
         public RuntimeFsmController controller;
     }
 
+    /// <summary>Unity 状态机宿主，创建和驱动多个配置层，并提供跨层参数广播与状态查询。</summary>
+    /// <remarks>默认在 Start 初始化；禁用时可关闭并复用克隆，销毁或移除层时永久释放所属实例。</remarks>
     public class FsmController : MonoBehaviour
     {
 
@@ -53,11 +56,11 @@ namespace YLFramework.StateMachine
 
         #region 事件
         /// <summary>
-        /// 初始化完成的回调
+        /// 初始化各层的流程结束后同步通知；不表示每个源配置都成功启动，订阅不会在通知后自动清空。
         /// </summary>
         public Action Initialized;
         /// <summary>
-        /// 状态改变的回调 参数1:状态机名称 参数2:当前状态
+        /// 节点进入回调后同步通知，参数依次为配置名称、节点名称；子层默认节点进入前也会通知容器。
         /// </summary>
         public Action<string, string> StateChanged;
 
@@ -66,8 +69,9 @@ namespace YLFramework.StateMachine
         #region 属性
 
         /// <summary>
-        /// 当前状态机执行的状态配置文件列表
+        /// 返回复用的配置列表：运行且初始化中或已完成时为活动克隆，否则为源配置。
         /// </summary>
+        /// <remarks>每次读取都会清空并重填同一列表，调用方不应将其作为稳定快照或注册入口。</remarks>
         public List<RuntimeFsmController> RuntimeFsmController
         {
             get
@@ -103,6 +107,8 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>取得当前使用的层列表：运行且初始化中或已完成时为活动层，否则为源定义。</summary>
+        /// <remarks>返回内部列表而非副本；增删执行层应使用对应方法，以同步维护实例所有权。</remarks>
         public List<RuntimeFsmControllerLayer> RuntimeFsmControllerLayers
         {
             get
@@ -117,7 +123,7 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 状态机是否初始化完成
+        /// 初始层处理流程是否已结束；在调用初始化通知前置位，不保证所有层有效或回调无异常。
         /// </summary>
         public bool IsInitialized { get; private set; } = false;
 
@@ -125,28 +131,28 @@ namespace YLFramework.StateMachine
 
         #region 生命周期
 
+        /// <summary>在 Unity Start 中初始化预设层，使状态脚本晚于场景组件 Awake 执行。</summary>
         private void Start()
         {
-            // 不推荐在Awake中初始化,如果在Awake中初始化，
-            // 状态机的逻辑执行过早，在状态逻辑中,如果需要使用其他的组件,其他的组件如果没有初始化就会报错
-            // 暂时觉得没有必要把初始化的时机配置成选项,固定在Start中初始化没有任何问题,
-            // Awake 仅仅只是比Start早了一帧,其他没有任何必要性
-            // 在Start之前所有数据保持默认,Start之后由状态机控制行为逻辑!
             if (!IsInitialized)
             {
                 Init();
             }
         }
 
+        /// <summary>驱动逻辑阶段，并在关闭后重新启用时启动尚未运行的层。</summary>
         private void Update()
             => Tick(0);
 
+        /// <summary>向活动层转发后置更新阶段。</summary>
         private void LateUpdate()
             => Tick(1);
 
+        /// <summary>向活动层转发固定步长更新阶段。</summary>
         private void FixedUpdate()
             => Tick(2);
 
+        /// <summary>按阶段快照驱动仍归属宿主的层，跳过被回调移除的实例。</summary>
         private void Tick(int phase)
         {
             _phaseSnapshot.Clear();
@@ -195,6 +201,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>先摘除层记录，再释放所有克隆，并在收尾时清空通知及静态宿主登记。</summary>
         private void OnDestroy()
         {
             _isDestroying = true;
@@ -214,6 +221,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>按配置关闭各层而不销毁克隆，供下一次逻辑阶段重新启动。</summary>
         private void OnDisable()
         {
             if (resetOnDisable)
@@ -222,6 +230,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>尝试关闭或释放快照中的全部层，完成后重抛首个异常。</summary>
         private static void CloseInstances(RuntimeFsmControllerInstance[] snapshot, bool dispose)
         {
             Exception firstError = null;
@@ -254,7 +263,7 @@ namespace YLFramework.StateMachine
 
         #region 方法
 
-        // 初始化
+        /// <summary>处理源层快照，允许回调增删层；收集错误并在其他层及初始化通知处理后重抛。</summary>
         private void Init()
         {
             _instances.Clear();
@@ -308,6 +317,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>验证并创建一层，先登记所有权再按宿主启用状态启动；配置及反射构造错误记录为日志。</summary>
         private void StartLayer(RuntimeFsmControllerLayer source)
         {
             RuntimeFsmControllerInstance instance;
@@ -334,6 +344,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>启动所属实例；首次回调失败时摘除并释放该层，再保留原始异常抛出。</summary>
         private void StartInstance(RuntimeFsmControllerInstance instance)
         {
             try
@@ -357,57 +368,69 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>按名称向各层同名且同类型的布尔参数广播新值。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <param name="v">新布尔值。</param>
         public void SetBool(string name, bool v)
         {
             SetBool(StringToHash(name), v);
         }
 
         /// <summary>
-        /// 设置bool类型参数的值
+        /// 按哈希向各层布尔参数广播新值；初始化前的请求通过初始化通知延后执行。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <param name="v">值</param>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <param name="v">新布尔值。</param>
         public void SetBool(int nameHash, bool v)
             => BroadcastParameter(nameHash, v ? 1 : 0, ParameterType.Bool);
 
+        /// <summary>按名称向各层同名且同类型的浮点参数广播新值。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <param name="v">新浮点值。</param>
         public void SetFloat(string name, float v)
         {
             SetFloat(StringToHash(name), v);
         }
 
         /// <summary>
-        /// 设置float类型参数的值
+        /// 按哈希向各层浮点参数广播新值，变化通知可同步执行状态切换。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <param name="v">值</param>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <param name="v">新浮点值。</param>
         public void SetFloat(int nameHash, float v)
             => BroadcastParameter(nameHash, v, ParameterType.Float);
 
+        /// <summary>按名称向各层同名且同类型的整数参数广播新值。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <param name="v">新整数值。</param>
         public void SetInt(string name, int v)
         {
             SetInt(StringToHash(name), v);
         }
 
         /// <summary>
-        /// 设置Int类型参数的值
+        /// 按哈希向各层整数参数广播新值，底层仍使用浮点数存储。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <param name="v">值</param>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <param name="v">新整数值。</param>
         public void SetInt(int nameHash, int v)
             => BroadcastParameter(nameHash, v, ParameterType.Int);
 
+        /// <summary>按名称向各层广播一次 Trigger，已置位的层将本次触发排队。</summary>
+        /// <param name="name">Trigger 参数名称。</param>
         public void SetTrigger(string name)
         {
             SetTrigger(StringToHash(name));
         }
 
         /// <summary>
-        /// 触发Trigger
+        /// 按哈希向各层广播一次 Trigger，允许参数通知同步触发过渡。
         /// </summary>
-        /// <param name="nameHash">Trigger名称</param>
+        /// <param name="nameHash">Trigger 参数名称哈希。</param>
         public void SetTrigger(int nameHash)
             => BroadcastParameter(nameHash, 1, ParameterType.Trigger);
 
+        /// <summary>按独立层快照同步广播参数请求；初始化前挂到完成通知，递归广播各借用自己的快照。</summary>
         private void BroadcastParameter(int hash, double value, ParameterType type, bool resetTrigger = false)
         {
             if (_isDestroying)
@@ -470,28 +493,33 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>按名称清除各层 Trigger 当前值及全部排队次数。</summary>
+        /// <param name="name">Trigger 参数名称。</param>
         public void ResetTrigger(string name)
         {
             ResetTrigger(StringToHash(name));
         }
 
         /// <summary>
-        /// 还原Trigger
+        /// 按哈希清除各层 Trigger 当前值及排队次数，未找到参数时不告警。
         /// </summary>
-        /// <param name="nameHash">Trigger名称</param>
+        /// <param name="nameHash">Trigger 参数名称哈希。</param>
         public void ResetTrigger(int nameHash)
             => BroadcastParameter(nameHash, 0, ParameterType.Trigger, true);
 
+        /// <summary>按名称查询各层布尔参数，任一匹配层值为一时返回 true。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <returns>是否至少有一层的匹配布尔值为真。</returns>
         public bool GetBool(string name)
         {
             return GetBool(StringToHash(name));
         }
 
         /// <summary>
-        /// 获取Bool类型参数的值
+        /// 按哈希查询布尔参数；不选定单层，而是检查任一匹配层是否为真。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <returns></returns>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <returns>任一匹配布尔参数值为一时为 true；否则为 false。</returns>
         public bool GetBool(int nameHash)
         {
             foreach (var item in _instances)
@@ -505,16 +533,19 @@ namespace YLFramework.StateMachine
             return false;
         }
 
+        /// <summary>按名称取得层顺序中首个非零的匹配浮点参数值。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <returns>首个非零值；均为零或未命中时为零。</returns>
         public float GetFloat(string name)
         {
             return GetFloat(StringToHash(name));
         }
 
         /// <summary>
-        /// 获取Float类型参数的值
+        /// 按哈希取得层顺序中首个非零的匹配浮点参数值，不对各层求和。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <returns></returns>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <returns>首个非零值；均为零或未命中时为零。</returns>
         public float GetFloat(int nameHash)
         {
             foreach (var item in _instances)
@@ -534,16 +565,19 @@ namespace YLFramework.StateMachine
             return 0;
         }
 
+        /// <summary>按名称取得层顺序中首个非零的匹配整数参数值。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <returns>首个非零整数值；均为零或未命中时为零。</returns>
         public int GetInt(string name)
         {
             return GetInt(StringToHash(name));
         }
 
         /// <summary>
-        /// 获取Int类型参数的值
+        /// 按哈希取得层顺序中首个转换后非零的匹配整数参数值。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <returns></returns>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <returns>首个非零整数值；均为零或未命中时为零。</returns>
         public int GetInt(int nameHash)
         {
             foreach (var item in _instances)
@@ -563,16 +597,19 @@ namespace YLFramework.StateMachine
             return 0;
         }
 
+        /// <summary>按名称查询各层 Trigger 是否已置位或仍有排队次数。</summary>
+        /// <param name="name">Trigger 参数名称。</param>
+        /// <returns>任一匹配层有当前或待触发记录时为 true。</returns>
         public bool GetTrigger(string name)
         {
             return GetTrigger(StringToHash(name));
         }
 
         /// <summary>
-        /// 获取Trigger类型参数的值
+        /// 按哈希查询各层 Trigger，包含当前置位值及尚未处理的排队次数。
         /// </summary>
-        /// <param name="nameHash">参数名称</param>
-        /// <returns></returns>
+        /// <param name="nameHash">Trigger 参数名称哈希。</param>
+        /// <returns>任一匹配层有当前或待触发记录时为 true。</returns>
         public bool GetTrigger(int nameHash)
         {
             foreach (var item in _instances)
@@ -586,11 +623,19 @@ namespace YLFramework.StateMachine
         }
 
 
+        /// <summary>按名称与类型判断是否至少有一个运行时层包含该参数。</summary>
+        /// <param name="name">参数名称。</param>
+        /// <param name="type">预期参数类型。</param>
+        /// <returns>任一层包含匹配参数时为 true，初始化前通常为 false。</returns>
         public bool ContainsParameter(string name, ParameterType type)
         {
             return ContainsParameter(StringToHash(name), type);
         }
 
+        /// <summary>按名称哈希与类型判断是否至少有一个运行时层包含该参数。</summary>
+        /// <param name="name">参数名称哈希。</param>
+        /// <param name="type">预期参数类型。</param>
+        /// <returns>任一层包含匹配参数时为 true。</returns>
         public bool ContainsParameter(int name, ParameterType type)
         {
             foreach (var item in _instances)
@@ -606,9 +651,9 @@ namespace YLFramework.StateMachine
 
 
         /// <summary>
-        /// 运行时添加并执行状态配置文件
+        /// 使用源配置对象哈希生成层名并添加配置，已初始化时创建运行时实例。
         /// </summary>
-        /// <param name="controller"></param>
+        /// <param name="controller">要添加的源配置。</param>
         public void AddRuntimeFsmController(RuntimeFsmController controller)
         {
             if (!controller || _isDestroying)
@@ -621,9 +666,10 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 运行时添加并执行状态配置文件
+        /// 添加命名源层，拒绝重复源配置；初始化中或完成后会创建层，宿主启用时立即启动。
         /// </summary>
-        /// <param name="controller"></param>
+        /// <param name="controller">要添加的源配置。</param>
+        /// <param name="layerName">新层名称，供查询和按名移除使用。</param>
         public void AddRuntimeFsmController(RuntimeFsmController controller, string layerName)
         {
             if (controller == null || _isDestroying)
@@ -643,7 +689,7 @@ namespace YLFramework.StateMachine
             runtimeFsmControllerLayers.Add(layer);
 
 
-            // 如果没有初始化完成 不需要处理 在初始化的时候会处理
+            // 初始化前仅登记源定义；初始化中新增的层须立即处理，不依赖旧的源层快照。
             if (IsInitialized || _isInitializing)
             {
                 StartLayer(layer);
@@ -651,6 +697,8 @@ namespace YLFramework.StateMachine
 
         }
 
+        /// <summary>按层名移除全部匹配的源定义及活动实例，退出回调前即摘除记录。</summary>
+        /// <param name="layerName">要移除的层名称；空名称不处理。</param>
         public void RemoveRuntimeFsmController(string layerName)
         {
             if (string.IsNullOrEmpty(layerName))
@@ -672,7 +720,7 @@ namespace YLFramework.StateMachine
 
 
         /// <summary>
-        /// 运行时移除状态机配置文件
+        /// 以当前层列表下标取得层名，再移除所有同名层及其所属克隆。
         /// </summary>
         /// <param name="index">配置文件下标</param>
         public void RemoveRuntimeFsmController(int index)
@@ -686,11 +734,11 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 获取当前正在执行的状态信息
+        /// 按运行时实例下标查询指定父层中的当前节点。
         /// </summary>
         /// <param name="index">状态配置下标</param>
-        /// <param name="subStateName">子状态机名称(默认:空)</param>
-        /// <returns></returns>
+        /// <param name="subStateName">直接父状态机名称，空字符串表示基础层。</param>
+        /// <returns>当前节点；下标无效或该父层未进入时为 null。</returns>
         public FsmStateNode GetCurrentStateInfo(int index, string subStateName = "")
         {
             if (index < 0 || index >= _instances.Count)
@@ -701,6 +749,10 @@ namespace YLFramework.StateMachine
             return _instances[index].GetCurrentState(subStateName);
         }
 
+        /// <summary>按首个匹配层名查询指定父层中的当前节点。</summary>
+        /// <param name="layerName">宿主层名称。</param>
+        /// <param name="subStateName">直接父状态机名称，空字符串表示基础层。</param>
+        /// <returns>当前节点；层名无效、未命中或父层未进入时为 null。</returns>
         public FsmStateNode GetCurrentStateInfo(string layerName, string subStateName = "")
         {
 
@@ -721,10 +773,10 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 获取当前的状态切换信息
+        /// 查询指定实例最近一次记录的过渡，不表示存在持续中的过渡动画。
         /// </summary>
-        /// <param name="controller"></param>
-        /// <returns></returns>
+        /// <param name="index">运行时实例下标。</param>
+        /// <returns>记录的过渡；下标无效、默认进入或关闭后可能为 null。</returns>
         public FsmTransition GetCurrentTransition(int index)
         {
             if (index < 0 || index >= _instances.Count)
@@ -736,6 +788,7 @@ namespace YLFramework.StateMachine
         }
 
 
+        /// <summary>按配置对象引用判断源层列表是否已包含指定配置。</summary>
         private bool Contains(List<RuntimeFsmControllerLayer> layers, RuntimeFsmController controller)
         {
             if (controller == null)
@@ -764,29 +817,29 @@ namespace YLFramework.StateMachine
         #region 静态方法
 
         /// <summary>
-        /// 启动状态(适用于没有具体游戏物体的状态管理,例如:游戏状态)
+        /// 请求静态入口创建按名登记的跨场景宿主，实际状态进入由宿主 Start 执行。
         /// </summary>
         /// <param name="fsmName">状态机名称</param>
         /// <param name="fsm">状态配置文件</param>
         /// <param name="userData">自定义参数或数据</param>
-        /// <returns></returns>
+        /// <returns>新建宿主；非运行期、退出中、参数无效或名称已占用时为 null。</returns>
         public static FsmController StartupFsm(string fsmName, RuntimeFsmController fsm, object userData = null)
         {
             return FsmControllerExtension.StartupFsm(fsmName, fsm, userData);
         }
 
         /// <summary>
-        /// 查询通过FSMController.StartupFSM启动的状态机
+        /// 查询通过静态启动入口登记的存活宿主，不搜索场景中的直接挂载组件。
         /// </summary>
         /// <param name="fsmName">状态机名称</param>
-        /// <returns></returns>
+        /// <returns>对应宿主；名称无效、未登记或对象已销毁时为 null。</returns>
         public static FsmController GetFsm(string fsmName)
         {
             return FsmControllerExtension.GetFsm(fsmName);
         }
 
         /// <summary>
-        /// 移除通过FSMController.StartupFSM启动的状态机
+        /// 移除静态登记并请求销毁对应宿主，层清理由组件销毁回调执行。
         /// </summary>
         /// <param name="fsmName">状态机名称</param>
         public static void RemoveFsm(string fsmName)
@@ -799,11 +852,17 @@ namespace YLFramework.StateMachine
 
         #region StringToHash
 
+        /// <summary>按框架共用缓存取得与 Animator 算法一致的状态或参数名称哈希。</summary>
+        /// <param name="eventName">非 null 的名称。</param>
+        /// <returns>名称对应的整数哈希。</returns>
         public static int StringToHash(string eventName)
         {
             return FsmControllerExtension.StringToHash(eventName);
         }
 
+        /// <summary>取得本轮缓存中此哈希首次登记的名称，供参数诊断使用。</summary>
+        /// <param name="hash">名称哈希。</param>
+        /// <returns>已缓存名称；未命中时为空字符串。</returns>
         internal static string HashToString(int hash)
         {
             return FsmControllerExtension.HashToString(hash);

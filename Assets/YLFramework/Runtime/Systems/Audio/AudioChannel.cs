@@ -136,6 +136,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>绑定原宿主与固定拓扑，仅有显式持久化身份时读取独立音量和静音偏好。</summary>
         internal AudioChannel(AudioManager owner, string name, AudioCategory category, AudioChannelMode mode, string persistenceId)
         {
             Owner = owner;
@@ -152,7 +153,9 @@ namespace YLFramework.Audio
             _volume = AudioSoundOptions.IsFinite(volume) && volume >= 0f && volume <= 1f ? volume : 1f;
             _isMuted = PlayerPrefs.GetInt(StorageKey("Mute"), 0) != 0;
         }
+        /// <summary>以显式持久化身份生成设置键，不将通道显示名隐式用于存储。</summary>
         private string StorageKey(string setting) => "YLFramework.Audio.Channel:" + PersistenceId + ":" + setting;
+        /// <summary>逐个通知并汇总订阅者异常；重入改变身份或版本后停止投递旧通知。</summary>
         private static void Notify<T>(Action<T> listeners, T value, Func<bool> current)
         {
             if (listeners == null)
@@ -182,6 +185,7 @@ namespace YLFramework.Audio
                 throw new AggregateException("Audio channel setting notification failed.", failures);
             }
         }
+        /// <summary>要求登记仍属于原可用宿主，过期身份明确拒绝提交和设置写入。</summary>
         internal void RequireValid()
         {
             if (!IsValid)
@@ -189,6 +193,7 @@ namespace YLFramework.Audio
                 throw new InvalidOperationException("Audio channel has expired.");
             }
         }
+        /// <summary>校验登记或持久化身份为无首尾空白的稳定 ASCII 名称。</summary>
         internal static void ValidateIdentity(string identity, string parameter)
         {
             if (string.IsNullOrWhiteSpace(identity) || identity != identity.Trim())
@@ -205,6 +210,10 @@ namespace YLFramework.Audio
             }
         }
         /// <summary>播放调用方保活的 Clip。null 选项为普通非循环 Defaults；非法配置不会替换旧请求。</summary>
+        /// <param name="clip">由调用方保活至请求结束的 Clip。</param>
+        /// <param name="options">本次捕获的配置，后续修改不影响已提交请求。</param>
+        /// <param name="onStarted">首次提交 Source.Play 后的实际 Clip 和原句柄，可在入口返回前同步通知。</param>
+        /// <param name="onFinished">自然结束且清理前的实际 Clip 和原句柄；停止或替换不通知。</param>
         public AudioHandle Play(AudioClip clip, AudioSoundOptions options = null,
             Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null) =>
             PlayWithSnapshot(clip, AudioPlaybackOptions.Capture(options), onStarted, onFinished);
@@ -212,9 +221,15 @@ namespace YLFramework.Audio
         /// <remarks>仅 Exclusive 支持。不调用 PlayOneShot，不移动/停用/销毁对象，不改空间配置或曲线。
         /// 只配置 clip/loop/pitch/volume/mute/输出路由；Inherit 使用分类路由。释放比较最后写入值再恢复，不重建先前播放历史。
         /// 调用方在租约期间不得直接 Play/Pause/Stop（同 Clip 的外部重播无法可靠识别）；外部换 Clip 会放弃归属及恢复。</remarks>
+        /// <param name="source">调用方显式让渡独占控制的有效、启用且已停止音源。</param>
+        /// <param name="clip">由调用方保活的 Clip，不随借源结束自动销毁。</param>
+        /// <param name="options">本次捕获的配置；null 使用非循环 Defaults，空间字段不改写借入音源。</param>
+        /// <param name="onStarted">首次提交 Source.Play 后的实际 Clip 和原句柄，可同步重入控制。</param>
+        /// <param name="onFinished">自然结束且恢复前的实际 Clip 和原句柄。</param>
         public AudioHandle PlayBorrowed(AudioSource source, AudioClip clip, AudioSoundOptions options = null,
             Action<AudioClip, AudioHandle> onStarted = null, Action<AudioClip, AudioHandle> onFinished = null) =>
             PlayWithSnapshot(clip, AudioPlaybackOptions.Capture(options), onStarted, onFinished, source: source, borrowed: true);
+        /// <summary>校验并协调独占替换、Sound 去重和借源资格，再将快照交宿主接纳。</summary>
         internal AudioHandle PlayWithSnapshot(AudioClip clip, AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started = null, Action<AudioClip, AudioHandle> finished = null,
             AudioResourceLease resource = null, AudioSource source = null, bool borrowed = false, bool namedCommit = false)
@@ -304,8 +319,11 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>登记已进入本通道播放路径的原声部。</summary>
         internal void Add(AudioVoice voice) => _requests.Add(voice);
+        /// <summary>原声部终结时撤销本通道追踪。</summary>
         internal void Remove(AudioVoice voice) => _requests.Remove(voice);
+        /// <summary>追加本通道活跃句柄，用代次快照隔开后续清理与重入播放。</summary>
         internal void CopyTo(List<AudioHandle> destination)
         {
             foreach (var voice in _requests)
@@ -316,6 +334,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>按原句柄快照逐项停止请求，尝试全部清理后汇总异常，不误停新代次。</summary>
         private void StopRequests(AudioRequestEnd reason)
         {
             var snapshot = new List<AudioHandle>(_requests.Count);
@@ -415,6 +434,7 @@ namespace YLFramework.Audio
         }
         /// <summary>撤销登记后再结束原请求；不删除持久化值。重复调用安全。</summary>
         public void Dispose() => Release(AudioRequestEnd.Stopped);
+        /// <summary>先使通道和通知失效并撤销登记，再按指定原因终结原等待及播放。</summary>
         internal void Release(AudioRequestEnd reason)
         {
             if (_isDisposed)

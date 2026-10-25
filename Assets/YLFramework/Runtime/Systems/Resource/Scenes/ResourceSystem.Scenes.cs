@@ -14,6 +14,7 @@ namespace YLFramework.Resource
         private long _nextSceneSequence;
         private bool _isPumpingScenes;
 
+        /// <summary>一次未结算的场景加载意图，持有 Bundle 准备、激活门控和身份观察窗口。</summary>
         private sealed class SceneLoad
         {
             internal SceneRequest Request;
@@ -33,7 +34,11 @@ namespace YLFramework.Resource
         }
 
         /// <summary>按冻结目录加载真实 Scene。框架内部逐次关联 native 操作，不合并重复 Additive 意图。</summary>
+        /// <param name="address">目录中的场景地址，不接受子资产键。</param>
+        /// <param name="mode">本次 Single 或 Additive 加载意图。</param>
+        /// <param name="activateOnLoad">是否自动放行激活；为 false 时可显式 Activate，但仍受门控期限约束。</param>
         /// <param name="activationTimeoutSeconds">从 native 开始计时的有限门控期限，范围 (0, 300]；到期失败并放行激活，不承诺无限后台预加载。</param>
+        /// <returns>可单次领取调用方场景租约的请求，真实场景由独立 SceneRecord 管理。</returns>
         public SceneRequest LoadSceneAsync(ResourceAddress address, LoadSceneMode mode = LoadSceneMode.Single,
             bool activateOnLoad = true, float activationTimeoutSeconds = 30)
         {
@@ -102,12 +107,14 @@ namespace YLFramework.Resource
         }
 
         /// <summary>只读身份快照，包含已释放 caller Lease 的场景、取消 Single 的真实副作用和保守保活的歧义候选。</summary>
+        /// <returns>当前登记的独立场景记录列表，记录本身会继续反映卸载状态。</returns>
         public IReadOnlyList<SceneRecord> GetSceneRecords()
         {
             CheckThread();
             return _sceneRecords.ToArray();
         }
 
+        /// <summary>为本系统登记场景事件及统一清理驱动，保持原责任所有者可继续收尾。</summary>
         private void RegisterSceneCleanup()
         {
             if (_sceneCleanup.Add(this))
@@ -118,6 +125,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>仅在场景加载和记录全部清空后解除事件订阅并检查系统排空。</summary>
         private void UnregisterSceneCleanup()
         {
             if (_sceneLoads.Count != 0 || _sceneRecords.Count != 0)
@@ -131,6 +139,7 @@ namespace YLFramework.Resource
             CheckDrain();
         }
 
+        /// <summary>串行推进框架内部场景加载，先准备依赖图再启动原生操作。</summary>
         private void PumpScenes()
         {
             if (_isPumpingScenes)
@@ -211,6 +220,7 @@ namespace YLFramework.Resource
             UnregisterSceneCleanup();
         }
 
+        /// <summary>捕获加载前身份集合，启动真实场景加载并登记激活期限及完成时点。</summary>
         private void StartNativeScene(SceneLoad load)
         {
             try
@@ -255,6 +265,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>取消未启动的准备；原生已开始时只放行激活，保留迟到结果结算责任。</summary>
         private void CancelSceneLoad(SceneLoad load)
         {
             if (load.Request.HasNativeStarted)
@@ -272,6 +283,7 @@ namespace YLFramework.Resource
             PumpScenes();
         }
 
+        /// <summary>为仍等待的场景请求登记失败或失效终态并通知，不改写既有取消结果。</summary>
         private void FailSceneLoad(SceneLoad load, Exception error)
         {
             if (load.Request.IsDone)
@@ -284,6 +296,7 @@ namespace YLFramework.Resource
             load.Request.Notify();
         }
 
+        /// <summary>移除本次加载意图，归还其准备阶段仍持有的图根责任。</summary>
         private void RemoveSceneLoad(SceneLoad load)
         {
             _sceneLoads.Remove(load);
@@ -292,6 +305,7 @@ namespace YLFramework.Resource
             UnregisterSceneCleanup();
         }
 
+        /// <summary>记录当前加载窗口中同路径且不属于加载前集合的候选场景。</summary>
         private void OnResourceSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             if (_sceneLoads.Count == 0)
@@ -308,6 +322,7 @@ namespace YLFramework.Resource
             load.Observed[scene.handle] = scene;
         }
 
+        /// <summary>标记匹配记录的卸载帧，保活责任留待事件结算后清理。</summary>
         private void OnResourceSceneUnloaded(Scene scene)
         {
             foreach (var record in _sceneRecords)
@@ -319,6 +334,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>结算原生加载观察窗口，为真实候选建立记录并按唯一性决定租约交付。</summary>
         private void CompleteSceneLoad(SceneLoad load)
         {
             // completed 后留一帧事件结算窗，不能取 GetSceneByName/Path 的第一项。
@@ -389,6 +405,8 @@ namespace YLFramework.Resource
         }
 
         /// <summary>显式卸载当前 Lease 的真实身份。已 Dispose 的 Lease 拒绝，不按路径或复用 handle 查找替身。</summary>
+        /// <param name="lease">本系统中尚未归还的调用方场景租约。</param>
+        /// <returns>等待该场景卸载结算的独立请求，不消费传入租约。</returns>
         public ResourceRequest<bool> UnloadSceneAsync(SceneLease lease)
         {
             CheckThread();
@@ -401,6 +419,9 @@ namespace YLFramework.Resource
         }
 
         /// <summary>对独立 SceneRecord 显式卸载；用于 caller Lease 已释放或取消 Single 后的生命周期交接。</summary>
+        /// <param name="record">本系统仍登记的非歧义场景记录。</param>
+        /// <returns>用于等待该身份卸载结算的请求；门控或最后场景等限制以错误终态报告。</returns>
+        /// <remarks>取消此请求只退出本消费者的卸载等待，不撤销已发出的原生卸载。</remarks>
         public ResourceRequest<bool> UnloadSceneAsync(SceneRecord record)
         {
             CheckThread();
@@ -432,6 +453,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>复用在途卸载，或在激活门控和剩余场景条件允许时发起原生卸载。</summary>
         private ResourceException TryUnloadScene(SceneRecord record)
         {
             if (record.UnloadOperation != null || !record.IsLoaded)
@@ -473,6 +495,7 @@ namespace YLFramework.Resource
             return null;
         }
 
+        /// <summary>移除已卸载身份，归还独立图根后通知仍等待卸载的消费者。</summary>
         private void CollectScene(SceneRecord record)
         {
             record.IsUnloaded = true;
@@ -494,6 +517,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>处理激活超时、原生迟到完成及卸载结算窗口，继续推进原系统场景队列。</summary>
         private static void TickSceneCleanup()
         {
             foreach (var system in _sceneCleanup.ToArray())
@@ -551,6 +575,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>结束本系统场景等待并尝试卸载可归属记录，未完成原生责任仍留待收尾。</summary>
         private void EndSceneSession()
         {
             foreach (var load in _sceneLoads.ToArray())

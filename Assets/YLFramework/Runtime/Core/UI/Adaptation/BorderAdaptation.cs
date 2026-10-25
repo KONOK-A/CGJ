@@ -3,9 +3,12 @@ using UnityEngine;
 namespace YLFramework.Core
 {
 
+    /// <summary>水平边距对应的贴边方向，用于决定 anchoredPosition.x 的符号。</summary>
     public enum BorderType
     {
+        /// <summary>左侧边距向右为正。</summary>
         Left,
+        /// <summary>右侧边距向左为负。</summary>
         Right
     }
 
@@ -80,6 +83,7 @@ namespace YLFramework.Core
             return true;
         }
 
+        /// <summary>保存当前失败原因并返回 false，相同连续错误不重复写日志。</summary>
         private bool Reject(string error)
         {
             if (_lastError != error)
@@ -91,11 +95,16 @@ namespace YLFramework.Core
             return false;
         }
 
+        /// <summary>检查宽高比或偏移能否参与插值，排除 NaN 与无限值。</summary>
         private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
+        /// <summary>首次运行时补做边距刷新，读取当时可用的 Canvas 或屏幕尺寸。</summary>
         private void Start() => Refresh();
+        /// <summary>启用后立即应用当前边距配置。</summary>
         private void OnEnable() => Refresh();
+        /// <summary>每帧跟随 Canvas 或屏幕宽高比变化刷新水平位置。</summary>
         private void LateUpdate() => Refresh();
+        /// <summary>启用期间换父级时重新选择用于宽高比计算的 Canvas。</summary>
         private void OnTransformParentChanged()
         {
             if (isActiveAndEnabled)

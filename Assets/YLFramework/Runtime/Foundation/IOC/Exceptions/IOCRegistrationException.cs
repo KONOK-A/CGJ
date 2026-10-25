@@ -3,7 +3,7 @@ using System;
 namespace YLFramework.DependencyInjection
 {
     /// <summary>
-    /// 注册参数非法（null 类型、不可赋值的目标类型或实例）时抛出。
+    /// 注册的目标类型或非空实例不可赋值给服务类型时抛出；null 类型由入口抛出 ArgumentNullException。
     /// </summary>
     public class IOCRegistrationException : IOCException
     {

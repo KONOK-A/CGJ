@@ -68,10 +68,12 @@ namespace YLFramework.Audio
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>场景加载前准备隐藏的快捷键宿主，不初始化音频播放。</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void InstallShortcuts() => EnsureInstance()._isVisible = false;
 #endif
 
+        /// <summary>仅在支持诊断的播放环境取得窗口宿主，退出中或不支持时明确抛错。</summary>
         private static AudioKitDebugWindow EnsureInstance()
         {
 #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
@@ -93,6 +95,7 @@ namespace YLFramework.Audio
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>按当前平台和已编译输入后端读取快捷入口，切换窗口可见性。</summary>
         private void Update()
         {
 #if ENABLE_LEGACY_INPUT_MANAGER
@@ -150,6 +153,7 @@ namespace YLFramework.Audio
 #endif
         }
 
+        /// <summary>窗口可见时按屏幕边界约束窗口大小和位置，再绘制诊断内容。</summary>
         private void OnGUI()
         {
             if (!_isVisible)
@@ -164,6 +168,7 @@ namespace YLFramework.Audio
             _windowRect = GUILayout.Window(GetInstanceID(), _windowRect, DrawWindow, "AudioKit Debug");
         }
 
+        /// <summary>绘制关闭按钮与被动诊断，并允许拖动窗口标题区域。</summary>
         private void DrawWindow(int windowId)
         {
             if (GUILayout.Button("关闭"))

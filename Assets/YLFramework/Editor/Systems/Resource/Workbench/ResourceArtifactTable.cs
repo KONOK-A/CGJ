@@ -8,8 +8,10 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>展示一次 ArtifactStore 只读观测；清理候选仅为报告事实，不提供删除动作。</summary>
     internal sealed class ResourceArtifactTable : TreeView
     {
+        /// <summary>同次观测条目及其显示、搜索文本的投影。</summary>
         private sealed class Row : TreeViewItem
         {
             internal ArtifactEntry Entry;
@@ -20,6 +22,7 @@ namespace YLFramework.Editor.Resource
         private readonly Dictionary<int, Row> _ids = new();
         internal bool AlternateRows = true;
         internal ArtifactEntry Selected => GetSelection().Count == 1 && _ids.TryGetValue(GetSelection()[0], out var row) ? row.Entry : null;
+        /// <summary>创建缓存条目表及排序入口，行底纹由本表按需绘制。</summary>
         internal ResourceArtifactTable() : base(new TreeViewState(), Header())
         {
             rowHeight = ResourceWorkbenchGui.RowHeight;
@@ -29,6 +32,7 @@ namespace YLFramework.Editor.Resource
             multiColumnHeader.sortingChanged += _ => Reload();
             Reload();
         }
+        /// <summary>定义状态、观测完整性、候选和保护原因列，保持各项语义分离。</summary>
         private static MultiColumnHeader Header()
         {
             var names = new[] { "路径 / 文件", "类型", "条目状态", "观测字节", "空间观测", "清理候选", "保护原因" };
@@ -47,6 +51,7 @@ namespace YLFramework.Editor.Resource
                 visibleColumns = new[] { 0, 2, 3, 6 }
             });
         }
+        /// <summary>投影同次报告并清除旧选择；非就绪或观测不完整时不确认清理候选。</summary>
         internal void SetData(ArtifactStoreReport report)
         {
             _rows = report.Entries.Select((entry, i) =>
@@ -73,6 +78,7 @@ namespace YLFramework.Editor.Resource
             SetSelection(Array.Empty<int>());
             Reload();
         }
+        /// <summary>为本次观测条目建立平铺树根。</summary>
         protected override TreeViewItem BuildRoot()
         {
             var root = new TreeViewItem(0, -1, "缓存条目");
@@ -84,6 +90,7 @@ namespace YLFramework.Editor.Resource
             root.children ??= new List<TreeViewItem>();
             return root;
         }
+        /// <summary>按完整身份文本筛选，路径用完整路径排序，字节列用原始逻辑字节排序。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
         {
             var values = _rows.Where(x => string.IsNullOrEmpty(searchString) || x.Search.IndexOf(searchString, StringComparison.OrdinalIgnoreCase) >= 0);
@@ -102,6 +109,7 @@ namespace YLFramework.Editor.Resource
             }
             return values.Cast<TreeViewItem>().ToList();
         }
+        /// <summary>绘制可见列和可选交替底纹，提示保留同次观测的原始字段。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             var row = (Row)args.item;
@@ -119,6 +127,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将缓存条目种类转换为显示名称，保留未知值提示。</summary>
         private static string KindLabel(ArtifactKind value) => value switch
         {
             ArtifactKind.Version => "版本目录",
@@ -128,6 +137,7 @@ namespace YLFramework.Editor.Resource
             _ => "未知类型（" + value + "）"
         };
 
+        /// <summary>展示条目登记与可读状态，不把登记完整解释为内容或签名验证通过。</summary>
         internal static string StateLabel(ArtifactState value) => value switch
         {
             ArtifactState.CompleteRecord => "登记完整",
@@ -141,6 +151,7 @@ namespace YLFramework.Editor.Resource
             _ => "未知状态（" + value + "）"
         };
 
+        /// <summary>组合报告实际记录的保护标志，允许同一条目同时显示多种原因。</summary>
         internal static string ProtectionLabel(ArtifactProtection value)
         {
             if (value == ArtifactProtection.None)

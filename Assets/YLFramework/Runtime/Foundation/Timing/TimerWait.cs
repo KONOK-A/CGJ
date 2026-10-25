@@ -16,6 +16,7 @@ namespace YLFramework.Timing
         private TimerState _status;
         private bool _isFinished;
 
+        /// <summary>捕获精确句柄并立即观察一次，使已经结束的任务直接保存终态快照。</summary>
         internal TimerWait(TimerHandle handle)
         {
             _handle = handle;
@@ -42,8 +43,10 @@ namespace YLFramework.Timing
         }
         /// <summary>仅正常 Completed 为 true；取消、故障、失效均为 false。</summary>
         public bool IsCompleted => Status == TimerState.Completed;
+        /// <summary>供 Unity 协程等待首次终态观察，不推进或取消计时任务，也不重新抛出任务异常。</summary>
         public override bool keepWaiting => !IsFinished;
 
+        /// <summary>更新捕获代次的观察状态，首次进入终态后固定结果并释放对任务存储的引用。</summary>
         private void Observe()
         {
             if (_isFinished)

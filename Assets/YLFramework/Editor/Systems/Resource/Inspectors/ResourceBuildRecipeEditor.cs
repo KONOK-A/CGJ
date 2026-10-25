@@ -4,8 +4,10 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>供 Inspector 与工作台共用的配方序列化字段绘制。</summary>
     internal static class ResourceBuildRecipeFields
     {
+        /// <summary>按基础或高级选项筛选并应用字段编辑，返回是否发生序列化修改。</summary>
         internal static bool Draw(SerializedObject serialized, bool advanced = true, bool advancedOnly = false)
         {
             serialized.Update();
@@ -68,6 +70,7 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>提供配方的独立保存、只读解析和经确认的正式执行入口。</summary>
     [CustomEditor(typeof(ResourceBuildRecipe))]
     public sealed class ResourceBuildRecipeEditor : UnityEditor.Editor
     {
@@ -76,6 +79,7 @@ namespace YLFramework.Editor.Resource
         private ResourceEditorBuildReport _report;
         private bool _showTechnical;
 
+        /// <summary>绘制配方与分阶段执行结果，不把生成失败视为已发布版本回滚。</summary>
         public override void OnInspectorGUI()
         {
             ResourceBuildRecipeFields.Draw(serializedObject);
@@ -163,6 +167,7 @@ namespace YLFramework.Editor.Resource
         // Inspector 与脚本调用不各自解析窗口字段。
         internal static ResourceEditorBuildReport Execute(ResourceBuildRecipe recipe) => ResourceEditorOperations.ExecuteRecipe(recipe);
 
+        /// <summary>清除上次展示状态，执行显式操作并保留本次异常供技术详情查看。</summary>
         private void Run(Func<string> operation)
         {
             _error = null;

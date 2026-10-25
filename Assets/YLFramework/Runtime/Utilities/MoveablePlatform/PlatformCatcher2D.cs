@@ -7,23 +7,31 @@ using YLFramework.Extensions;
 
 namespace YLFramework.Platform2D
 {
+    /// <summary>用平台局部坐标定义一条乘客检测线段。</summary>
     [Serializable]
     public struct Area
     {
+        /// <summary>线段起点的局部坐标，检测前转换为世界坐标。</summary>
         public Vector3 from;
+        /// <summary>线段终点的局部坐标，检测前转换为世界坐标。</summary>
         public Vector3 to;
     }
 
+    /// <summary>沿配置线段执行二维 Linecast，缓存可供移动平台携带的候选乘客。</summary>
+    /// <remarks>自动检测由 Update 中的接触变化和限频刷新触发，与平台 FixedUpdate 不保证同步。</remarks>
     public class PlatformCatcher2D : MonoBehaviour
     {
 
         #region 字段
 
+        /// <summary>直接可写的局部检测线段数组，每条线段独立查询。</summary>
         [Tooltip("检测区域")]
         public Area[] areas;
 
         private readonly RaycastHit2D[] _hits = new RaycastHit2D[10];
 
+        /// <summary>最近一次线段查询的可写命中列表，可包含同一刚体或碰撞体的重复项。</summary>
+        /// <remarks>下次检测会清空重填，停用时清空；刷新前不会自动移除已失效命中，不是稳定快照。</remarks>
         [Tooltip("当前平台接触到的游戏物体")]
         public List<RaycastHit2D> Contacts = new List<RaycastHit2D>();
 
@@ -50,6 +58,7 @@ namespace YLFramework.Platform2D
 
         #region 生命周期
 
+        /// <summary>按对象层建立二维碰撞掩码，并缓存当前子层级碰撞体。</summary>
         private void Awake()
         {
             _layer = gameObject.layer;
@@ -57,12 +66,14 @@ namespace YLFramework.Platform2D
             _collider2d = GetComponentsInChildren<Collider2D>();
         }
 
+        /// <summary>重新缓存子层级碰撞体并清零检测计时，不立即执行线段查询。</summary>
         private void OnEnable()
         {
             _collider2d = GetComponentsInChildren<Collider2D>();
             _timer = _checkTimer = 0;
         }
 
+        /// <summary>清除乘客、接触和查询缓冲区，避免停用后继续携带旧候选。</summary>
         private void OnDisable()
         {
             Contacts.Clear();
@@ -72,6 +83,7 @@ namespace YLFramework.Platform2D
             Array.Clear(_contactsTemp, 0, _contactsTemp.Length);
         }
 
+        /// <summary>立即重建层掩码和碰撞体缓存并检测乘客；组件未启用时仅清空结果。</summary>
         public void RefreshContacts()
         {
             if (!isActiveAndEnabled)
@@ -86,6 +98,7 @@ namespace YLFramework.Platform2D
         }
 
 
+        /// <summary>存在同对象 BoxCollider2D 时，在其世界包围盒顶部上方生成默认局部检测线段。</summary>
         private void Reset()
         {
             BoxCollider2D box = GetComponent<BoxCollider2D>();
@@ -102,6 +115,7 @@ namespace YLFramework.Platform2D
             }
         }
 
+        /// <summary>同步对象层变化，检查接触变化，并对已有乘客以约 0.1 秒间隔刷新线段结果。</summary>
         private void Update()
         {
             if (gameObject.layer != _layer)
@@ -112,8 +126,6 @@ namespace YLFramework.Platform2D
 
             CheckWithTimer();
 
-            // 如果检测的结果有游戏物体 那么1s检测10次 用来监听游戏物体的情况
-            // 如果没有，可以不用检测 ， 等接触的游戏物体发生变化时再检测
             if (Contacts.Count > 0)
             {
                 _checkTimer += Time.deltaTime;
@@ -132,6 +144,7 @@ namespace YLFramework.Platform2D
         #region 方法
 
 
+        /// <summary>按约每秒 30 次的上限收集碰撞体接触，仅在接触集合变化时重查乘客。</summary>
         private void CheckWithTimer()
         {
             _timer += Time.deltaTime;
@@ -178,7 +191,7 @@ namespace YLFramework.Platform2D
 
         }
 
-        // 检测
+        /// <summary>将局部线段变换到世界坐标并查询，排除触发器及平台自身层级后重填乘客列表。</summary>
         private void Check()
         {
             Contacts.Clear();
@@ -189,6 +202,7 @@ namespace YLFramework.Platform2D
 
             foreach (Area area in areas)
             {
+                // 每条线段最多写入 10 个命中，不保证覆盖整个平台周围的全部乘客。
                 Vector3 from = transform.localToWorldMatrix.MultiplyPoint(area.from);
                 Vector3 to = transform.localToWorldMatrix.MultiplyPoint(area.to);
 
@@ -213,7 +227,7 @@ namespace YLFramework.Platform2D
         }
 
 
-        // 比较是否相同
+        /// <summary>比较接触数量及碰撞体 Transform 是否仍出现在旧集合中，不比较接触点与法线。</summary>
         private bool CompareTheSame()
         {
 
@@ -233,6 +247,8 @@ namespace YLFramework.Platform2D
             return true;
         }
 
+        /// <summary>判断旧接触列表中是否仍有存活碰撞体使用指定 Transform。</summary>
+        /// <param name="trans">待查找的碰撞体变换。</param>
         private bool ContainsTransform(Transform trans)
         {
 
@@ -247,6 +263,10 @@ namespace YLFramework.Platform2D
             return false;
         }
 
+        /// <summary>按层掩码、深度和全局触发器查询开关构造二维查询过滤器。</summary>
+        /// <param name="layerMask">允许查询的层位掩码。</param>
+        /// <param name="minDepth">允许的最小深度。</param>
+        /// <param name="maxDepth">允许的最大深度。</param>
         internal static ContactFilter2D CreateLegacyFilter(int layerMask, float minDepth, float maxDepth)
         {
             ContactFilter2D result = default(ContactFilter2D);

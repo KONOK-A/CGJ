@@ -22,57 +22,74 @@ using SettingsUtil = HybridCLR.SettingsUtil;
 
 namespace YLFramework.Integrations.HybridCLR.Editor
 {
+    /// <summary>一个实际执行阶段的结果，保留原始异常与 Unity 错误日志。</summary>
     public sealed class HybridCLRBuildStageResult
     {
+        /// <summary>阶段的稳定标识，不是本地化显示名称。</summary>
         public string Name
         {
             get; internal set;
         }
+        /// <summary>阶段失败的原始异常，成功时为空。</summary>
         public Exception Error
         {
             get; internal set;
         }
+        /// <summary>该阶段是否没有失败异常，不代表后续阶段已执行。</summary>
         public bool HasSucceeded => Error == null;
+        /// <summary>该阶段捕获的 Error、Exception 与 Assert 日志。</summary>
         public IReadOnlyList<string> Diagnostics { get; internal set; } = Array.Empty<string>();
     }
 
+    /// <summary>显式构建或发布的阶段报告，未出现的阶段不得视为已完成。</summary>
     public sealed class HybridCLRBuildReport
     {
         private readonly List<HybridCLRBuildStageResult> _stages = new List<HybridCLRBuildStageResult>();
+        /// <summary>按执行顺序记录的阶段结果。</summary>
         public IReadOnlyList<HybridCLRBuildStageResult> Stages => _stages.AsReadOnly();
+        /// <summary>是否至少执行了一个阶段且所有已记录阶段均成功。</summary>
         public bool HasSucceeded => _stages.Count != 0 && _stages.TrueForAll(s => s.HasSucceeded);
+        /// <summary>本项目拟交付的代码清单，生成后仍可能在后续阶段失败。</summary>
         public HybridCLRManifest Manifest
         {
             get; internal set;
         }
+        /// <summary>资源流程返回的发布版本，须结合阶段错误判断是否完成。</summary>
         public ResourceRelease Release
         {
             get; internal set;
         }
+        /// <summary>正式 Resource 构建及发布的原始报告。</summary>
         public ResourceEditorBuildReport ResourceBuild
         {
             get; internal set;
         }
+        /// <summary>显式内置部署的结果，未执行部署时为空。</summary>
         public ResourceBuiltInDeployment Deployment
         {
             get; internal set;
         }
+        /// <summary>真实 Player 构建的 Unity 报告；单独成功不等于最终基线已冻结。</summary>
         public BuildReport PlayerBuild
         {
             get; internal set;
         }
+        /// <summary>已读取验证或新冻结的基线根目录，不单独证明整个流程成功。</summary>
         public string BaselineDirectory
         {
             get; internal set;
         }
+        /// <summary>包含已执行阶段、原始错误及现有制品身份的文本摘要。</summary>
         public string Summary => string.Join("\n", _stages.Select(s => s.Name + ": " + (s.HasSucceeded ? "OK" : s.Error.ToString()))) +
             (Manifest == null ? "" : "\nCodePackageId=" + Manifest.CodePackageId) +
             (Release == null ? "" : "\nCatalogDigest=" + Release.Catalog.CatalogDigest) +
             (BaselineDirectory == null ? "" : "\nBaseline=" + BaselineDirectory);
+        // 追加真实返回的阶段结果，不替尚未执行的阶段预填成功。
         internal void Add(string name, Exception error = null, IReadOnlyList<string> diagnostics = null) =>
             _stages.Add(new HybridCLRBuildStageResult { Name = name, Error = error, Diagnostics = diagnostics ?? Array.Empty<string>() });
     }
 
+    /// <summary>在 Editor 主线程编排新基座或冻结基座上的补丁发布，不自动安装或切换官方设置。</summary>
     [InitializeOnLoad]
     public static class HybridCLRBuildPipeline
     {
@@ -80,8 +97,12 @@ namespace YLFramework.Integrations.HybridCLR.Editor
         private static readonly int _mainThread;
         private static bool _isBusy;
 
+        // 由 Editor 初始化记录允许执行构建编排的主线程。
         static HybridCLRBuildPipeline() => _mainThread = Thread.CurrentThread.ManagedThreadId;
 
+        /// <summary>严格检查保存状态、输入归属及当前原生构建环境，不生成制品。</summary>
+        /// <param name="profile">已显式保存的构建配置及其 Resource 配方、项目。</param>
+        /// <returns>仅包含 Preflight 阶段的报告；通过不等于 Player 或补丁可用。</returns>
         public static HybridCLRBuildReport Validate(HybridCLRBuildProfile profile)
         {
             var report = new HybridCLRBuildReport();
@@ -89,6 +110,13 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return report;
         }
 
+        /// <summary>生成全局原生能力、发布项目资源并构建真实 Player，最后冻结最终 AOT 基线。</summary>
+        /// <param name="profile">直接拥有新基座且未绑定 BaseProfile 的已保存配置。</param>
+        /// <param name="options">与配置及 enabled scenes 精确匹配、输出目录全新或为空的 Player 选项。</param>
+        /// <param name="cancellation">在阶段开始前检查并传入资源流程的取消令牌。</param>
+        /// <param name="provider">应用注入的可选资源内容密钥提供者，不写入 Profile。</param>
+        /// <returns>截至失败或最终基线冻结的实际阶段报告。</returns>
+        /// <remarks>取消不强制中断同步原生步骤，也不回滚此前已完成的生成、发布或部署。</remarks>
         public static HybridCLRBuildReport BuildBasePlayer(HybridCLRBuildProfile profile, BuildPlayerOptions options,
             CancellationToken cancellation = default, IResourceContentKeyProvider provider = null)
         {
@@ -224,6 +252,12 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        /// <summary>按持久冻结基线检查项目热更闭包并发布补丁，不裁剪 AOT、重建原生桥或构建 Player。</summary>
+        /// <param name="profile">拥有或显式一层绑定完整基线的已保存项目配置。</param>
+        /// <param name="cancellation">阶段前及资源发布流程使用的取消令牌。</param>
+        /// <param name="provider">应用注入的可选资源内容密钥提供者。</param>
+        /// <returns>基线读取、编译、兼容检查及已执行发布阶段的报告。</returns>
+        /// <remarks>超出冻结登记的 metadata 或原生需求须建立新基座；本入口不部署也不修改冻结基线。</remarks>
         public static HybridCLRBuildReport PublishPatch(HybridCLRBuildProfile profile, CancellationToken cancellation = default,
             IResourceContentKeyProvider provider = null)
         {
@@ -289,9 +323,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 在阶段边界响应取消，捕获同步异常及 Unity 错误日志，并始终解绑日志观察。
         private static bool Run(HybridCLRBuildReport report, string name, Action action, CancellationToken cancellation = default)
         {
             var messages = new List<string>();
+            // 仅收集会使当前阶段失败的日志，保留堆栈供报告定位。
             void Capture(string message, string stack, LogType type)
             {
                 if (type == LogType.Error || type == LogType.Exception || type == LogType.Assert)
@@ -323,6 +359,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 拒绝繁忙或未保存的 Editor 输入，再检查目录归属、基座绑定与官方环境。
         private static void Preflight(HybridCLRBuildProfile profile)
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThread)
@@ -373,6 +410,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             LinkPath();
         }
 
+        // 核对当前 Windows64、IL2CPP、Framework、精确包来源和已安装原生工具链，不代为配置。
         internal static void ValidateEnvironment(HybridCLRBuildProfile profile)
         {
             if (profile.recipe.target != BuildTarget.StandaloneWindows64 || EditorUserBuildSettings.activeBuildTarget != profile.recipe.target ||
@@ -415,6 +453,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                 "Microsoft Visual Studio/Installer/vswhere.exe"), kits?.GetValue("KitsRoot10") as string);
         }
 
+        // 要求解析包、Installer 包版本与本地 libil2cpp 版本均精确为 9.0.3。
         internal static void ValidateSupportedVersions(string resolvedVersion, string declaredVersion, string installedVersion)
         {
             if (resolvedVersion != "9.0.3" || declaredVersion != "9.0.3" || installedVersion != "9.0.3")
@@ -423,6 +462,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 交叉验证 manifest、UPM lock 与可用的 PackageInfo，拒绝同版本号但来源不同的包。
         internal static void ValidateGitProvenance(string version, string source, string declared, string lockSource,
             string lockVersion, string lockHash, string apiRevision, string apiHash)
         {
@@ -436,6 +476,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 只发现并检查既有 x64 C++ 工具与 SDK 库，不启动安装。
         internal static void ValidateNativeToolchain(string vswherePath, string sdkRoot)
         {
             if (!File.Exists(vswherePath) || string.IsNullOrEmpty(sdkRoot) || !Directory.Exists(Path.Combine(sdkRoot, "Lib")))
@@ -473,6 +514,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 从官方设置读取非保留热更名单，拒绝空项、大小写碰撞和隐式默认程序集。
         internal static string[] ConfiguredNames()
         {
             var names = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved.ToArray();
@@ -493,6 +535,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return names.OrderBy(n => n, StringComparer.Ordinal).ToArray();
         }
 
+        // 在全新工作区编译官方全局集合，复制显式外部 DLL，并拒绝 AOT 到热更的静态引用。
         private static HybridCLRAssemblySet Compile(HybridCLRBuildProfile profile, string workspace)
         {
             var output = workspace + "/Compiled";
@@ -565,6 +608,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return new HybridCLRAssemblySet { HotUpdate = hot.AsReadOnly(), Aot = Array.Empty<HybridCLRAssemblyRecord>() };
         }
 
+        // 仅接纳本轮编译器明确返回且名称唯一的输出，不能用遗留 DLL 补齐成功。
         internal static IReadOnlyList<HybridCLRAssemblyRecord> VerifyCompiledOutputs(IEnumerable<string> returnedAssemblies, IEnumerable<string> expectedNames)
         {
             if (returnedAssemblies == null || expectedNames == null)
@@ -593,6 +637,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return output.AsReadOnly();
         }
 
+        // 在官方显式外部目录及 Windows64 子目录查找唯一 DLL，不扩展到未知来源。
         internal static IEnumerable<HybridCLRAssemblyRecord> ExternalCandidates(string[] names)
         {
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -638,6 +683,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 检查可执行 Player 模式、场景和互不重叠的新输出，保护已有 Player 与基线。
         internal static void ValidatePlayerOptions(HybridCLRBuildProfile profile, BuildPlayerOptions options)
         {
 #if UNITY_EDITOR_WIN
@@ -688,6 +734,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 解析官方 Assets 相对 link.xml 输出，拒绝链接及逃出 Assets 的路径。
         private static string LinkPath()
         {
             var relative = Settings.instance.outputLinkFile;
@@ -706,6 +753,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return path;
         }
 
+        // 依据全局热更输入生成官方裁剪保留文件，并同步导入。
         private static void GenerateLink(HybridCLRAssemblySet compiled)
         {
             var analyzer = new global::HybridCLR.CodeGen.Link.LinkAnalyzer(HybridCLRAssemblyAnalysis.CreateResolver(compiled));
@@ -714,6 +762,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         }
 
+        // 用真实 Player 裁剪目录建立 AOT 集合，不以编译前引用程序集冒充最终输入。
         private static HybridCLRAssemblySet AnalyzeStripped(HybridCLRBuildProfile profile, IReadOnlyList<HybridCLRAssemblyRecord> hot)
         {
             var directory = SettingsUtil.GetAssembliesPostIl2CppStripDir(profile.recipe.target);
@@ -725,6 +774,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return HybridCLRAssemblyAnalysis.Analyze(hot.Select(a => a.Path), Directory.GetFiles(directory, "*.dll").OrderBy(p => p, StringComparer.Ordinal), UnityAotAliases());
         }
 
+        // 结合裁剪 AOT、热更回调及 calli 需求生成完整原生桥接。
         private static void GenerateBridge(HybridCLRAssemblySet assemblies, bool development, string path)
         {
             var resolver = HybridCLRAssemblyAnalysis.CreateResolver(assemblies);
@@ -751,12 +801,15 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }).Generate();
         }
 
+        // 将项目入口投影为热更依赖闭包后生成交付清单。
         private static HybridCLRManifest CreateManifest(HybridCLRBuildProfile profile, HybridCLRAssemblySet assemblies)
             => CreateManifestForSet(profile, SelectAssemblies(profile, assemblies));
 
+        // 为明确程序集集合生成代码及所需 metadata 描述，并封口为规范清单。
         private static HybridCLRManifest CreateManifestForSet(HybridCLRBuildProfile profile, HybridCLRAssemblySet assemblies)
         {
             var hotNames = new HashSet<string>(assemblies.HotUpdate.Select(a => a.Name), StringComparer.Ordinal);
+            // 保留完整 DLL 指纹，仅热更描述携带集合内直接依赖。
             HybridCLRPayload Payload(HybridCLRAssemblyRecord record, bool aot) => new HybridCLRPayload
             {
                 Name = record.Name,
@@ -781,6 +834,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return manifest;
         }
 
+        // 确认最终 Player 的 AOT 身份与字节未偏离已准备并发布的 SuperSet 输入。
         private static void VerifyFinalAot(HybridCLRAssemblySet prepared, HybridCLRAssemblySet final, HybridCLRManifest manifest)
         {
             if (!prepared.Aot.Select(a => a.Identity).SequenceEqual(final.Aot.Select(a => a.Identity)))
@@ -806,6 +860,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 补丁必须是全局登记、已登记 metadata 和冻结原生需求的子集，而非仅在目录中存在同名文件。
         internal static void ValidatePatchSet(HybridCLRBuildBaseline baseline, HybridCLRAssemblySet patch)
         {
             var registered = new HashSet<string>(baseline.InitialManifest.HotUpdateAssemblies.Select(a => a.Name), StringComparer.Ordinal);
@@ -827,6 +882,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 解析精确项目入口；空集合保留官方全量语义，非空非法项不得静默回退。
         internal static string[] ValidateRoots(string[] roots, IEnumerable<string> configured)
         {
             var all = new HashSet<string>(configured, StringComparer.Ordinal);
@@ -847,6 +903,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return roots.ToArray();
         }
 
+        // 沿实际引用展开项目热更闭包，保留原有顺序和可用 AOT 集合。
         internal static HybridCLRAssemblySet SelectAssemblies(HybridCLRBuildProfile profile, HybridCLRAssemblySet assemblies)
         {
             if (!profile)
@@ -882,6 +939,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return new HybridCLRAssemblySet { HotUpdate = Array.AsReadOnly(assemblies.HotUpdate.Where(a => selected.Contains(a.Name)).ToArray()), Aot = assemblies.Aot };
         }
 
+        // 解析唯一直接基座拥有者，拒绝自引用、链式绑定及目录或构建身份不匹配。
         internal static HybridCLRBuildProfile ResolveBaseProfile(HybridCLRBuildProfile profile)
         {
             if (!profile || !profile.recipe || !profile.recipe.project)
@@ -912,6 +970,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return owner;
         }
 
+        // 按直接拥有者验证冻结基线，同时保留当前项目自己的发布身份。
         internal static void ValidateBaselineBinding(HybridCLRBuildProfile profile, HybridCLRBuildBaseline baseline, string fingerprint)
         {
             var owner = ResolveBaseProfile(profile);
@@ -922,6 +981,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 收集静态可见的 AOT 泛型、反向回调、calli 与 P/Invoke 需求，生成稳定比较集合。
         private static string[] NativeRequirements(HybridCLRAssemblySet assemblies)
         {
             var hot = assemblies.HotUpdate.Select(a => a.Name).ToList();
@@ -952,9 +1012,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return requirements.Distinct(StringComparer.Ordinal).OrderBy(s => s, StringComparer.Ordinal).ToArray();
         }
 
+        // 保留嵌套泛型实参及其程序集范围，防止同名类型被误判为同一原生需求。
         internal static string NativeTypeRequirement(global::HybridCLR.Meta.GenericClass type) =>
             "type:" + TypeSignature(type.ToTypeSig()).ToString(Formatting.None);
 
+        // 拒绝仅脚本或 Visual Studio 工程导出，避免将其报告为可执行基座。
         internal static void ValidateExecutableBuildMode(bool scriptsOnly, bool createSolution)
         {
             if (scriptsOnly || createSolution)
@@ -963,6 +1025,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 在 Unity 报告之外确认精确输出 exe 及 GameAssembly.dll 实际存在。
         internal static void ValidatePlayerOutputs(string requested, string actual)
         {
             if (string.IsNullOrEmpty(actual) || Path.GetFullPath(requested) != Path.GetFullPath(actual) || !File.Exists(requested) ||
@@ -972,9 +1035,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 将有序泛型实参编码为保留完整类型结构的稳定描述。
         private static string SignatureArguments(IEnumerable<TypeSig> arguments) =>
             new JArray((arguments ?? Array.Empty<TypeSig>()).Select(t => TypeSignature(t))).ToString(Formatting.None);
 
+        // 组合声明类型、名称及签名，避免仅按方法名比较原生需求。
         private static string MethodRequirement(MethodDef method) => new JObject
         {
             ["declaringType"] = TypeReference(method.DeclaringType),
@@ -982,12 +1047,14 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             ["signature"] = MethodSignature(method.MethodSig)
         }.ToString(Formatting.None);
 
+        // 记录类型的完整名称与定义程序集，缺少范围时拒绝构建需求描述。
         private static JObject TypeReference(ITypeDefOrRef type) => new JObject
         {
             ["assembly"] = type.DefinitionAssembly?.FullName ?? throw new InvalidDataException("A native type requirement has no assembly scope."),
             ["name"] = type.FullName
         };
 
+        // 有界编码调用约定、泛型元数、返回值及含 sentinel 的参数结构。
         private static JObject MethodSignature(MethodSig signature, int depth = 0)
         {
             if (signature == null || depth > 64)
@@ -1005,6 +1072,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             };
         }
 
+        // 有界展开类型签名及修饰、数组或泛型所有者，拒绝无法准确表示的叶节点。
         private static JObject TypeSignature(TypeSig type, int depth = 0)
         {
             if (type == null || depth > 64)
@@ -1079,6 +1147,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return value;
         }
 
+        // 仅从当前 Unity 安装的 Framework 引用及原生实现建立明确身份别名。
         internal static IReadOnlyDictionary<string, string> UnityAotAliases()
         {
             var referenceRoot = EditorApplication.applicationContentsPath + "/UnityReferenceAssemblies/unity-4.8-api";
@@ -1118,6 +1187,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return aliases;
         }
 
+        // 固定影响全局原生能力的工具、构建和官方登记设置，不纳入项目入口子集。
         internal static string SettingsFingerprint(HybridCLRBuildProfile profile)
         {
             var settings = Settings.instance;
@@ -1144,6 +1214,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return HybridCLRManifest.Hash(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(description)));
         }
 
+        // 对实际 Player 输出的相对路径、长度和字节摘要整体计算基座指纹。
         private static string PlayerFingerprint(string executable)
         {
             if (!File.Exists(executable))
@@ -1166,6 +1237,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return HybridCLRManifest.Hash(Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(files)));
         }
 
+        // 先核对规范生成地址，再调用正式 Resource 流程并保留其首个原始错误。
         internal static void PublishResources(HybridCLRBuildReport report, HybridCLRBuildProfile profile, CancellationToken cancellation, IResourceContentKeyProvider provider)
         {
             var map = ResourceBuildMap.Create(profile.recipe.project);
@@ -1198,6 +1270,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 检查自有 Assets 生成根及独立持久基线，并在写入前验证现有归属。
         internal static void ValidateInputPaths(HybridCLRBuildProfile profile)
         {
             if (!profile || string.IsNullOrWhiteSpace(profile.generatedAssetDirectory) || !profile.generatedAssetDirectory.StartsWith("Assets/", StringComparison.Ordinal) ||
@@ -1231,13 +1304,18 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             ReadOwner(profile);
         }
 
+        /// <summary>生成根的 Profile 归属与已提交文件指纹，不用于认领未知用户文件。</summary>
         private sealed class Owner
         {
+            /// <summary>生成归属回执的格式版本。</summary>
             public int SchemaVersion = 1;
+            /// <summary>拥有此生成根的已保存 Profile GUID。</summary>
             public string ProfileGuid;
+            /// <summary>上次提交的规范代码文件及指纹。</summary>
             public HybridCLRBaselineFile[] Files = Array.Empty<HybridCLRBaselineFile>();
         }
 
+        // 只接纳本配置的完整归属记录及已知目录元数据，拒绝未知或被外部修改的文件。
         private static Owner ReadOwner(HybridCLRBuildProfile profile)
         {
             var root = Path.GetFullPath(profile.generatedAssetDirectory);
@@ -1305,14 +1383,17 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return owner;
         }
 
+        // 识别允许预先创建的规范代码目录元数据，不扩大可认领范围。
         private static bool IsPayloadDirectoryMeta(string root, string file) => file.EndsWith(".meta", StringComparison.Ordinal) &&
             Directory.Exists(file.Substring(0, file.Length - 5)) && new[] { "hybridclr.meta", "hybridclr/assemblies.meta", "hybridclr/metadata.meta" }
                 .Contains(file.Substring(root.Length + 1).Replace('\\', '/'));
 
+        // 识别受管清单及固定两类 DLL 资源路径。
         private static bool IsPayloadPath(string path) => path == HybridCLRManifest.ManifestPath || path != null &&
             (path.StartsWith("hybridclr/assemblies/", StringComparison.Ordinal) || path.StartsWith("hybridclr/metadata/", StringComparison.Ordinal)) &&
             path.EndsWith(".dll.bytes", StringComparison.Ordinal) && path.Split('/').Length == 3;
 
+        // 复核输入后更新自有文件及归属，最后写 manifest；跨文件失败不承诺自动回滚。
         internal static void CommitPayloads(HybridCLRBuildProfile profile, HybridCLRManifest manifest, HybridCLRAssemblySet assemblies)
         {
             ValidateInputPaths(profile);
@@ -1359,6 +1440,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
         }
 
+        // 单文件持久写入后原子替换，内容相同时不改写且保留既有 .meta 身份。
         internal static void WriteOwned(string root, string relative, byte[] bytes, Action<string, string> replace = null, Action<int> backoff = null)
         {
             var target = HybridCLRBuildBaseline.Child(root, relative);
@@ -1423,6 +1505,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 要求 Profile 已保存为有稳定 GUID 的资产，作为归属与基座拥有者身份。
         private static string ProfileGuid(HybridCLRBuildProfile profile)
         {
             var path = AssetDatabase.GetAssetPath(profile);
@@ -1435,6 +1518,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return guid;
         }
 
+        // 按规范绝对路径判断相等或目录包含，避免前缀同名造成边界误判。
         private static bool Within(string candidate, string directory)
         {
             var full = Path.GetFullPath(candidate).TrimEnd('\\', '/');

@@ -7,8 +7,11 @@ namespace YLFramework.Audio
     /// <summary>显式的组自动播放时机；不改变已有 Emitter/MusicPlayer 的首次 Start 行为。</summary>
     public enum AudioGroupAutoPlay
     {
+        /// <summary>仅由显式 Play 或 PlayGroup 入口触发播放。</summary>
         Manual,
+        /// <summary>只在组件首次 Start 时自动播放一次。</summary>
         FirstStart,
+        /// <summary>首次 Start 及之后每次重新启用时自动播放。</summary>
         EveryEnable
     }
 
@@ -55,11 +58,13 @@ namespace YLFramework.Audio
         public UnityEvent Started => onStarted;
 
         /// <summary>设置 ExternalProvider 条目的显式后端；先停止本所有者的旧请求，不注册全局后端。</summary>
+        /// <param name="provider">之后选曲使用的后端；null 表示不提供 ExternalProvider 候选来源。</param>
         public void SetProvider(IAudioClipProvider provider)
         {
             Stop();
             _provider = provider;
         }
+        /// <summary>记录首次启动完成，并按自动播放模式决定是否提交首个请求。</summary>
         private void Start()
         {
             _hasStarted = true;
@@ -68,6 +73,7 @@ namespace YLFramework.Audio
                 Play();
             }
         }
+        /// <summary>首次 Start 之后，仅 EveryEnable 模式在重启用时自动播放。</summary>
         private void OnEnable()
         {
             if (_hasStarted && autoPlay == AudioGroupAutoPlay.EveryEnable)
@@ -79,6 +85,7 @@ namespace YLFramework.Audio
         public void Play() => PlayGroup(groupName);
 
         /// <summary>按明确组名抽选并提交；不是控制通道名称。失活组件不提交在途请求。</summary>
+        /// <param name="name">素材库内区分大小写的组名。</param>
         public void PlayGroup(string name)
         {
             if (_isDestroyed || !isActiveAndEnabled || !library || !library.TrySelect(name, out var selection, _provider))
@@ -196,7 +203,9 @@ namespace YLFramework.Audio
             _version++;
             _channel?.Stop();
         }
+        /// <summary>停用时结束本组件原播放与等待，但保留通道登记供重新启用。</summary>
         private void OnDisable() => Stop();
+        /// <summary>先撤销本组件提交版本，再归还原通道登记，防止迟到回调接管新身份。</summary>
         private void OnDestroy()
         {
             _isDestroyed = true;

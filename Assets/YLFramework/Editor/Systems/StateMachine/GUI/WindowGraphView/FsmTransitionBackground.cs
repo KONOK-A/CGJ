@@ -7,6 +7,7 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>以 IMGUI 绘制过渡边、默认入口和运行时切换提示，同时提供边命中及检查选择。</summary>
     public class FsmTransitionBackground : ImmediateModeElement
     {
         private float EdgeDistanceMultiplier => Mathf.Clamp(_graphView.scale, 0.1f, 1);
@@ -22,11 +23,13 @@ namespace YLFramework.Editor.StateMachine
 
         private static Color SelectedEdgeColor => new Color(0.42f, 0.7f, 1f, 1f);
 
+        /// <summary>鼠标距离阈值内最近的过渡，用于悬停加粗及单击选择，不代表正在执行的过渡。</summary>
         public FsmTransitionData CloseTransition
         {
             get; internal set;
         }
 
+        /// <summary>当前选中边的数据引用；要同步 Inspector 应通过选择方法修改。</summary>
         public FsmTransitionData Selection
         {
             get; set;
@@ -55,7 +58,7 @@ namespace YLFramework.Editor.StateMachine
         private float _exitStateTimer = 0;
         #endregion
 
-        // Fix编码
+        /// <summary>按当前浏览层重绘配置边及预览，合成 Entry 到默认节点的显示边，并更新最近命中过渡。</summary>
         protected override void ImmediateRepaint()
         {
             List<FsmTransitionData> transitions = Context.Instance.GetCurrentShowTransitionData();
@@ -121,6 +124,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>解析过渡端点，按选中与悬停状态绘制边；端点未显示时不绘制。</summary>
         private void DrawTransiton(FsmTransitionData data, Color color)
         {
 
@@ -142,6 +146,7 @@ namespace YLFramework.Editor.StateMachine
             DrawTransiton(edgePoints, color, data == CloseTransition, true);
         }
 
+        /// <summary>按缩放系数绘制给定线段及可选箭头，加粗仅改变显示尺寸。</summary>
         private void DrawTransiton(Vector3[] edgePoints, Color color, bool bold, bool isDrawArrow)
         {
             float arrowSize = 5f * EdgeSizeMultiplier;
@@ -164,11 +169,13 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>使用过渡定义中的端点名称取得当前绘制线段。</summary>
         private Vector3[] GetTransitionPoints(FsmTransitionData data)
         {
             return GetTransitionPoints(data.fromStateName, data.toStateName);
         }
 
+        /// <summary>将端点中心变换到图绘制坐标并沿垂线偏移，以区分反向边；返回复用数组。</summary>
         private Vector3[] GetTransitionPoints(string fromStateName, string toStateName)
         {
             FsmNodeView fromNode = _graphView.GetNode(fromStateName);
@@ -190,11 +197,13 @@ namespace YLFramework.Editor.StateMachine
             return _points;
         }
 
+        /// <summary>将节点内容坐标中心转换为叠加层使用的图绘制坐标。</summary>
         private Vector3 GetNodeViewPosition(FsmNodeView node)
         {
             return _graphView.contentViewContainer.Matrix().MultiplyPoint(node.GetPosition().center);
         }
 
+        /// <summary>在线段中部计算箭头中心及方向，并交由单箭头绘制入口输出。</summary>
         private static void DrawArrows(Color color, Vector3 cross, Vector3[] edgePoints, bool isSelf, float arrowSize, float outlineWidth, float arrowLength)
         {
             Vector3 vector = edgePoints[1] - edgePoints[0];
@@ -213,6 +222,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>仅在重绘事件中以填充三角形及轮廓线绘制单个方向箭头。</summary>
         private static void DrawArrow(Color color, Vector3 cross, Vector3 direction, Vector3 center, float arrowSize, float outlineWidth)
         {
             if (Event.current.type == EventType.Repaint)
@@ -229,6 +239,8 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>在当前显示层中查找距鼠标最近且小于十像素的配置边，不包含合成的默认入口边。</summary>
+        /// <returns>最近的过渡；没有命中时为 null。</returns>
         public FsmTransitionData FindClosestTransition()
         {
             FsmTransitionData result = null;
@@ -267,6 +279,8 @@ namespace YLFramework.Editor.StateMachine
             return result;
         }
 
+        /// <summary>更新选中边并去重安排延迟 Inspector 绑定，清空选择时立即清除原检查目标。</summary>
+        /// <param name="transition">要选中的过渡，null 表示取消选择。</param>
         public void OnTransitionSelection(FsmTransitionData transition)
         {
             EditorApplication.delayCall -= DelayCallSelection;
@@ -286,6 +300,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>预览从来源节点到悬停普通节点或鼠标位置的连线，不创建配置过渡。</summary>
         private void DrawMakeTransition()
         {
             if (!_graphView.IsMakingTransition)
@@ -313,7 +328,7 @@ namespace YLFramework.Editor.StateMachine
 
 
         /// <summary>
-        /// 绘制当前状态切换的过渡
+        /// 为宿主最近记录的过渡绘制一次短暂高亮，不表示过渡仍在执行，也不改变运行时状态。
         /// </summary>
         private void DrawCurrentTransition(FsmTransitionData transition)
         {
@@ -342,8 +357,6 @@ namespace YLFramework.Editor.StateMachine
             Vector3[] edgePoints = GetTransitionPoints(transition);
 
             int index = Context.Instance.FsmController.RuntimeFsmController.IndexOf(Context.Instance.RuntimeFsmController);
-
-            // 找到当前的过渡
 
             FsmTransition currentTransition = Context.Instance.FsmController.GetCurrentTransition(index);
             if (currentTransition == null)
@@ -388,6 +401,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>检测浏览父层的当前节点由存在变为空，临时绘制到 Up 节点的退出提示并按时间清除。</summary>
         private void DrawStateExitTransition()
         {
             if (Event.current.type != EventType.Repaint)
@@ -468,6 +482,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>将当前边选择交给检查代理，代理再次验证其是否仍属于当前配置。</summary>
         private void DelayCallSelection()
         {
             FsmTransitionInspectorHelper.Instance.Inspect(Context.Instance.RuntimeFsmController, Selection);

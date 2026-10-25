@@ -6,6 +6,7 @@ using UnityEngine.UI;
 namespace YLFramework.Core
 {
     /// <summary>Module 拥有的独立 UI 表现会话。复用 View/Model/事件/释放，不承担业务所有权。</summary>
+    /// <remarks>首次打开先执行 View 的 OnLoaded，再执行 OnOpen；有效 Single 重开只执行 OnOpen，不重建会话。</remarks>
     public abstract class Panel : View
     {
         [SerializeField] private PanelConfig settings = PanelConfig.Default;
@@ -39,6 +40,7 @@ namespace YLFramework.Core
         public bool IsTop() => this && IsLoaded && Session != null && PanelManager.GetTopPanel(Root) == this;
 
         internal PanelConfig Defaults => settings;
+        /// <summary>在初始化时固定实际根及本会话配置，不改写 Prefab 默认值。</summary>
         internal void Configure(UIRootContext root, PanelConfig value)
         {
             Root = root;
@@ -46,6 +48,7 @@ namespace YLFramework.Core
         }
         internal void CommitSettings(PanelConfig value) => _effective = value;
 
+        /// <summary>供派生面板准备实例级组件或事件声明；此时尚不能假定已绑定 Module 会话。</summary>
         protected virtual void Awake()
         {
         }
@@ -54,6 +57,7 @@ namespace YLFramework.Core
         {
         }
 
+        /// <summary>在参数借读区间内执行打开钩子，并用当前会话身份标记受限调用阶段。</summary>
         internal void Open(LoadViewArgs args)
         {
             var previous = OpeningSession;
@@ -85,6 +89,7 @@ namespace YLFramework.Core
         /// <summary>原子修改五个显示字段；不改变根、owner、来源、实例模式或缓存策略，不调用 OnOpen。</summary>
         public void UpdateDisplay(PanelOverrides changes) => PanelManager.UpdateDisplay(this, changes);
 
+        /// <summary>拒绝 OnOpen 对当前会话追加显示命令，避免覆盖本次打开尚未提交的意图。</summary>
         internal void EnsureDisplayAllowed()
         {
             if (OpeningSession != null && ReferenceEquals(OpeningSession, Session))
@@ -92,6 +97,7 @@ namespace YLFramework.Core
                 throw new InvalidOperationException("OnOpen 期间不能调用当前 Panel 的显示命令；请使用打开 overrides。");
             }
         }
+        /// <summary>在业务加载回调前准备独立 Canvas、射线入口及协调器状态；已有对象只认真实祖先根。</summary>
         internal override void BeforeOnLoaded()
         {
             base.BeforeOnLoaded();
@@ -129,6 +135,7 @@ namespace YLFramework.Core
         {
         }
         internal void NotifySortingOrder() => OnSortingOrderChange(SortingOrder);
+        /// <summary>把协调器确认的可见性变化转发到对应业务钩子。</summary>
         internal void NotifyVisible(bool value)
         {
             if (value)
@@ -140,6 +147,7 @@ namespace YLFramework.Core
                 Invisible();
             }
         }
+        /// <summary>清除已结束会话的根、配置和打开阶段标记，不销毁可复用的物理组件。</summary>
         internal void EndPanelSession()
         {
             Root = null;

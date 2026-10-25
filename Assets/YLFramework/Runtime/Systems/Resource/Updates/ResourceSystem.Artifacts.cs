@@ -6,13 +6,16 @@ using YLFramework.Singletons;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>制品查询只借读运行中的保护身份与原因，不增加资源 pin 或替代真实版本操作门禁。</remarks>
     public sealed partial class ResourceSystem
     {
+        /// <summary>一次制品观测使用的运行中身份与保护副本，仅在内部汇总时可变。</summary>
         internal sealed class ArtifactRuntimeState
         {
             internal readonly Dictionary<string, ArtifactProtection> Protections = new(StringComparer.OrdinalIgnoreCase);
             internal readonly List<string> Operations = new();
             internal string Identity;
+            /// <summary>合并路径保护原因，不持有快照、文件或 Unity 对象。</summary>
             internal void Protect(string path, ArtifactProtection reason)
             {
                 Protections.TryGetValue(path, out var current);
@@ -21,6 +24,7 @@ namespace YLFramework.Resource
         }
 
         // 只复制身份及原因；不增加 pin，不持有 Unity 对象，不清理已失效会话。
+        /// <summary>在主线程采样同根 authority 与排空主体的版本保护、操作说明及变化身份。</summary>
         internal static ArtifactRuntimeState CaptureArtifactState(ArtifactStore store)
         {
             AssertThread();

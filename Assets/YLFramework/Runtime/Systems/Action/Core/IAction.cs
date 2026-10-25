@@ -73,6 +73,7 @@ namespace YLFramework.Actions
     // 可复用池对象在一次 Execute 调用内被 Reset/复用时，版本号随之变化，供重入保护判断本次执行是否仍然有效。
     internal interface IActionExecutionVersion
     {
+        /// <summary>当前执行进度的版本，用于识别 Execute 调用期间发生的重置或复用。</summary>
         ulong ExecutionVersion
         {
             get;
@@ -86,6 +87,7 @@ namespace YLFramework.Actions
         internal readonly IAction Action;
         private readonly ulong _actionId;
 
+        // 快照加入组合时的动作标识，后续只操作这一使用周期。
         internal ActionLease(IAction action)
         {
             Action = action;
@@ -215,7 +217,7 @@ namespace YLFramework.Actions
                 }
                 finally
                 {
-                    // 等当前执行栈退出后再复用，避免旧回调继续操作新分配的动作。
+                    // 此处只入队，实际复用留给队列 Drain，不在 Deinit 调用内直接还池。
                     ActionQueue.AddCallback(new ActionQueueRecycleCallback<T>(_pool, this as T, discard: !cleaned));
                 }
             }

@@ -5,13 +5,13 @@ using UnityEngine;
 namespace YLFramework.StateMachine
 {
     /// <summary>
-    /// 状态节点
+    /// 运行时状态节点，持有按配置顺序创建的状态脚本，并协调逐脚本创建和进入、退出回调。
     /// </summary>
     public class FsmStateNode
     {
         #region 字段
         /// <summary>
-        /// 状态数据
+        /// 所属配置克隆中的节点数据。
         /// </summary>
         public FsmStateNodeData Data;
         internal RuntimeFsmControllerInstance Instance;
@@ -27,12 +27,16 @@ namespace YLFramework.StateMachine
         private readonly FsmCreationTracker _creation;
         private int _activationVersion;
 
+        /// <summary>构造时由节点名称计算的哈希。</summary>
         [Tooltip("当前状态名称Hash,可通过方法FSMController.StringToHash()转换!")]
         public int NameHash;
 
         #endregion
 
         #region 方法
+        /// <summary>反射构造节点的普通状态对象，并绑定宿主、共享数据和节点引用，暂不调用生命周期。</summary>
+        /// <param name="data">配置克隆中的节点定义。</param>
+        /// <param name="instance">拥有此节点的运行时实例。</param>
         internal FsmStateNode(FsmStateNodeData data, RuntimeFsmControllerInstance instance)
         {
             this.Data = data;
@@ -61,6 +65,7 @@ namespace YLFramework.StateMachine
 
         }
 
+        /// <summary>按脚本顺序执行首次创建及本轮进入；激活版本变化后停止旧轮次。</summary>
         internal void OnEnter()
         {
             IsRunning = true;
@@ -78,7 +83,7 @@ namespace YLFramework.StateMachine
 
                 if (_creation.TryMarkCreated(i))
                 {
-                    item.OnCreate(); // 调用 OnCreate 的方法
+                    item.OnCreate();
                 }
 
                 if (!IsRunning || version != _activationVersion || !Instance.HasStarted)
@@ -91,6 +96,7 @@ namespace YLFramework.StateMachine
 
         }
 
+        /// <summary>先终止当前激活，再退出所有已创建脚本；收集首个异常并在其余脚本退出后重抛。</summary>
         internal void OnExit()
         {
             IsRunning = false;
@@ -121,6 +127,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>按配置顺序转发逻辑更新，节点或实例停止后不再访问后续脚本。</summary>
         internal void OnUpdate()
         {
             foreach (var item in this._states)
@@ -134,6 +141,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>向仍在运行的节点脚本转发固定步长更新。</summary>
         internal void OnFixedUpdate()
         {
             foreach (var item in this._states)
@@ -147,6 +155,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>向仍在运行的节点脚本转发后置更新。</summary>
         internal void OnLateUpdate()
         {
             foreach (var item in this._states)

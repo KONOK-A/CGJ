@@ -11,7 +11,8 @@ namespace YLFramework.Binding
     /// 批量作用域（<see cref="BeginBatch"/> / <see cref="BeginBatchScope"/>）内的变化被抑制，退出时最多补发
     /// 一次 OnCountChanged 与一次 OnChanged(Reset)。
     /// 通过构造传入的 List 会被直接包裹（不复制），绕过本类修改该 List 不会触发任何事件。
-    /// 非线程安全；事件回调中增删元素请先取快照或使用批量作用域。
+    /// 非线程安全；通知同步执行，回调异常中断后续通知，但不回滚已完成的数据修改。
+    /// 批量作用域只合并通知，不提供集合快照、事务回滚或重入隔离。
     /// </summary>
     /// <typeparam name="T">列表元素类型。</typeparam>
     public class BindableList<T> : Collection<T>
@@ -64,7 +65,7 @@ namespace YLFramework.Binding
         public EasyEvent<int> OnCountChanged => _onCountChanged ??= new EasyEvent<int>();
         [NonSerialized] private EasyEvent _onClear;
         /// <summary>
-        /// 清空事件；参数无意义。
+        /// 非批量模式下清空完成后的无参通知；空列表再次清空也会发送。
         /// </summary>
         public EasyEvent OnClear => _onClear ??= new EasyEvent();
         [NonSerialized] private EasyEvent<int, T> _onAdd;
@@ -150,6 +151,7 @@ namespace YLFramework.Binding
         /// <summary>
         /// 配合 using 使用的批量作用域：即使中途抛异常，退出作用域时也会结束批量并补发合并通知
         /// </summary>
+        /// <returns>释放时结束本层批量通知的句柄；不撤销作用域内已完成的数据修改。</returns>
         public IDisposable BeginBatchScope()
         {
             BeginBatch();
@@ -179,10 +181,9 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 从后向前移除所有满足条件的元素并返回移除数量；
-        /// 回调中增删集合时按收缩后的边界继续处理，不会因集合缩短而越界。
+        /// 从后向前移除所有满足条件的元素并返回移除数量；通知回调缩短列表时，下一轮会收缩游标边界。
         /// </summary>
-        /// <param name="match">匹配条件。</param>
+        /// <param name="match">匹配条件，不应修改列表结构，否则匹配后待移除的下标可能失效。</param>
         /// <returns>被移除的元素数量。</returns>
         /// <exception cref="ArgumentNullException">match 为 null。</exception>
         public int RemoveAll(Predicate<T> match)
@@ -245,6 +246,9 @@ namespace YLFramework.Binding
         /// <summary>
         /// 移动实现：默认先移除再插入，只触发一次 Move 通知；派生类可重写为更高效的实现。
         /// </summary>
+        /// <param name="oldIndex">移动前下标，必须已存在。</param>
+        /// <param name="newIndex">移动后下标，必须在当前列表范围内。</param>
+        /// <exception cref="ArgumentOutOfRangeException">oldIndex 或 newIndex 越界。</exception>
         protected virtual void MoveItem(int oldIndex, int newIndex)
         {
             if (oldIndex < 0 || oldIndex >= Count)
@@ -280,6 +284,7 @@ namespace YLFramework.Binding
         /// <summary>
         /// 在指定位置插入数据后触发 Add 通知。
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">index 小于 0 或大于当前数量。</exception>
         protected override void InsertItem(int index, T item)
         {
             base.InsertItem(index, item);
@@ -289,6 +294,7 @@ namespace YLFramework.Binding
         /// <summary>
         /// 移除指定位置的数据后触发 Remove 通知。
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">index 不是已有元素的下标。</exception>
         protected override void RemoveItem(int index)
         {
             var beforeItem = this[index];
@@ -297,8 +303,9 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 替换指定位置的数据后触发 Replace 通知（数量不变）。
+        /// 替换指定位置的数据后触发 Replace 通知，即使新旧值相等也不抑制通知（数量不变）。
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">index 不是已有元素的下标。</exception>
         protected override void SetItem(int index, T newItem)
         {
             var oldItem = this[index];
@@ -306,6 +313,7 @@ namespace YLFramework.Binding
             NotifyReplace(index, oldItem, newItem);
         }
 
+        /// <summary>将已完成的插入广播给操作、数量和统一变化监听。</summary>
         private void NotifyAdd(int index, T item)
         {
             if (_batchDepth > 0)
@@ -319,6 +327,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableListChange<T>.Add(index, item));
         }
 
+        /// <summary>携带移除前的元素值，广播删除、数量和统一变化通知。</summary>
         private void NotifyRemove(int index, T item)
         {
             if (_batchDepth > 0)
@@ -332,6 +341,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableListChange<T>.Remove(index, item));
         }
 
+        /// <summary>广播原位置的新旧值，不发送数量变化通知。</summary>
         private void NotifyReplace(int index, T oldItem, T newItem)
         {
             if (_batchDepth > 0)
@@ -344,6 +354,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableListChange<T>.Replace(index, oldItem, newItem));
         }
 
+        /// <summary>将内部移除与插入合并为移动通知，不暴露中间操作。</summary>
         private void NotifyMove(int oldIndex, int newIndex, T item)
         {
             if (_batchDepth > 0)
@@ -356,6 +367,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableListChange<T>.Move(oldIndex, newIndex, item));
         }
 
+        /// <summary>广播清空结果，并根据操作前数量决定是否发送数量变化通知。</summary>
         private void NotifyClear(int beforeCount)
         {
             if (_batchDepth > 0)

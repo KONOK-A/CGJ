@@ -4,25 +4,30 @@ using System.Collections.ObjectModel;
 
 namespace YLFramework.Resource
 {
-    /// <summary>canonical 资产与显式 alias；不携带持久化 Schema 或构建配置。</summary>
+    /// <summary>一个规范资产条目及其显式别名；别名解析回本条目，不产生第二份资产身份。</summary>
     public sealed class ResourceCatalogEntry
     {
+        /// <summary>目录内唯一的规范资产标识；正式发布目录由 GUID 与 localId 组成。</summary>
         public string AssetId
         {
             get;
         }
+        /// <summary>条目的规范逻辑地址，包含可选子资产键。</summary>
         public ResourceAddress Address
         {
             get;
         }
+        /// <summary>该条目声明的来源、精确定位与已编译类型。</summary>
         public ResourceLocation Location
         {
             get;
         }
+        /// <summary>解析到本条目的只读别名副本；挂入目录时要求项目与子资产键和规范地址一致。</summary>
         public IReadOnlyList<ResourceAddress> Aliases
         {
             get;
         }
+        /// <summary>显式引用的依赖节点标识；目录验证引用，不在解析地址时执行加载。</summary>
         public IReadOnlyList<string> Dependencies
         {
             get;
@@ -30,6 +35,7 @@ namespace YLFramework.Resource
         internal ResourceLocalSnapshot Snapshot;
         internal ResourceCatalogAsset Descriptor;
 
+        /// <summary>保存一份规范资产描述并复制输入集合；跨条目的唯一性与图约束由目录构造器校验。</summary>
         public ResourceCatalogEntry(string assetId, ResourceAddress address, ResourceLocation location,
             IEnumerable<ResourceAddress> aliases = null, IEnumerable<string> dependencies = null)
         {
@@ -47,17 +53,20 @@ namespace YLFramework.Resource
         }
     }
 
-    /// <summary>有界依赖节点/边。此批只验证图，不预先定义 Bundle 持久化字段或执行依赖加载。</summary>
+    /// <summary>内存依赖图中的有界节点；描述直接依赖，不自行执行依赖加载。</summary>
     public sealed class ResourceDependencyNode
     {
+        /// <summary>图内唯一且按精确文本引用的节点标识。</summary>
         public string Id
         {
             get;
         }
+        /// <summary>直接依赖节点标识的只读副本。</summary>
         public IReadOnlyList<string> Dependencies
         {
             get;
         }
+        /// <summary>校验节点标识并复制直接依赖；缺失节点、重复边与环由所属目录检查。</summary>
         public ResourceDependencyNode(string id, IEnumerable<string> dependencies = null)
         {
             ResourceAddress.ValidateId(id, nameof(id));
@@ -66,28 +75,36 @@ namespace YLFramework.Resource
         }
     }
 
-    /// <summary>不可变、只读内存快照；解析仅认已登记的地址，构建/编码规范留待真实构建闭环确定。</summary>
+    /// <summary>只读内存目录快照；只解析登记的精确地址，并拒绝仅大小写不同的地址冲突。</summary>
+    /// <remarks>同一来源定位、声明类型及子资产键只能有一个规范条目；额外入口须登记为别名。</remarks>
     public sealed class ResourceCatalog
     {
         internal const int MaximumItems = 16384;
         private readonly Dictionary<ResourceAddress, ResourceCatalogEntry> _addresses = new();
+        /// <summary>本次内存目录实例的随机身份，不是发布内容的稳定摘要。</summary>
         public Guid SnapshotId { get; } = Guid.NewGuid();
+        /// <summary>本目录所有规范地址与别名共同所属的项目。</summary>
         public string ProjectId
         {
             get;
         }
+        /// <summary>规范资产条目的只读集合，不另列别名条目。</summary>
         public IReadOnlyList<ResourceCatalogEntry> Entries
         {
             get;
         }
+        /// <summary>已经检查引用与无环约束的内存依赖节点集合。</summary>
         public IReadOnlyList<ResourceDependencyNode> DependencyNodes
         {
             get;
         }
+        /// <summary>关联正式发布快照的目录字节摘要；纯内存目录为 null。</summary>
         public string CatalogDigest => Snapshot?.Document.CatalogDigest;
+        /// <summary>按规范 AssetId 描述的逻辑组；不等同于 Bundle，也不在读取时预加载。</summary>
         public IReadOnlyList<ResourceCatalogGroup> Groups { get; internal set; } = Array.Empty<ResourceCatalogGroup>();
         internal ResourceLocalSnapshot Snapshot;
 
+        /// <summary>复制输入并建立规范地址与别名索引，同时校验资产、来源身份和依赖图冲突。</summary>
         public ResourceCatalog(string projectId, IEnumerable<ResourceCatalogEntry> entries,
             IEnumerable<ResourceDependencyNode> dependencyNodes = null)
         {
@@ -119,6 +136,7 @@ namespace YLFramework.Resource
             ValidateGraph();
         }
 
+        /// <summary>在集合数量上限内复制枚举，避免调用方后续修改原集合影响目录。</summary>
         internal static ReadOnlyCollection<T> Copy<T>(IEnumerable<T> values)
         {
             var copy = new List<T>();
@@ -138,6 +156,7 @@ namespace YLFramework.Resource
             return copy.AsReadOnly();
         }
 
+        /// <summary>登记指向同一条目的地址，并拒绝跨项目、子资产键变化与大小写折叠冲突。</summary>
         private void AddAddress(ResourceAddress address, ResourceCatalogEntry entry, HashSet<(string, string)> folded)
         {
             if (!address.IsValid || address.ProjectId != ProjectId ||
@@ -154,14 +173,18 @@ namespace YLFramework.Resource
             _addresses.Add(address, entry);
         }
 
+        /// <summary>仅用于发现地址大小写冲突，不改变实际解析时的精确匹配规则。</summary>
         private sealed class FoldedAddressComparer : IEqualityComparer<(string, string)>
         {
+            /// <summary>忽略大小写比较路径与子资产键。</summary>
             public bool Equals((string, string) left, (string, string) right) =>
                 StringComparer.OrdinalIgnoreCase.Equals(left.Item1, right.Item1) && StringComparer.OrdinalIgnoreCase.Equals(left.Item2, right.Item2);
+            /// <summary>为同样忽略大小写的地址对生成散列值。</summary>
             public int GetHashCode((string, string) value) => StringComparer.OrdinalIgnoreCase.GetHashCode(value.Item1) ^
                 (value.Item2 == null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(value.Item2));
         }
 
+        /// <summary>检查依赖节点和资产引用的完整性、边数上限及无环约束，并在失败时给出实际环路径。</summary>
         private void ValidateGraph()
         {
             var nodes = new Dictionary<string, ResourceDependencyNode>(StringComparer.Ordinal);
@@ -276,6 +299,7 @@ namespace YLFramework.Resource
             throw new ArgumentException("Dependency cycle: " + string.Join(" -> ", cycle));
         }
 
+        /// <summary>将规范地址或显式别名解析为唯一条目；未登记地址直接报错，不猜测来源路径。</summary>
         public ResourceCatalogEntry Resolve(ResourceAddress address)
         {
             if (!_addresses.TryGetValue(address, out var entry))

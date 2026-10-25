@@ -24,6 +24,7 @@ namespace YLFramework.Actions
         private int _currentActionIndex = 0;
         private List<ActionLease> _actions = new List<ActionLease>();
 
+        /// <summary>对象池的构造入口。</summary>
         private Sequence()
         {
         }
@@ -31,6 +32,7 @@ namespace YLFramework.Actions
         private static ActionPool<Sequence> _pool =
             new ActionPool<Sequence>(() => new Sequence(), null, 10);
 
+        /// <summary>为新一轮执行取得空序列并分配动作标识。</summary>
         public static Sequence Allocate()
         {
             var sequence = _pool.Allocate();
@@ -40,25 +42,30 @@ namespace YLFramework.Actions
             return sequence;
         }
 
+        /// <inheritdoc />
         public bool IsPaused
         {
             get; set;
         }
 
+        /// <inheritdoc />
         public bool IsDeinitialized
         {
             get; set;
         }
 
+        /// <inheritdoc />
         public ulong ActionId
         {
             get; set;
         }
+        /// <inheritdoc />
         public ActionStatus Status
         {
             get; set;
         }
 
+        /// <summary>检查子动作后从首项开始推进即时步骤；空序列直接完成。</summary>
         public void OnStart()
         {
             if (TryCancelIfChildDeinited())
@@ -79,9 +86,9 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>以 dt=0 连续推进同步完成的子动作，遇到未完成项或取消即停止。</summary>
         void TryExecuteUntilNextNotFinished()
         {
-            // 同步完成的子动作在同次调用中连续推进；后续动作以 dt=0 启动，不传递剩余时间。
             while (_currentAction != null)
             {
                 if (TryCancelIfChildDeinited())
@@ -115,6 +122,8 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>推进当前子动作，完成后以零增量启动后续步骤，不传递本次剩余时间。</summary>
+        /// <param name="dt">仅传给当前子动作的时间增量，单位为秒。</param>
         public void OnExecute(float dt)
         {
             if (TryCancelIfChildDeinited())
@@ -153,19 +162,21 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>正常完成时不释放子动作，子动作保留到组合 Deinit，以便 Reset 后重复执行。</summary>
         public void OnFinish()
         {
         }
 
+        /// <inheritdoc />
         public ISequence Append(IAction action)
         {
             _actions.Add(new ActionLease(action));
             return this;
         }
 
+        // 子动作取消或租约失效时取消整个组合，不能视为正常完成。
         internal bool TryCancelIfChildDeinited()
         {
-            // 子动作取消或租约失效时取消整个组合，不能视为正常完成。
             if (IsDeinitialized)
             {
                 return true;
@@ -184,6 +195,7 @@ namespace YLFramework.Actions
             return false;
         }
 
+        /// <summary>推进子动作；异常时补查组合取消状态，清理也失败则一并抛出。</summary>
         private bool ExecuteChild(IAction action, float dt)
         {
             try
@@ -204,6 +216,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>逐项清理仍匹配的子动作并安排自身延迟回收；子动作清理异常在遍历后聚合抛出。</summary>
         public void Deinit()
         {
             if (!IsDeinitialized)
@@ -255,6 +268,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>重置序列和全部仍有效的子动作进度；发现子动作取消或租约失效则取消组合。</summary>
         public void Reset()
         {
             _currentActionIndex = 0;

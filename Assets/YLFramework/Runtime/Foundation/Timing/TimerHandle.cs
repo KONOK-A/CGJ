@@ -11,6 +11,7 @@ namespace YLFramework.Timing
         private readonly TimerRun _run;
         private readonly ulong _generation;
 
+        /// <summary>同时捕获任务存储与当前代次，防止旧句柄控制复用后的新任务。</summary>
         internal TimerHandle(TimerRun run)
         {
             _run = run;
@@ -48,7 +49,7 @@ namespace YLFramework.Timing
         public bool Cancel() => IsActive && _run.Owner.Cancel(_run, _generation);
         /// <summary>冻结剩余量；非末轮回调内冻结完整下一周期。重复暂停返回 true。</summary>
         public bool Pause() => IsActive && _run.Owner.Pause(_run, _generation);
-        /// <summary>按当前样本恢复等待，最早下一 rendered frame；非暂停状态返回 false。</summary>
+        /// <summary>按当前样本恢复等待，最早下一 rendered frame；回调内可撤销刚请求的暂停，其他非暂停状态返回 false。</summary>
         public bool Resume() => IsActive && _run.Owner.Resume(_run, _generation);
 
         /// <summary>

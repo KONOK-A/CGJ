@@ -7,6 +7,8 @@ using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
+    /// <summary>让独立门禁挂载层代理目标控件的布局，并用内层坐标节点抵消占位带来的坐标变化。</summary>
+    /// <remarks>外层向原父布局提供目标尺寸，内层只穿透布局；绑定或层级变化后停止旧一轮同步。</remarks>
     [AddComponentMenu("")]
     [DisallowMultipleComponent]
     internal sealed class PanelInputGateLayout : UIBehaviour, ILayoutElement, ILayoutGroup, ILayoutIgnorer
@@ -32,6 +34,7 @@ namespace YLFramework.Core
         private bool _isRetiring;
         private bool _previousIgnore = true;
 
+        /// <summary>初始化外层占位，要求内层已绑定同一目标，并确认可只读取得布局驱动字段。</summary>
         internal void Initialize(RectTransform target, RectTransform frame)
         {
             if (_drivenProperties == null || _drivenProperties.PropertyType != typeof(DrivenTransformProperties) ||
@@ -57,6 +60,7 @@ namespace YLFramework.Core
             Synchronize();
         }
 
+        /// <summary>初始化内层坐标穿透节点，不让它作为目标控件的尺寸代理参与父布局。</summary>
         internal void InitializePassThrough(RectTransform target)
         {
             this._target = target;
@@ -70,6 +74,7 @@ namespace YLFramework.Core
             Synchronize();
         }
 
+        /// <summary>检查目标与两层挂载结构，并在同步期间拒绝绑定版本或父级已经变化的旧操作。</summary>
         private bool IsValid()
         {
             if (!_isInitialized || !_target || !_slot || !_frame || _frame.parent != _slot)
@@ -92,13 +97,20 @@ namespace YLFramework.Core
         }
 
         private bool IsMeasurable => !_isPassThrough && IsValid() && _target.parent == _frame && _target.gameObject.activeInHierarchy;
+        /// <summary>目标最小宽度的代理值；不具备度量条件时为 0。</summary>
         public float minWidth => IsMeasurable ? LayoutUtility.GetMinWidth(_target) : 0;
+        /// <summary>供原父布局分配空间的目标首选宽度。</summary>
         public float preferredWidth => IsMeasurable ? LayoutUtility.GetPreferredWidth(_target) : 0;
+        /// <summary>目标参与水平剩余空间分配的弹性权重。</summary>
         public float flexibleWidth => IsMeasurable ? LayoutUtility.GetFlexibleWidth(_target) : 0;
+        /// <summary>目标最小高度的代理值。</summary>
         public float minHeight => IsMeasurable ? LayoutUtility.GetMinHeight(_target) : 0;
+        /// <summary>供原父布局分配空间的目标首选高度。</summary>
         public float preferredHeight => IsMeasurable ? LayoutUtility.GetPreferredHeight(_target) : 0;
+        /// <summary>目标参与垂直剩余空间分配的弹性权重。</summary>
         public float flexibleHeight => IsMeasurable ? LayoutUtility.GetFlexibleHeight(_target) : 0;
 
+        /// <summary>目标上启用的 ILayoutElement 中的最高优先级；无可度量元素时为 0。</summary>
         public int layoutPriority
         {
             get
@@ -125,6 +137,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>代理目标的布局忽略决策；穿透节点、失效目标或未激活目标不参与父布局。</summary>
         public bool ignoreLayout
         {
             get
@@ -148,8 +161,10 @@ namespace YLFramework.Core
         }
 
         internal void Synchronize() => Synchronize(false);
+        /// <summary>标记挂载壳退役，留待可安全搬离子节点的生命周期入口清理。</summary>
         internal void RetireMount() => _isRetiring = true;
 
+        /// <summary>同步自有占位和坐标节点，避开父布局当前驱动的字段，不直接重写目标的非驱动布局。</summary>
         private void Synchronize(bool prepareHorizontal)
         {
             if (_isRetiring || _isSynchronizing || !IsValid())
@@ -357,6 +372,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>计算坐标抵消所需的有限倒数，零或不可表示的倒数按 0 处理。</summary>
         private static float Inverse(float value)
         {
             if (value == 0)
@@ -368,20 +384,27 @@ namespace YLFramework.Core
             return float.IsInfinity(inverse) || float.IsNaN(inverse) ? 0 : inverse;
         }
 
+        /// <summary>只取得占位直接父级上正在工作的布局组，不跨层猜测布局驱动者。</summary>
         private LayoutGroup ParentLayout()
         {
             var layout = _slot.parent ? _slot.parent.GetComponent<LayoutGroup>() : null;
             return layout && layout.isActiveAndEnabled ? layout : null;
         }
 
+        /// <summary>仅在占位确由指定布局组驱动时读取驱动位，避免沿用其他驱动者的字段集合。</summary>
         private DrivenTransformProperties ReadDriven(LayoutGroup layout) => _slot.drivenByObject == layout
             ? (DrivenTransformProperties)_drivenProperties.GetValue(_slot) : DrivenTransformProperties.None;
 
+        /// <summary>横向度量前准备占位，不继承父布局尚未清除的上轮驱动位。</summary>
         public void CalculateLayoutInputHorizontal() => Synchronize(true);
+        /// <summary>纵向度量前按本轮已有驱动信息同步占位。</summary>
         public void CalculateLayoutInputVertical() => Synchronize(false);
+        /// <summary>将父布局本轮横向驱动的结果回传到目标控件。</summary>
         public void SetLayoutHorizontal() => ApplyLayout(false);
+        /// <summary>将父布局本轮纵向驱动的结果回传到目标控件。</summary>
         public void SetLayoutVertical() => ApplyLayout(true);
 
+        /// <summary>按布局类型和当前轴筛选驱动字段，再把占位结果复制回目标，保留目标的自布局结果。</summary>
         private void ApplyLayout(bool vertical)
         {
             if (_isPassThrough)
@@ -436,6 +459,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>仅复制指定驱动位对应的矩形字段，每次原生写入后复核挂载身份，返回是否发生变化。</summary>
         private bool CopyRect(RectTransform source, RectTransform destination, DrivenTransformProperties properties)
         {
             bool changed = false;
@@ -501,6 +525,7 @@ namespace YLFramework.Core
             return changed;
         }
 
+        /// <summary>按两轴驱动位合成向量，未被驱动的分量保留目标当前值。</summary>
         private static Vector2 Select(Vector2 current, Vector2 input, DrivenTransformProperties properties,
             DrivenTransformProperties x, DrivenTransformProperties y)
         {
@@ -517,6 +542,7 @@ namespace YLFramework.Core
             return current;
         }
 
+        /// <summary>在布局重建之外标记当前自有节点待重建，避免在重建栈中重复登记。</summary>
         private void SetDirty()
         {
             var rect = _isPassThrough ? _frame : _slot;
@@ -526,6 +552,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>启用时继续未完成的退役，正常挂载则同步并请求布局更新。</summary>
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -539,17 +566,20 @@ namespace YLFramework.Core
                 SetDirty();
             }
         }
+        /// <summary>退出布局参与时通知布局系统重新计算，不在此搬移业务子节点。</summary>
         protected override void OnDisable()
         {
             SetDirty();
             base.OnDisable();
         }
+        /// <summary>父级变化后重新同步自有坐标，并标记新的布局计算需求。</summary>
         protected override void OnTransformParentChanged()
         {
             base.OnTransformParentChanged();
             Synchronize();
             SetDirty();
         }
+        /// <summary>外部尺寸变化时同步；自身同步引发的回调不再次进入同一轮计算。</summary>
         protected override void OnRectTransformDimensionsChange()
         {
             base.OnRectTransformDimensionsChange();
@@ -561,11 +591,13 @@ namespace YLFramework.Core
             Synchronize();
             SetDirty();
         }
+        /// <summary>子节点变化后检查挂载关系，并通知布局系统重算。</summary>
         private void OnTransformChildrenChanged()
         {
             Synchronize();
             SetDirty();
         }
+        /// <summary>补齐本帧布局同步，或继续处理此前延后的挂载壳退役。</summary>
         private void LateUpdate()
         {
             if (_isRetiring)
@@ -578,6 +610,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>先把存活业务子节点移出旧壳，只在本轮确认壳内不再承载业务对象时销毁自有节点。</summary>
         private void Retire()
         {
             if (_isPassThrough || !_slot)

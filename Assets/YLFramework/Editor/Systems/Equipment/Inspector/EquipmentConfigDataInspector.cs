@@ -7,6 +7,7 @@ using YLFramework.Equipment;
 
 namespace YLFramework.Editor.Equipment
 {
+    /// <summary>编辑装备定义及派生字段，按模式选择专用绘制器，并在修改后维护缓存与资产命名。</summary>
     [CustomEditor(typeof(EquipmentConfigData), true)]
     public sealed class EquipmentConfigDataInspector : UnityEditor.Editor
     {
@@ -19,6 +20,7 @@ namespace YLFramework.Editor.Equipment
             ["projectName"] = new CustomEquipmentConfigDataProjectNameGui(),
             ["assetName"] = new CustomEquipmentConfigDataAssetNameGui()
         };
+        /// <summary>仅在未运行且未切换 PlayMode 时应用序列化编辑，清除所属配表缓存并保存当前定义。</summary>
         public override void OnInspectorGUI()
         {
             if (!target)

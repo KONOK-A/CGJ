@@ -14,12 +14,14 @@ using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission
 {
+    /// <summary>任务条目 Inspector；普通资产面板只读，专用窗口通过序列化属性和字段绘制器编辑。</summary>
     [CustomEditor(typeof(MissionConfigData))]
     public class MissionConfigDataInspector : UnityEditor.Editor
     {
 
         private static MissionConfigDataInspector _instance;
 
+        /// <summary>供任务配置窗口复用的按需创建 Inspector 实例，选择缓存需由窗口释放。</summary>
         public static MissionConfigDataInspector Instance
         {
             get
@@ -44,6 +46,7 @@ namespace YLFramework.Editor.Mission
         //private SerializedProperty m_Script = null;
 
 
+        /// <summary>在普通资产 Inspector 中以禁用状态绘制默认内容。</summary>
         public override void OnInspectorGUI()
         {
 
@@ -54,6 +57,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>绘制窗口内的可编辑详情，应用字段变更，并同步 ID 选择、配表缓存及必要的树重载。</summary>
         internal void OnInspectorGUI(MissionConfigData data, ConfigsWindow window, MissionsConfig missionsConfig)
         {
             if (data == null)
@@ -134,6 +138,7 @@ namespace YLFramework.Editor.Mission
         }
 
         private Dictionary<string, CustomPropertyGui> _drawers = new();
+        /// <summary>为当前选择创建独立的任务领域绘制器，避免复用旧序列化字段上下文。</summary>
         private static Dictionary<string, CustomPropertyGui> CreateDrawers() => new()
         {
             ["id"] = new CustomMissionConfigDataIdGui(),
@@ -143,6 +148,7 @@ namespace YLFramework.Editor.Mission
             ["missionTypeClassFullName"] = new CustomMissionConfigDataClassGui()
         };
 
+        /// <summary>选择变化时先释放旧缓存，再为新条目创建 SerializedObject、属性列表和绘制器。</summary>
         internal void BindSelection(MissionConfigData data)
         {
             if (_currentMissionConfigData == data && _missionConfigSerializedObject != null)
@@ -162,6 +168,7 @@ namespace YLFramework.Editor.Mission
             _drawers = CreateDrawers();
         }
 
+        /// <summary>释放当前 SerializedObject，并清除选择、属性特性及绘制器缓存。</summary>
         internal void ReleaseSelection()
         {
             _missionConfigSerializedObject?.Dispose();
@@ -171,10 +178,12 @@ namespace YLFramework.Editor.Mission
             _attributes.Clear();
             _drawers.Clear();
         }
+        /// <summary>Inspector 停用时释放当前序列化选择。</summary>
         private void OnDisable() => ReleaseSelection();
 
         private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> _attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
 
+        /// <summary>读取并按属性及特性类型缓存字段特性，未找到的结果也缓存。</summary>
         private T GetPropertyCustomAttribute<T>(SerializedProperty property) where T : Attribute
         {
             if (!_attributes.ContainsKey(property))

@@ -3,7 +3,7 @@ using UnityEngine;
 namespace YLFramework.Extensions
 {
     /// <summary>
-    /// Color 相关扩展。
+    /// 将 HTML 颜色文本解析为 Unity 颜色，并为解析失败提供黑色结果。
     /// </summary>
     public static class HtmlColorExtensions
     {

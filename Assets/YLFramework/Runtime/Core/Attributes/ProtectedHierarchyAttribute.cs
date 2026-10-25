@@ -19,13 +19,16 @@ namespace YLFramework.Core.RoslynAnalyzers
     {
 
         /// <summary>
-        /// 禁止修改此类型实例的类型（及其子类）
+        /// 禁止写入的调用方类型名单；YL0006 沿调用方的基类与接口层级匹配这些类型。
         /// </summary>
+        /// <remarks>保留构造时传入的数组引用，不复制名单，也不在运行时拦截修改。</remarks>
         public Type[] ForbiddenModifiers
         {
             get;
         }
 
+        /// <summary>保存作为禁止调用方层级起点的类型名单。</summary>
+        /// <param name="forbiddenModifiers">禁止写入的类型、基类或接口；分析器忽略 null 名单和 null 项。</param>
         public ProtectedHierarchyAttribute(params Type[] forbiddenModifiers)
         {
             ForbiddenModifiers = forbiddenModifiers;

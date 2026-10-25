@@ -4,6 +4,7 @@ using System.Text;
 
 namespace YLFramework.Integrations.HybridCLR
 {
+    /// <summary>仅从有界 PE/CLR 字节读取 Module.Mvid，不加载程序集，也不依赖运行时 dnlib。</summary>
     internal static class HybridCLRMetadata
     {
         // 只读 ECMA-335 Module.Mvid；IL2CPP 没有实现 CLR Module GUID，不能用空 Guid 冒充核验。

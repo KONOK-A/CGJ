@@ -5,9 +5,11 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>按图片来源展示 ResourceImage 配置，并提供运行时请求状态与显式刷新入口。</summary>
     [CustomEditor(typeof(ResourceImage)), CanEditMultipleObjects]
     internal sealed class ResourceImageEditor : UnityEditor.Editor
     {
+        /// <summary>绘制来源相关字段；运行时操作仍由组件管理租约，不接管原有图片资源。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();

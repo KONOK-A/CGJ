@@ -7,9 +7,11 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>通过序列化属性编辑音频素材组库，支持多对象与 Undo，不抽选或加载素材。</summary>
     [CustomEditor(typeof(AudioClipLibrary)), CanEditMultipleObjects]
     public sealed class AudioClipLibraryEditor : UnityEditor.Editor
     {
+        /// <summary>绘制素材组和迁移入口，提交字段修改后显示只读配置诊断。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -122,6 +124,8 @@ namespace YLFramework.Editor.Audio
             }
         }
 
+        /// <summary>在各库自己的列表末尾追加空的均匀选择组，提交后刷新多对象视图。</summary>
+        /// <param name="selection">待编辑的一个或多个素材库。</param>
         internal static void AddGroup(SerializedObject selection)
         {
             selection.ApplyModifiedProperties();
@@ -145,6 +149,9 @@ namespace YLFramework.Editor.Audio
             selection.Update();
         }
 
+        /// <summary>为指定组逐库追加独立初始化的条目，不继承末项的地址、引用或权重。</summary>
+        /// <param name="selection">待编辑的一个或多个素材库。</param>
+        /// <param name="groupIndex">目标组索引；不存在该组的库不处理。</param>
         internal static void AddEntry(SerializedObject selection, int groupIndex)
         {
             selection.ApplyModifiedProperties();
@@ -177,8 +184,15 @@ namespace YLFramework.Editor.Audio
             selection.Update();
         }
 
+        /// <summary>通过共用删除入口移除各库存在的指定组。</summary>
+        /// <param name="selection">待编辑的一个或多个素材库。</param>
+        /// <param name="index">待删除的组索引。</param>
         internal static void RemoveGroup(SerializedObject selection, int index) => RemoveEntry(selection, -1, index);
 
+        /// <summary>按各库的实际长度删除组或条目，以序列化提交记录 Undo 并刷新共享视图。</summary>
+        /// <param name="selection">待编辑的一个或多个素材库。</param>
+        /// <param name="groupIndex">条目所属组；负数表示直接删除组。</param>
+        /// <param name="index">目标列表中的待删除索引；越界对象不处理。</param>
         internal static void RemoveEntry(SerializedObject selection, int groupIndex, int index)
         {
             selection.ApplyModifiedProperties();
@@ -210,6 +224,10 @@ namespace YLFramework.Editor.Audio
             selection.Update();
         }
 
+        /// <summary>只读检查组名、候选、权重与地址形状，并提示旧定位迁移和外部 Provider 接入要求。</summary>
+        /// <param name="library">待检查的素材库。</param>
+        /// <param name="groupName">可选的精确组名；null 时检查整个库。</param>
+        /// <remarks>不随机抽选、不加载素材，也不确认 Provider 或 ResourceSystem 的运行时就绪状态。</remarks>
         internal static List<string> GetWarnings(AudioClipLibrary library, string groupName = null)
         {
             var warnings = new List<string>();

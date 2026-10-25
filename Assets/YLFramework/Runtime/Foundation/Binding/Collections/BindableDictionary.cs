@@ -11,7 +11,8 @@ namespace YLFramework.Binding
     /// 索引器赋值、Add、Remove、Clear 等操作会触发对应事件，并支持批量合并通知（语义与 <see cref="BindableList{T}"/> 一致）。
     /// 通过构造传入的字典会被直接使用（不复制），绕过本类修改它不会触发任何事件。
     /// 同时实现泛型与非泛型 IDictionary 接口，非泛型入口会做类型转换。
-    /// 非线程安全；事件回调中增删元素请先取快照或使用批量作用域。
+    /// 非线程安全；通知同步执行，回调异常中断后续通知，但不回滚已完成的数据修改。
+    /// 批量作用域只合并通知，不提供集合快照、事务回滚或重入隔离。
     /// </summary>
     /// <typeparam name="TKey">键类型。</typeparam>
     /// <typeparam name="TValue">值类型。</typeparam>
@@ -35,7 +36,8 @@ namespace YLFramework.Binding
         /// <summary>
         /// 直接使用已有字典作为内部存储（不复制）；之后绕过本类修改该字典不会触发事件。
         /// </summary>
-        /// <param name="innerDictionary">内部字典，不能为 null。</param>
+        /// <param name="innerDictionary">内部字典，调用方必须保证非 null；本构造不做校验。</param>
+        /// <remarks>传入 null 不会创建空字典，后续访问内部存储时会抛出 NullReferenceException。</remarks>
         public BindableDictionary(Dictionary<TKey, TValue> innerDictionary) => _inner = innerDictionary;
 
         #region 监听事件
@@ -48,7 +50,7 @@ namespace YLFramework.Binding
 
         [NonSerialized] private EasyEvent _onClear;
         /// <summary>
-        /// 清空事件；参数无意义。
+        /// 非批量模式下清空完成后的无参通知；空字典再次清空也会发送。
         /// </summary>
         public EasyEvent OnClear => _onClear ??= new EasyEvent();
 
@@ -132,6 +134,7 @@ namespace YLFramework.Binding
         /// <summary>
         /// 配合 using 使用的批量作用域：即使中途抛异常，退出作用域时也会结束批量并补发合并通知
         /// </summary>
+        /// <returns>释放时结束本层批量通知的句柄；不撤销作用域内已完成的数据修改。</returns>
         public IDisposable BeginBatchScope()
         {
             BeginBatch();
@@ -148,6 +151,8 @@ namespace YLFramework.Binding
         /// </summary>
         /// <param name="key">键。</param>
         /// <exception cref="KeyNotFoundException">读取时 key 不存在。</exception>
+        /// <exception cref="ArgumentNullException">key 为 null。</exception>
+        /// <remarks>替换不比较新旧值，即使值相等也发送替换通知；批量期间按合并规则通知。</remarks>
         public TValue this[TKey key]
         {
             get => _inner[key];
@@ -187,6 +192,7 @@ namespace YLFramework.Binding
         /// <param name="key">键。</param>
         /// <param name="value">值。</param>
         /// <exception cref="ArgumentException">key 已存在。</exception>
+        /// <exception cref="ArgumentNullException">key 为 null。</exception>
         public void Add(TKey key, TValue value)
         {
             _inner.Add(key, value);
@@ -284,6 +290,7 @@ namespace YLFramework.Binding
 
         #region 变化通知
 
+        /// <summary>将已完成的新增广播给操作、数量和统一变化监听。</summary>
         private void NotifyAdd(TKey key, TValue value)
         {
             if (_batchDepth > 0)
@@ -297,6 +304,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableDictionaryChange<TKey, TValue>.Add(key, value));
         }
 
+        /// <summary>携带被移除的键值对，广播删除、数量和统一变化通知。</summary>
         private void NotifyRemove(TKey key, TValue value)
         {
             if (_batchDepth > 0)
@@ -310,6 +318,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableDictionaryChange<TKey, TValue>.Remove(key, value));
         }
 
+        /// <summary>广播同一键的新旧值，不发送数量变化通知。</summary>
         private void NotifyReplace(TKey key, TValue oldValue, TValue newValue)
         {
             if (_batchDepth > 0)
@@ -322,6 +331,7 @@ namespace YLFramework.Binding
             _onChanged?.Trigger(BindableDictionaryChange<TKey, TValue>.Replace(key, oldValue, newValue));
         }
 
+        /// <summary>广播清空结果，并根据操作前数量决定是否发送数量变化通知。</summary>
         private void NotifyClear(int beforeCount)
         {
             if (_batchDepth > 0)
@@ -343,67 +353,93 @@ namespace YLFramework.Binding
 
         #region 显式接口实现
 
+        /// <summary>将非泛型键值强制转换后沿用带通知的索引器；读取缺失键同样抛出 KeyNotFoundException。</summary>
+        /// <remarks>键值类型不匹配时不会静默忽略，转换异常直接向上传播。</remarks>
         object IDictionary.this[object key]
         {
             get => this[(TKey)key];
             set => this[(TKey)key] = (TValue)value;
         }
 
+        /// <summary>沿用内部字典的非固定大小标记。</summary>
         bool IDictionary.IsFixedSize => ((IDictionary)_inner).IsFixedSize;
 
+        /// <summary>内部字典是否只读，当前实现返回 false。</summary>
         bool IDictionary.IsReadOnly => ((IDictionary)_inner).IsReadOnly;
 
+        /// <summary>不提供同步访问保证；内部字典的同步标记不会保护包装器的通知状态。</summary>
         bool ICollection.IsSynchronized => ((ICollection)_inner).IsSynchronized;
 
+        /// <summary>以非泛型接口返回内部键集合的实时视图。</summary>
         ICollection IDictionary.Keys => ((IDictionary)_inner).Keys;
 
+        /// <summary>返回内部字典的同步根，不自动为数据操作、通知或批量状态加锁。</summary>
         object ICollection.SyncRoot => ((ICollection)_inner).SyncRoot;
 
+        /// <summary>以非泛型接口返回内部值集合的实时视图。</summary>
         ICollection IDictionary.Values => ((IDictionary)_inner).Values;
 
+        /// <summary>内部键值对集合是否只读，当前实现返回 false。</summary>
         bool ICollection<KeyValuePair<TKey, TValue>>.IsReadOnly =>
             ((ICollection<KeyValuePair<TKey, TValue>>)_inner).IsReadOnly;
 
+        /// <inheritdoc />
         ICollection<TKey> IDictionary<TKey, TValue>.Keys => _inner.Keys;
 
+        /// <inheritdoc />
         ICollection<TValue> IDictionary<TKey, TValue>.Values => _inner.Values;
 
+        /// <inheritdoc />
         IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => _inner.Keys;
 
+        /// <inheritdoc />
         IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => _inner.Values;
 
+        /// <summary>转换非泛型键值后走新增入口，保留重复键异常与变化通知。</summary>
         void IDictionary.Add(object key, object value) => Add((TKey)key, (TValue)value);
 
+        /// <summary>按内部非泛型字典规则查询键，不触发变化通知。</summary>
         bool IDictionary.Contains(object key) => ((IDictionary)_inner).Contains(key);
 
+        /// <inheritdoc />
         void ICollection.CopyTo(Array array, int index) => ((IDictionary)_inner).CopyTo(array, index);
 
         /// <summary>
-        /// 序列化支持：委托内部字典写入数据。
+        /// 委托内部字典向序列化信息写入其数据，不包含本包装器的监听和批量通知状态。
         /// </summary>
+        /// <param name="info">接收内部字典序列化信息的目标。</param>
+        /// <param name="context">原样转交内部字典的序列化上下文。</param>
         public void GetObjectData(SerializationInfo info, StreamingContext context) =>
             ((ISerializable)_inner).GetObjectData(info, context);
 
         /// <summary>
         /// 反序列化完成后委托内部字典重建查找结构。
         /// </summary>
+        /// <param name="sender">原样转交内部字典的回调来源。</param>
         public void OnDeserialization(object sender) => ((IDeserializationCallback)_inner).OnDeserialization(sender);
 
+        /// <summary>转换非泛型键后按键移除，成功时沿用变化通知。</summary>
         void IDictionary.Remove(object key) => Remove((TKey)key);
 
+        /// <summary>将键值对交给新增入口，保留键校验、重复键异常和通知。</summary>
         void ICollection<KeyValuePair<TKey, TValue>>.Add(KeyValuePair<TKey, TValue> item) => Add(item.Key, item.Value);
 
+        /// <summary>查询内部字典是否同时包含指定键及相等的值。</summary>
         bool ICollection<KeyValuePair<TKey, TValue>>.Contains(KeyValuePair<TKey, TValue> item) =>
             ((ICollection<KeyValuePair<TKey, TValue>>)_inner).Contains(item);
 
+        /// <inheritdoc />
         void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) =>
             ((ICollection<KeyValuePair<TKey, TValue>>)_inner).CopyTo(array, arrayIndex);
 
+        /// <inheritdoc />
         IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() =>
             ((ICollection<KeyValuePair<TKey, TValue>>)_inner).GetEnumerator();
 
+        /// <inheritdoc />
         IEnumerator IEnumerable.GetEnumerator() => _inner.GetEnumerator();
 
+        /// <summary>仅在键存在且值按默认值比较器相等时移除并通知，否则返回 false。</summary>
         bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> item)
         {
             if (TryGetValue(item.Key, out var v))
@@ -418,6 +454,7 @@ namespace YLFramework.Binding
             return false;
         }
 
+        /// <inheritdoc />
         IDictionaryEnumerator IDictionary.GetEnumerator() => ((IDictionary)_inner).GetEnumerator();
 
         #endregion

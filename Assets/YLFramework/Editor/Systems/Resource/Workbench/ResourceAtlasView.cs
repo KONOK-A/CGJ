@@ -10,6 +10,7 @@ namespace YLFramework.Editor.Resource
     /// <summary>仅共享公开字段绘制；操作按钮由Inspector/Workbench各自拥有。</summary>
     internal static class ResourceAtlasFields
     {
+        /// <summary>通过序列化属性编辑全部或指定规则，并应用可撤销修改；不保存或生成图集。</summary>
         internal static bool Draw(SerializedObject serialized, int rule = -1, bool textureSettings = true)
         {
             serialized.Update();
@@ -46,6 +47,7 @@ namespace YLFramework.Editor.Resource
             return serialized.ApplyModifiedProperties();
         }
 
+        /// <summary>按字段职责组织规则编辑，将输出组织方式与 Bundle 分包设置分开呈现。</summary>
         private static void DrawRule(SerializedProperty entry, bool textureSettings)
         {
             var field = entry.Copy();
@@ -143,6 +145,7 @@ namespace YLFramework.Editor.Resource
             } while (field.NextVisible(false));
         }
 
+        /// <summary>编辑规则来源引用数组，移除引用不删除源文件，实际范围由生成服务复核。</summary>
         private static void DrawSources(SerializedProperty sources)
         {
             GUILayout.Label(new GUIContent("来源文件 / 目录（" + sources.arraySize + " 项）", "选择已登记来源目录内的 Sprite 纹理或文件夹；文件夹会递归收集。"), GUILayout.Height(ResourceWorkbenchGui.FieldHeight));
@@ -179,6 +182,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>复核项目登记和可选预期配置后，仅保存该可编辑规则资产，不保存项目或副本。</summary>
         internal static void Save(ResourceProject project, ResourceAtlasConfiguration expected = null)
         {
             ResourceEditorOperations.RequireEditableProject(project);
@@ -205,6 +209,7 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>协调图集规则草稿、只读计划及显式生成操作，旧计划保留但必须标记过期。</summary>
     internal sealed class ResourceAtlasView
     {
         private ResourceAtlasPlan _plan;
@@ -226,6 +231,7 @@ namespace YLFramework.Editor.Resource
         private Vector2 _detailScroll;
         private Vector2 _sourceScroll;
         private ResourceBuildAsset[] _explicitAtlases;
+        /// <summary>将已有生成计划或手动图集列表标记过期，不立即读取或生成。</summary>
         internal void Invalidate()
         {
             if (_plan != null || _explicitAtlases != null)
@@ -233,6 +239,7 @@ namespace YLFramework.Editor.Resource
                 _isStale = true;
             }
         }
+        /// <summary>清除当前项目的计划、手动图集和来源选择上下文。</summary>
         internal void Reset()
         {
             _plan = null;
@@ -242,6 +249,7 @@ namespace YLFramework.Editor.Resource
             _rule = _selected = _tab = 0;
             _isStale = false;
         }
+        /// <summary>从分包来源定位自动图集规则，并在窄窗口显示规则编辑区。</summary>
         internal void SelectRule(int index)
         {
             _tab = 0;
@@ -249,6 +257,7 @@ namespace YLFramework.Editor.Resource
             _showCompactEditor = true;
         }
 
+        /// <summary>组织自动与手动图集页面，读取计划和写入准备使用不同的显式操作入口。</summary>
         internal void Draw(ResourceProject project, float width, Action changed, Action<Func<string>> run, Action<Func<string>> queue)
         {
             _tab = ResourceWorkbenchGui.Navigation(_tab, new[] { "自动图集", "手动图集" });
@@ -472,6 +481,7 @@ namespace YLFramework.Editor.Resource
                 "“准备本项目图集”也会生成或更新自动图集，不是只读操作。", ResourceWorkbenchGui.Secondary);
         }
 
+        /// <summary>只读计算自动图集计划并记录时间，失败时保留旧结果但标记过期。</summary>
         private string ReadPlan(ResourceProject project)
         {
             try
@@ -491,6 +501,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按当前页虚拟化显示计划输出或手动图集，输出选择不改规则选择。</summary>
         private void DrawList(Rect rect)
         {
             GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
@@ -529,6 +540,7 @@ namespace YLFramework.Editor.Resource
             GUI.EndScrollView();
         }
 
+        /// <summary>可撤销地编辑规则草稿，并展示所选输出及独立的失效输出删除入口。</summary>
         private void DrawRules(ResourceProject project, Action changed, Action<Func<string>> run)
         {
             var config = project.automaticAtlases;
@@ -645,6 +657,7 @@ namespace YLFramework.Editor.Resource
                 {
                     run(() =>
                     {
+                        // 删除是生成服务的真实资产操作，不属于上方规则草稿的 Undo；确认后仍重查归属、内容和引用。
                         ResourceAtlasGenerator.DeleteObsolete(project, key);
                         changed();
                         ReadPlan(project);
@@ -654,6 +667,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>展示手动图集的解析身份，打开 Inspector 前重查来源定义及 GUID 对应路径。</summary>
         private void DrawExplicitDetails(ResourceProject project, float width, Action<Func<string>> run)
         {
             if (_explicitAtlases == null || _explicitAtlases.Length == 0)
@@ -682,6 +696,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将计划中的输出变化种类转换为展示状态，不表示本次已完成写入。</summary>
         private static string Status(ResourceAtlasChangeKind kind) => kind switch
         {
             ResourceAtlasChangeKind.Create => "待创建 (Create)",

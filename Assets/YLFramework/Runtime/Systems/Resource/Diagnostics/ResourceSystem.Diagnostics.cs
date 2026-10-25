@@ -6,6 +6,7 @@ using System.Text;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>诊断在主线程按需复制运行记录与责任关系；返回报告不参与资源保活，也不修复运行状态。</remarks>
     public sealed partial class ResourceSystem
     {
         /// <summary>只读复制数据预算及分列CNG成本，不取key、不认证、不创建native。</summary>
@@ -32,6 +33,7 @@ namespace YLFramework.Resource
         private int _diagnosticHistoryNext;
         private int _diagnosticHistoryGeneration;
 
+        /// <summary>将真实 Bundle 租约挂入诊断链表，不额外增加图根引用。</summary>
         internal void RegisterBundleDiagnostics(BundleLease lease)
         {
             lease.Next = _diagnosticBundleLeases;
@@ -43,6 +45,7 @@ namespace YLFramework.Resource
             _diagnosticBundleLeases = lease;
         }
 
+        /// <summary>从诊断链表移除已归还租约，并清除其前后链接。</summary>
         internal void UnregisterBundleDiagnostics(BundleLease lease)
         {
             if (lease.Previous == null)
@@ -64,6 +67,7 @@ namespace YLFramework.Resource
         }
 
         /// <summary>显式开启有界历史；0关闭并清空。默认不订阅请求、不抓栈、不做额外逐帧扫描。</summary>
+        /// <param name="capacity">新的历史容量，范围为 0 至 4096；重新配置会清空旧历史并使旧订阅代次失效。</param>
         public void ConfigureDiagnosticsHistory(int capacity)
         {
             CheckThread();
@@ -78,6 +82,7 @@ namespace YLFramework.Resource
             _diagnosticHistoryNext = 0;
         }
 
+        // 仅在历史开启时附加完成观测，关闭时不进入创建捕获闭包的路径。
         private void TrackDiagnostics<T>(ResourceRequest<T> request)
         {
             if (_diagnosticHistory == null)
@@ -88,6 +93,7 @@ namespace YLFramework.Resource
             ObserveRequestDiagnostics(request);
         }
 
+        // 绑定当前历史代次和起始时间，在请求完成时只记录仍属于该代次的事件。
         private void ObserveRequestDiagnostics<T>(ResourceRequest<T> request)
         {
             // 单独方法确保关闭历史时连编译器生成的 closure 也不会创建。
@@ -105,6 +111,7 @@ namespace YLFramework.Resource
             };
         }
 
+        // 为失败生产或已无等待者的迟到结果追加事件，不记录普通成功生产。
         private void RecordProducerCompletion(AssetRecord record, ResourceException failure, int waiterCount)
         {
             if (_diagnosticHistory == null || waiterCount != 0 && failure == null)
@@ -117,6 +124,7 @@ namespace YLFramework.Resource
                 record.Entry.Address, failure?.ToString(), null));
         }
 
+        // 写入有界环形历史，满容量时覆盖最早事件。
         private void AddDiagnosticEvent(ResourceDiagnosticEvent item)
         {
             _diagnosticHistory[_diagnosticHistoryNext] = item;
@@ -128,6 +136,7 @@ namespace YLFramework.Resource
         }
 
         /// <summary>只按需复制本 authority 的实际记录和租约，不搜索全场景、不触发加载、卸载、恢复或磁盘清理。</summary>
+        /// <remarks>必须在本主体的 Unity 线程调用；字段按遍历顺序采样，报告不继续跟随可变记录或保活 Unity 对象。</remarks>
         public ResourceDiagnosticsReport GetDiagnosticsReport()
         {
             CheckThread();

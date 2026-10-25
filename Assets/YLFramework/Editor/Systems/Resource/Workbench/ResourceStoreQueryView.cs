@@ -9,8 +9,10 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>管理显式缓存根和完整项目列表的有界只读查询，不挂载、恢复或清理 ArtifactStore。</summary>
     internal sealed class ResourceStoreQueryView : IDisposable
     {
+        /// <summary>操作者填写的一项查询身份，只在窗口会话保留，不从工作台项目推断。</summary>
         private sealed class ProjectInput
         {
             internal string ProjectId = "";
@@ -22,6 +24,7 @@ namespace YLFramework.Editor.Resource
         private int _maxEntries = 10000;
         private IEnumerator _query;
         private CancellationTokenSource _cancellation;
+        // 每轮查询单独持有身份；停止后旧回调即使到达也不能覆盖新结果。
         private object _runningIdentity;
         private ArtifactStoreReport _report;
         private string _reportIdentity;
@@ -43,6 +46,7 @@ namespace YLFramework.Editor.Resource
         private string _lifecycleDetail;
         internal bool IsQuerying => _query != null;
 
+        /// <summary>绑定明确查询参数并创建枚举器，同一时间只允许一个查询；实际扫描由 Tick 分段推进。</summary>
         internal void Begin(string path, ResourceProjectMount[] closure, int steps)
         {
             if (_query != null)
@@ -94,6 +98,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>在编辑器主线程推进一次查询，完成或异常时收尾，不将旧报告改造成新结果。</summary>
         internal bool Tick()
         {
             if (_query == null)
@@ -119,6 +124,7 @@ namespace YLFramework.Editor.Resource
             }
             return true;
         }
+        /// <summary>停止当前查询并标记保留报告为旧结果；未收到新回调时不伪造取消报告。</summary>
         internal void Stop(string reason)
         {
             if (_query != null)
@@ -133,6 +139,7 @@ namespace YLFramework.Editor.Resource
 
             StopCore();
         }
+        /// <summary>先使查询身份失效，再尝试取消和释放枚举器；保留首个异常及后续清理异常。</summary>
         private void StopCore()
         {
             var original = _query;
@@ -162,6 +169,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>绘制参数与只读结果入口，参数变化时停止原查询，不自动扫描或寻找替代缓存根。</summary>
         internal void Draw(float width)
         {
             EditorGUILayout.BeginHorizontal(ResourceWorkbenchGui.Toolbar);
@@ -251,6 +259,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>展示同次观测的范围、时间、完整性和候选信息，旧报告不代表当前表单或磁盘状态。</summary>
         private void DrawReport(float width)
         {
             if (_report == null)
@@ -357,6 +366,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>将查询终态映射为说明；查询完成不等于兼容、解密、签名或运行时加载通过。</summary>
         private static string StatusLabel(ArtifactQueryStatus value) => value switch
         {
             ArtifactQueryStatus.Ready => "查询完成",
@@ -371,6 +381,7 @@ namespace YLFramework.Editor.Resource
             ArtifactQueryStatus.Canceled => "已取消",
             _ => "未知状态（" + value + "）"
         };
+        /// <summary>按需分别展示查询失败与收尾异常，避免后者覆盖首因。</summary>
         private void DrawErrorDetails()
         {
             if (_error == null)
@@ -391,6 +402,7 @@ namespace YLFramework.Editor.Resource
                 GUILayout.Label("结束查询时另有异常：\n" + ResourceEditorText.FailureDetails(_cleanupError), ResourceWorkbenchGui.Secondary);
             }
         }
+        /// <summary>窗口关闭或重载时停止本视图查询，不删除缓存或改写已有报告状态。</summary>
         public void Dispose() => Stop("关闭或重载");
     }
 }

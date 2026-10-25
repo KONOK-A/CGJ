@@ -60,9 +60,13 @@ namespace YLFramework.Events
         protected virtual void OnListenersChanged()
         {
         }
+        /// <summary>由注册集合在变更提交后通知派生通道，供组合事件维护连接。</summary>
         internal void NotifyListenersChanged() => OnListenersChanged();
+        /// <summary>当前生命周期的引用身份；重置或关闭时更换。</summary>
         internal object Incarnation => _incarnation;
+        /// <summary>检查快照是否仍属于当前代次，避免旧通知进入下一生命周期。</summary>
         internal bool IsCurrent(object incarnation) => ReferenceEquals(_incarnation, incarnation);
+        /// <summary>拒绝在永久关闭后开始注册、发布或重置操作。</summary>
         internal void ThrowIfDisposed()
         {
             if (IsDisposed)

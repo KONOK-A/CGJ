@@ -10,13 +10,15 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Utilities
 {
+    /// <summary>为 Inspector 提供属性值同步、原生剪贴板预检和按字段路径查询特性的工具。</summary>
     public static class SerializedPropertyExtensions
     {
         /// <summary>
-        /// 把目标属性的值 赋值给当前对象
+        /// 按接收方属性类型复制源值，仅写入序列化缓冲，不自动应用到对象。
         /// </summary>
-        /// <param name="serializedProperty"></param>
-        /// <param name="target"></param>
+        /// <param name="serializedProperty">接收值的属性。</param>
+        /// <param name="target">具有兼容类型的源属性，本方法不执行类型兼容预检。</param>
+        /// <remarks>对象引用只复制引用；Generic、Character、Gradient、FixedBufferSize 及未列出的类型不处理。</remarks>
         public static void SyncFrom(this SerializedProperty serializedProperty, SerializedProperty target)
         {
             switch (serializedProperty.propertyType)
@@ -97,10 +99,10 @@ namespace YLFramework.Editor.Utilities
         }
 
         /// <summary>
-        /// 获取当前属性的值的文本
+        /// 取得属性值的显示文本；枚举显示索引，对象引用显示对象文本或 None，不用于无损序列化。
         /// </summary>
-        /// <param name="serializedProperty"></param>
-        /// <returns></returns>
+        /// <param name="serializedProperty">要读取的有效属性。</param>
+        /// <returns>当前类型的文本表示；未支持的属性类型返回空字符串。</returns>
         public static string GetValueText(this SerializedProperty serializedProperty)
         {
             switch (serializedProperty.propertyType)
@@ -184,7 +186,7 @@ namespace YLFramework.Editor.Utilities
         /// <summary>
         /// 使用 Unity 原生格式复制属性；混值或原生解析器不支持的属性明确拒绝。
         /// </summary>
-        /// <param name="serializedProperty"></param>
+        /// <param name="serializedProperty">待复制的有效属性；结构内部也不能含混值或不支持的类型。</param>
         public static void CopyToClipboard(this SerializedProperty serializedProperty)
         {
             string error = ClipboardPropertyError(serializedProperty, false);
@@ -201,7 +203,8 @@ namespace YLFramework.Editor.Utilities
         /// 完整预检后粘贴并应用修改，沿用 SerializedObject 的 Undo 与 Prefab override 契约。
         /// 不支持混值、多种目标类型或不兼容的原生数据；拒绝时不应用任何修改。
         /// </summary>
-        /// <param name="serializedProperty"></param>
+        /// <param name="serializedProperty">可编辑且与剪贴板数据兼容的目标属性。</param>
+        /// <remarks>应用的是该 SerializedObject 的全部待提交修改，不仅是本属性；不负责保存资产或场景文件。</remarks>
         public static void PasteFromClipboard(this SerializedProperty serializedProperty)
         {
             if (!PrepareClipboardPaste(serializedProperty, out var staged, out string error))
@@ -220,8 +223,8 @@ namespace YLFramework.Editor.Utilities
         /// 判断原生 Clipboard 数据能否完整粘贴；不修改对象、待应用修改或系统粘贴板。
         /// Unity 私有 API 不可用时抛出带版本与成员信息的 NotSupportedException。
         /// </summary>
-        /// <param name="serializedProperty"></param>
-        /// <returns></returns>
+        /// <param name="serializedProperty">要预检的粘贴目标。</param>
+        /// <returns>完整解析并回读比对一致时为 true；目标或数据不兼容时为 false。</returns>
         public static bool IsCanPaste(this SerializedProperty serializedProperty)
         {
             bool compatible = PrepareClipboardPaste(serializedProperty, out var staged, out _);
@@ -229,6 +232,7 @@ namespace YLFramework.Editor.Utilities
             return compatible;
         }
 
+        /// <summary>按精确签名解析 Unity 内部静态方法，版本不兼容时明确报错。</summary>
         private static MethodInfo GetClipboardMethod(string typeName, string name, Type returnType, params Type[] parameters)
         {
             // 只解析 Unity Editor 自身的类型，不从业务程序集接收同名替身。
@@ -243,6 +247,7 @@ namespace YLFramework.Editor.Utilities
             return method;
         }
 
+        /// <summary>检查目标可编辑性、目标类型及整棵属性子树的混值和不支持类型，返回拒绝原因。</summary>
         private static string ClipboardPropertyError(SerializedProperty property, bool paste)
         {
             if (property == null)
@@ -283,6 +288,7 @@ namespace YLFramework.Editor.Utilities
             return null;
         }
 
+        /// <summary>在独立缓冲中解析并回读原生剪贴板数据；成功时交出待释放缓冲，失败时自行释放。</summary>
         private static bool PrepareClipboardPaste(SerializedProperty property, out SerializedObject staged, out string error)
         {
             staged = null;
@@ -357,6 +363,7 @@ namespace YLFramework.Editor.Utilities
             }
         }
 
+        /// <summary>递归比较原生解析前后的字段集合、列表顺序和规范化叶子值是否一致。</summary>
         private static bool ClipboardValuesEqual(object expected, object actual)
         {
             if (expected is Dictionary<string, object> dictionary)
@@ -376,11 +383,11 @@ namespace YLFramework.Editor.Utilities
 
 
         /// <summary>
-        /// 查询当前属性的特性
+        /// 查询属性路径末端字段的首个指定特性，字段解析规则与 GetAttributes 相同。
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="prop"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">要查询的 Attribute 类型。</typeparam>
+        /// <param name="prop">用于定位字段的有效序列化属性。</param>
+        /// <returns>首个匹配特性；路径或特性未找到时为 null。</returns>
         public static T GetAttribute<T>(this SerializedProperty prop) where T : Attribute
         {
             var attrs = prop.GetAttributes<T>();
@@ -388,11 +395,11 @@ namespace YLFramework.Editor.Utilities
         }
 
         /// <summary>
-        /// 查询当前属性的特性集合
+        /// 按首个目标对象的声明字段路径查询末端字段的特性，支持基类字段和集合元素路径。
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="prop"></param>
-        /// <returns></returns>
+        /// <typeparam name="T">要查询的 Attribute 类型。</typeparam>
+        /// <param name="prop">其 propertyPath 用于反射定位字段，不读取元素的运行时派生类型。</param>
+        /// <returns>匹配特性的数组；目标、字段或特性不存在时为空数组。</returns>
         public static T[] GetAttributes<T>(this SerializedProperty prop) where T : Attribute
         {
             var target = prop.serializedObject.targetObject;
@@ -411,7 +418,7 @@ namespace YLFramework.Editor.Utilities
             foreach (var part in parts)
             {
                 string name = part;
-                // array element like list[0]
+                // 路径中的 list[0] 按集合字段 list 查找，索引不参与反射字段名。
                 var bracket = part.IndexOf('[');
                 if (bracket > 0)
                 {
@@ -443,6 +450,7 @@ namespace YLFramework.Editor.Utilities
             return field?.GetCustomAttributes(typeof(T), true).Cast<T>().ToArray() ?? Array.Empty<T>();
         }
 
+        /// <summary>沿继承链查找同名实例字段，包含各层的非公开字段。</summary>
         static FieldInfo GetFieldInHierarchy(Type type, string name)
         {
             while (type != null)
@@ -459,11 +467,11 @@ namespace YLFramework.Editor.Utilities
         }
 
         /// <summary>
-        /// 查询当前属性的所有子属性
+        /// 收集当前属性的可见子属性，可选择递归收集各层后代。
         /// </summary>
-        /// <param name="property"></param>
-        /// <param name="recursive"></param>
-        /// <returns></returns>
+        /// <param name="property">作为遍历边界的有效父属性。</param>
+        /// <param name="recursive">是否递归进入可见子属性的后代。</param>
+        /// <returns>仍依赖原 SerializedObject 的属性游标副本，非值快照；使用与释放由调用方管理。</returns>
         public static List<SerializedProperty> GetChildrens(this SerializedProperty property, bool recursive = false)
         {
 
@@ -478,7 +486,7 @@ namespace YLFramework.Editor.Utilities
             var iterator = property.Copy();
             var end = iterator.GetEndProperty();
 
-            // Move to first child
+            // 先进入子层，再用父属性的结束游标限界，避免把后续兄弟属性也收进结果。
             if (!iterator.NextVisible(true))
             {
                 return list;
@@ -506,9 +514,10 @@ namespace YLFramework.Editor.Utilities
 
 
         /// <summary>
-        /// 判断属性是否为脚本属性（即 MonoScript 类型），如果是脚本属性，则通常在 Inspector 中显示为不可编辑的字段，显示 MonoScript 的名称和图标。
+        /// 判断属性是否为名为 m_Script、且引用有效 MonoScript 的脚本字段，供 Inspector 决定是否禁用编辑。
         /// </summary>
-        /// <returns></returns>
+        /// <param name="property">待判断属性，可为 null。</param>
+        /// <returns>属性名与有效脚本引用均匹配时为 true；缺失脚本引用返回 false。</returns>
         public static bool IsScript(this SerializedProperty property)
         {
             if (property == null)
@@ -520,7 +529,6 @@ namespace YLFramework.Editor.Utilities
             {
                 if (property.objectReferenceValue)
                 {
-                    // Direct object check
                     if (property.objectReferenceValue is MonoScript && property.name == "m_Script")
                     {
                         return true;

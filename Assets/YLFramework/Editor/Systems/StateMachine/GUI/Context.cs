@@ -7,6 +7,7 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>图编辑器共享上下文，按宿主实例、层索引或资产 GUID 解析当前配置，并保存浏览和选择状态。</summary>
     internal class Context
     {
 
@@ -14,12 +15,17 @@ namespace YLFramework.Editor.StateMachine
 
         private RuntimeFsmController _runtimeFsmController;
 
+        /// <summary>上下文保存的节点选择记录，清空选择时一并清除。</summary>
         public List<FsmStateNodeData> SelectNodes = new List<FsmStateNodeData>();
 
+        /// <summary>上下文保存的过渡选择记录。</summary>
         public FsmTransitionData SelectTransition;
 
+        /// <summary>上下文中的过渡预览标记，与 GraphView 自身的连线交互状态分开保存。</summary>
         public bool IsPreviewingTransition = false;
+        /// <summary>上下文记录的连线来源节点。</summary>
         public FsmStateNodeData FromState = null;
+        /// <summary>上下文记录的悬停节点。</summary>
         public FsmStateNodeData HoverState = null;
 
         private FsmController _fsmController;
@@ -39,6 +45,7 @@ namespace YLFramework.Editor.StateMachine
 
         private List<string> _emptyLayers = new List<string>();
 
+        /// <summary>当前配置的浏览祖先路径；没有配置时返回复用的空列表。</summary>
         public List<string> Layers
         {
             get
@@ -53,6 +60,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>当前图层的直接父节点名称，基础层为空字符串。</summary>
         public string LayerParent
         {
             get
@@ -66,6 +74,8 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>请求当前配置追加浏览层级，不改变运行时执行状态。</summary>
+        /// <param name="layer">要进入的子状态机名称。</param>
         public void AddLayer(string layer)
         {
             if (RuntimeFsmController == null)
@@ -76,6 +86,9 @@ namespace YLFramework.Editor.StateMachine
             RuntimeFsmController.AddLayer(layer);
         }
 
+        /// <summary>从当前配置浏览路径中移除指定范围。</summary>
+        /// <param name="index">移除起始下标。</param>
+        /// <param name="count">移除层级数量。</param>
         public void RemoveLayer(int index, int count)
         {
             if (RuntimeFsmController == null)
@@ -86,6 +99,8 @@ namespace YLFramework.Editor.StateMachine
             RuntimeFsmController.RemoveLayer(index, count);
         }
 
+        /// <summary>仅在浏览路径末项与指定名称一致时返回上一层。</summary>
+        /// <param name="name">预期的当前末层名称。</param>
         public void RemoveLast(string name)
         {
             if (RuntimeFsmController == null)
@@ -110,8 +125,7 @@ namespace YLFramework.Editor.StateMachine
 
         #region 属性
 
-        // 这个逻辑修改为如果只有一个,逻辑不变,
-        // 如果有多个,判断当前显示的是不是在多个中,如果在不做处理,如果不在设置为第一个
+        /// <summary>优先解析宿主当前索引的配置；索引越界归零，没有有效宿主配置时按资产 GUID 加载。</summary>
         public RuntimeFsmController RuntimeFsmController
         {
             get
@@ -154,6 +168,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>由偏好设置中的 GameObject 实例标识解析的宿主，不创建场景对象。</summary>
         public FsmController FsmController
         {
             get
@@ -186,6 +201,7 @@ namespace YLFramework.Editor.StateMachine
 
         private List<RuntimeFsmController> _currentFsmControllers = new List<RuntimeFsmController>();
 
+        /// <summary>取得宿主复用的配置列表，或无宿主时由当前资产组成的复用列表，不是稳定快照。</summary>
         public List<RuntimeFsmController> RuntimeFsmControllers
         {
             get
@@ -211,6 +227,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>当前编辑器域中按需创建的共享图上下文。</summary>
         public static Context Instance
         {
             get
@@ -224,6 +241,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>保存在编辑器偏好中的宿主 GameObject 实例标识；赋值时同步刷新宿主缓存。</summary>
         internal int FsmControllerInstanceId
         {
             get
@@ -256,6 +274,7 @@ namespace YLFramework.Editor.StateMachine
 
         private string _runtimeFsmControllerGuid;
 
+        /// <summary>偏好设置保存的源配置 GUID；赋值时尝试加载该资产供宿主失效后继续显示。</summary>
         internal string RuntimeFsmControllerGuid
         {
             get
@@ -271,6 +290,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>宿主配置列表中的选择下标；变更时尝试刷新对应源资产 GUID。</summary>
         internal int FsmControllerIndex
         {
             get
@@ -286,7 +306,6 @@ namespace YLFramework.Editor.StateMachine
 
                 EditorPrefs.SetInt("FSMControllerIndex", value);
 
-                // 刷新RuntimeGUID
                 RefreshRuntimeFsmControllerGuid();
             }
         }
@@ -295,13 +314,14 @@ namespace YLFramework.Editor.StateMachine
 
         #region 方法
 
+        /// <summary>仅由共享入口构造上下文，资产和宿主在查询时按需解析。</summary>
         private Context()
         {
         }
 
+        /// <summary>清除上下文节点与过渡选择，同时清空 Unity 的活动对象选择。</summary>
         public void ClearSelections()
         {
-            // 如果不是 InspectorWindow 此时清空 Inspector
             this.SelectNodes.Clear();
             SelectTransition = null;
             Selection.activeObject = null;
@@ -309,9 +329,9 @@ namespace YLFramework.Editor.StateMachine
         }
 
         /// <summary>
-        /// 获取当前显示状态节点
+        /// 取得当前浏览父层的节点定义，不改变运行时当前状态。
         /// </summary>
-        /// <returns></returns>
+        /// <returns>配置缓存中的节点列表；没有配置或对应父层时为 null。</returns>
         public List<FsmStateNodeData> GetCurrentShowStateNodeData()
         {
 
@@ -323,6 +343,8 @@ namespace YLFramework.Editor.StateMachine
             return null;
         }
 
+        /// <summary>取得当前浏览父层中端点有效且层级一致的过渡。</summary>
+        /// <returns>配置缓存中的过渡列表；没有配置或匹配项时为 null。</returns>
         public List<FsmTransitionData> GetCurrentShowTransitionData()
         {
             if (RuntimeFsmController != null)
@@ -334,6 +356,9 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>判断配置列表是否为空或只包含失效配置引用。</summary>
+        /// <param name="controllers">待检查的配置列表。</param>
+        /// <returns>不存在任何有效配置时为 true。</returns>
         public bool IsEmpty(List<RuntimeFsmController> controllers)
         {
             if (controllers == null || controllers.Count == 0)
@@ -359,11 +384,9 @@ namespace YLFramework.Editor.StateMachine
 
         #region 运行时刷新选中的GUID
 
-        // 运行时选中某一个FSMController 组件，当取消运行，这个游戏物体被销毁时
-        // 仍选中这个状态配置
-
         private List<RuntimeFsmControllerLayer> _tempLayers = new List<RuntimeFsmControllerLayer>();
 
+        /// <summary>运行时反射读取宿主源层定义，保留所选层的源资产 GUID，使宿主销毁后仍可显示源配置。</summary>
         public void RefreshRuntimeFsmControllerGuid()
         {
             if (!Application.isPlaying)
@@ -381,7 +404,7 @@ namespace YLFramework.Editor.StateMachine
                 return;
             }
 
-            // 通过反射拿到源配置
+            // 活动列表指向克隆，源资产身份需从宿主的序列化层定义取得，不能用克隆路径反查。
             Type type = typeof(FsmController);
             FieldInfo fieldInfo = type.GetField("runtimeFsmControllerLayers", BindingFlags.NonPublic | BindingFlags.Instance);
             List<RuntimeFsmControllerLayer> layers = fieldInfo.GetValue(FsmController) as List<RuntimeFsmControllerLayer>;

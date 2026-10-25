@@ -10,17 +10,25 @@ using YLFramework.Resource;
 
 namespace YLFramework.Integrations.HybridCLR.Editor
 {
+    /// <summary>当前配置与 Player 脚本图的只读检查快照，不是编译或原生运行证明。</summary>
     internal sealed class HybridCLRProfileInspection
     {
+        /// <summary>阻止配置检查通过的错误消息。</summary>
         public readonly List<string> Errors = new List<string>();
+        /// <summary>保存状态、环境与检查范围的提示。</summary>
         public readonly List<string> Warnings = new List<string>();
+        /// <summary>当前解析出的项目入口及热更依赖名称。</summary>
         public string[] Assemblies = Array.Empty<string>();
+        /// <summary>未显式选作入口而由引用闭包自动包含的名称。</summary>
         public string[] Dependencies = Array.Empty<string>();
+        /// <summary>本次快照是否未发现配置错误，警告不影响此值。</summary>
         public bool HasSucceeded => Errors.Count == 0;
     }
 
+    /// <summary>显式创建配置、关联规范资源映射及预览依赖，不改写官方 HybridCLR 设置。</summary>
     internal static class HybridCLRProfileTools
     {
+        // 在全新自有位置创建并保存 Project、Recipe 和 Profile，失败时只清理本次创建内容。
         internal static HybridCLRBuildProfile Create(string assetPath)
         {
             RequireEditMode();
@@ -89,6 +97,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 幂等关联规范生成目录与代码选择，冲突先拒绝，项目修改通过 SerializedObject 支持 Undo。
         internal static void MapGeneratedResources(HybridCLRBuildProfile profile)
         {
             RequireEditMode();
@@ -161,6 +170,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             serialized.ApplyModifiedProperties();
         }
 
+        // 用当前 Player 脚本图及外部 DLL 预览配置，不执行编译、原生生成或安装。
         internal static HybridCLRProfileInspection Inspect(HybridCLRBuildProfile profile)
         {
             var result = new HybridCLRProfileInspection();
@@ -169,6 +179,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                 result.Errors.Add("先新建或选择一个 HybridCLR 配置。");
                 return result;
             }
+            // 累积独立检查的错误，避免首个失败遮住其他可诊断输入。
             void Check(Action action)
             {
                 try
@@ -276,6 +287,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return result;
         }
 
+        // 要求代码目录选择唯一且只含标准扩展名，不静默覆盖用户地址或别名。
         private static ResourceSelection ReadCodeSelection(ResourceProject project, string guid)
         {
             var matches = project.groups.SelectMany(g => g.selections).Where(s => s.guid == guid).ToArray();
@@ -294,6 +306,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return selection;
         }
 
+        // 拒绝组 ID 碰撞及其他来源对规范 hybridclr 地址的占用。
         private static void ValidateCodeMappings(HybridCLRBuildProfile profile)
         {
             var project = profile.recipe.project;
@@ -337,6 +350,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 递归补齐 Assets 文件夹，已有有效文件夹保持原 GUID。
         private static void EnsureFolder(string path)
         {
             if (AssetDatabase.IsValidFolder(path))
@@ -357,6 +371,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 仅允许在非 Play、编译或 Player 构建期间显式编辑配置。
         private static void RequireEditMode()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || BuildPipeline.isBuildingPlayer)

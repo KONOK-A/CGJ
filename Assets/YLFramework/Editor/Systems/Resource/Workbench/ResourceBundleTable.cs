@@ -7,8 +7,10 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>以分包预估为基础展示来源与依赖，有实际构建时补充其 Manifest 和文件测量。</summary>
     internal sealed class ResourceBundleTable : TreeView
     {
+        /// <summary>关联预估包、可选实际构建包及预计算展示和依赖关系。</summary>
         internal sealed class Row : TreeViewItem
         {
             internal ResourceBuildBundle Bundle;
@@ -28,6 +30,7 @@ namespace YLFramework.Editor.Resource
         internal bool SharedOnly;
         internal Action SelectionUpdated;
 
+        /// <summary>创建分包列表和多列排序入口。</summary>
         internal ResourceBundleTable() : base(new TreeViewState(), CreateHeader())
         {
             rowHeight = ResourceWorkbenchGui.RowHeight;
@@ -38,6 +41,7 @@ namespace YLFramework.Editor.Resource
             Reload();
         }
 
+        /// <summary>定义源、构建和交付文件量各自独立的统计列。</summary>
         private static MultiColumnHeader CreateHeader()
         {
             var names = new[] { "用途", "分包方式", "源文件量", "源文件", "依赖", "来源分组", "构建文件量", "交付文件量" };
@@ -57,6 +61,7 @@ namespace YLFramework.Editor.Resource
             });
         }
 
+        /// <summary>传播来源组到依赖包并投影行内容，实际构建存在时优先展示其依赖和测量。</summary>
         internal void SetData(ResourceBuildMap map, ResourceBuildResult build)
         {
             var built = build?.Bundles.ToDictionary(x => x.Name, StringComparer.Ordinal);
@@ -120,7 +125,9 @@ namespace YLFramework.Editor.Resource
             Reload();
         }
 
+        /// <summary>按完整包名在当前快照查找行，供依赖树复用。</summary>
         internal Row Find(string name) => _rows.FirstOrDefault(x => x.Bundle.Name == name);
+        /// <summary>将最终分包原因映射为展示名称，不等同于原组的打包意图。</summary>
         internal static string PlacementName(ResourceBundlePlacement value) => value switch
         {
             ResourceBundlePlacement.Group => "按组合包",
@@ -130,6 +137,7 @@ namespace YLFramework.Editor.Resource
             ResourceBundlePlacement.CycleMerge => "循环归并",
             _ => value.ToString()
         };
+        /// <summary>清除过滤后定位指定完整包名，使依赖树跳转目标可见。</summary>
         internal void SelectBundle(string name)
         {
             var row = Find(name);
@@ -145,6 +153,7 @@ namespace YLFramework.Editor.Resource
             SetSelection(new[] { row.id }, TreeViewSelectionOptions.RevealAndFrame);
         }
 
+        /// <summary>为当前分包快照建立平铺树根。</summary>
         protected override TreeViewItem BuildRoot()
         {
             var root = new TreeViewItem(0, -1, "资源包");
@@ -157,6 +166,7 @@ namespace YLFramework.Editor.Resource
             return root;
         }
 
+        /// <summary>组合分包方式、共享包和文本过滤，按原始数值或文本生成排序行。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
         {
             var filtered = _rows.Where(x => (!Placement.HasValue || x.Bundle.Placement == Placement) && (!SharedOnly || x.Bundle.IsShared) &&
@@ -166,6 +176,7 @@ namespace YLFramework.Editor.Resource
             {
                 if (column == 2 || column == 3 || column == 4 || column == 6 || column == 7)
                 {
+                    // 未构建的量保持未知，只用 -1 作为排序键，不写回为真实字节值。
                     long Number(Row row) => long.TryParse(row.Cells[column], out var value) ? value : -1;
                     filtered = multiColumnHeader.IsSortedAscending(column) ? filtered.OrderBy(Number).ThenBy(x => x.id) : filtered.OrderByDescending(Number).ThenBy(x => x.id);
                 }
@@ -178,6 +189,7 @@ namespace YLFramework.Editor.Resource
             return filtered.Cast<TreeViewItem>().ToList();
         }
 
+        /// <summary>将字节列格式化显示，并在提示中保留完整包名、来源组和原始值。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             var row = (Row)args.item;
@@ -196,6 +208,7 @@ namespace YLFramework.Editor.Resource
                 EditorGUI.LabelField(rect, new GUIContent(text, "完整包名：" + row.Bundle.Name + "\n来源分组：" + row.Groups + "\n本列原值：" + row.Cells[column]));
             }
         }
+        /// <summary>通知宿主更新当前包的详情上下文。</summary>
         protected override void SelectionChanged(IList<int> selectedIds) => SelectionUpdated?.Invoke();
     }
 }

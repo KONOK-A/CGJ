@@ -18,9 +18,11 @@ namespace YLFramework.Actions
         // 完成槽隔离旧任务的异步回调：Reset/Deinit 先断开 Target，旧任务结束时就找不到可操作的动作。
         private sealed class CompletionSlot
         {
+            /// <summary>本轮任务仍可通知的动作；Reset 或 Deinit 后清空。</summary>
             public TaskAction Target;
         }
 
+        /// <summary>仅供对象池创建任务观察动作，任务工厂在 Allocate 时绑定。</summary>
         private TaskAction()
         {
         }
@@ -67,9 +69,9 @@ namespace YLFramework.Actions
             Status = ActionStatus.NotStart;
         }
 
+        /// <summary>断开旧完成通知，避免旧任务结束时操作重置或复用后的动作；不取消外部任务。</summary>
         private void InvalidateCompletion()
         {
-            // 断开旧完成通知，避免旧任务结束时操作重置或复用后的动作；不取消外部任务。
             if (_completion == null)
             {
                 return;
@@ -102,6 +104,7 @@ namespace YLFramework.Actions
             StartTask();
         }
 
+        /// <summary>为本轮启动建立独立完成槽，再异步观察工厂返回的任务。</summary>
         void StartTask()
         {
             var completion = new CompletionSlot { Target = this };
@@ -109,6 +112,7 @@ namespace YLFramework.Actions
             ObserveTask(_taskGetter, completion);
         }
 
+        /// <summary>等待任务并更新仍绑定的动作；任务失败或取消按清理处理，不通知正常完成。</summary>
         private static async void ObserveTask(Func<Task> taskGetter, CompletionSlot completion)
         {
             // await 后的续体回到 Unity 主线程同步上下文（前提是动作在主线程启动）：

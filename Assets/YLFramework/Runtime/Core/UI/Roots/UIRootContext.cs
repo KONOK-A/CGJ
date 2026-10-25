@@ -8,6 +8,7 @@ namespace YLFramework.Core
     [DisallowMultipleComponent]
     public sealed class UIRootContext : MonoBehaviour
     {
+        /// <summary>根内一个显式层的容器和可选遮罩绑定，不自动创建缺失对象。</summary>
         [Serializable]
         public sealed class Layer
         {
@@ -49,6 +50,7 @@ namespace YLFramework.Core
                 return true;
             }
         }
+        /// <summary>检查根以及全部层、必需遮罩的存活和归属，不修复失效结构。</summary>
         internal void ValidateStructure()
         {
             ValidateRoot();
@@ -57,6 +59,7 @@ namespace YLFramework.Core
                 throw new InvalidOperationException("UIRootContext 层容器或必需遮罩丢失、跨根，根结构已失效。");
             }
         }
+        /// <summary>校验原生组件、场景及非空层映射，供只需根级前置条件的操作使用。</summary>
         internal void ValidateRoot()
         {
             if (!IsValid)
@@ -84,6 +87,7 @@ namespace YLFramework.Core
         internal bool HasMask(int index) => index >= 0 && index < uiLayers.Length && uiLayers[index] != null &&
             uiLayers[index].enableMask && uiLayers[index].maskImage;
 
+        /// <summary>运行时补取本对象组件引用并登记实际根，不接管其场景或对象寿命。</summary>
         private void OnEnable()
         {
             if (!Application.isPlaying)
@@ -103,6 +107,7 @@ namespace YLFramework.Core
 
             PanelManager.RegisterRoot(this);
         }
+        /// <summary>停用时隐藏根内遮罩并重新协调面板；保留登记和会话以便恢复。</summary>
         private void OnDisable()
         {
             if (uiLayers != null)
@@ -118,8 +123,10 @@ namespace YLFramework.Core
 
             PanelManager.RootChanged();
         }
+        /// <summary>根销毁时撤销登记，由协调器处理失去根的面板会话。</summary>
         private void OnDestroy() => PanelManager.UnregisterRoot(this);
 
+        /// <summary>按每层最高有效可见模态刷新遮罩，并把遮罩顺序放在该面板之前。</summary>
         internal void RefreshMasks()
         {
             if (uiLayers == null)

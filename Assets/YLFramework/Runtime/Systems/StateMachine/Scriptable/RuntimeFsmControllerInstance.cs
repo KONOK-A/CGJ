@@ -10,20 +10,25 @@ namespace YLFramework.StateMachine
 
 
     /// <summary>
-    /// RuntimeFSMController 运行时的示例
+    /// 一层配置的运行时执行实例，拥有配置克隆、状态脚本、参数、过渡和 Trigger 队列。
     /// </summary>
     public class RuntimeFsmControllerInstance
     {
 
+        /// <summary>构造时记录的源配置名称，用于诊断。</summary>
         public string Name;
 
+        /// <summary>所属宿主中的层名称。</summary>
         public string LayerName;
 
+        /// <summary>本实例拥有的配置克隆，释放后清空，不应替换为共享源资产。</summary>
         public RuntimeFsmController RuntimeFsmController;
+        /// <summary>用于创建本实例的共享源配置，不由实例销毁。</summary>
         public RuntimeFsmController SourceController
         {
             get;
         }
+        /// <summary>是否已开始永久释放；置位后不再启动或接受参数写入。</summary>
         public bool IsDisposed
         {
             get; private set;
@@ -52,9 +57,10 @@ namespace YLFramework.StateMachine
 
         private List<FsmStateNode> _currentStatesArray = new List<FsmStateNode>();
 
-        // 当前的过渡
+        /// <summary>最近一次切换流程记录的过渡；默认进入或关闭后可为空，不表示持续中的混合过程。</summary>
         public FsmTransition CurrentTransition { get; private set; } = null;
 
+        /// <summary>驱动本层并接收状态变化通知的宿主组件。</summary>
         public FsmController FsmController
         {
             get; private set;
@@ -77,15 +83,19 @@ namespace YLFramework.StateMachine
 
         private List<int> _triggerKeys = new List<int>();
 
+        /// <summary>是否已启动且尚未关闭；不等同于源配置或宿主的初始化状态。</summary>
         public bool HasStarted { get; private set; } = false;
 
 
+        /// <summary>验证配置后克隆数据、反射构造全部状态脚本并绑定过渡，暂不进入默认状态。</summary>
+        /// <param name="runtimeFsmController">共享源配置资产。</param>
+        /// <param name="controller">拥有此层的宿主组件。</param>
+        /// <param name="layerName">宿主中的层名称。</param>
         public RuntimeFsmControllerInstance(RuntimeFsmController runtimeFsmController, FsmController controller, string layerName)
         {
             FsmController = controller;
             SourceController = runtimeFsmController;
             this.LayerName = layerName;
-            // 把数据复制一份
             if (!runtimeFsmController)
             {
                 throw new System.ArgumentNullException(nameof(runtimeFsmController));
@@ -112,7 +122,7 @@ namespace YLFramework.StateMachine
             RuntimeFsmController.name = runtimeFsmController.name;
             try
             {
-                // 参数
+                // 参数通知只绑定到本层克隆；默认值单独保留，关闭时绕过通知恢复。
                 Parameters.Clear();
                 for (int i = 0; i < RuntimeFsmController.parameters.Count; i++)
                 {
@@ -132,7 +142,7 @@ namespace YLFramework.StateMachine
                     ParameterDefaults.Add(nameHash, data.Value);
                 }
 
-                // 状态
+                // 所有脚本在此构造，OnCreate 则推迟到各脚本首次被进入流程访问时。
                 States.Clear();
                 for (int i = 0; i < RuntimeFsmController.states.Count; i++)
                 {
@@ -151,7 +161,7 @@ namespace YLFramework.StateMachine
 
                     States.Add(stateData.name, state);
                 }
-                // 过渡
+                // 建立顺序同时决定主动扫描顺序及参数通知的订阅顺序。
                 Transitions.Clear();
                 foreach (var item in RuntimeFsmController.transitions)
                 {
@@ -169,7 +179,7 @@ namespace YLFramework.StateMachine
         }
 
 
-        // 启动
+        /// <summary>启动未释放且未运行的实例，从基础层默认节点进入并检查连锁过渡。</summary>
         public void StartUp()
         {
             if (IsDisposed || HasStarted || _isClosing)
@@ -178,10 +188,11 @@ namespace YLFramework.StateMachine
             }
 
             HasStarted = true;
-            // 找到默认状态 切换
             SwitchState(DefaultState, null);
         }
 
+        /// <summary>退出基础层及其活动子状态，清空 Trigger 和过渡预算并恢复参数默认值，保留克隆供重启。</summary>
+        /// <remarks>退出回调异常仍会向外传播；不回滚回调已执行的业务动作，也不重置脚本创建标记。</remarks>
         public void Close()
         {
             if (_isClosing)
@@ -246,6 +257,9 @@ namespace YLFramework.StateMachine
                 RuntimeFsmController = null;
             }
         }
+        /// <summary>在同一父层先退出旧节点再进入目标，记录过渡后立即检查当前状态的后续过渡。</summary>
+        /// <param name="state">目标节点；为空时退出基础层。</param>
+        /// <param name="transition">触发本次切换的过渡，默认进入时为空。</param>
         internal void SwitchState(FsmStateNode state, FsmTransition transition)
         {
             if (!HasStarted || IsDisposed || _isClosing)
@@ -265,7 +279,6 @@ namespace YLFramework.StateMachine
 
             string parent = state != null ? state.Data.Parent : string.Empty;
 
-            // 退出当前状态
             ExitState(parent, state);
             EnterState(state);
 
@@ -276,21 +289,19 @@ namespace YLFramework.StateMachine
 
             CurrentTransition = transition;
 
-            // 检测当前状态是否有已经满足的条件
             CheckConditionAndSwitch();
         }
 
 
+        /// <summary>按配置过渡顺序主动扫描，首个条件满足的过渡发出切换请求后停止本轮扫描。</summary>
         private void CheckConditionAndSwitch()
         {
             if (!HasStarted || IsDisposed || _isClosing)
             {
                 return;
             }
-            // 检测当前的状态是否有已经满足条件的过渡
             foreach (var item in Transitions)
             {
-                // 检测条件是否满足
                 if (item.CheckConditionAndSwitch())
                 {
                     break;
@@ -298,6 +309,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>先摘除父层当前节点再执行退出，容器先于活动子节点退出；保留首个异常直到递归退出完成。</summary>
         private void ExitState(string parent, FsmStateNode nextState)
         {
             if (!_currentStates.ContainsKey(parent))
@@ -324,9 +336,9 @@ namespace YLFramework.StateMachine
 
             if (nextState != null)
             {
-                nextState.NextState = string.Empty;  // 把下一个状态的值设置为空
+                nextState.NextState = string.Empty;
             }
-            // 移除状态
+            // 在用户退出回调前摘除记录，避免回调重入时仍将旧节点视为该层当前状态。
             _currentStates.Remove(parent);
             System.Exception firstError = null;
             try
@@ -338,10 +350,8 @@ namespace YLFramework.StateMachine
                 firstError = error;
             }
 
-            // 判断一下当前状态是否子状态机
             if (currentState.Data.isSubStateMachine)
             {
-                // 把子状态也退出掉
                 try
                 {
                     ExitState(currentState.Data.name, nextState);
@@ -357,6 +367,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>先登记当前节点，再进入脚本并通知宿主；回调后仍有效时才递归进入子层默认节点。</summary>
         private void EnterState(FsmStateNode state)
         {
             if (state == null || !HasStarted || IsDisposed || _isClosing)
@@ -380,17 +391,14 @@ namespace YLFramework.StateMachine
             {
                 return;
             }
-            // 触发事件
             FsmController.StateChanged?.Invoke(RuntimeFsmController.name, state.Data.name);
             if (!HasStarted || IsDisposed || GetCurrentState(parent) != state)
             {
                 return;
             }
 
-            // 判断是否有子状态机
             if (state.Data.isSubStateMachine)
             {
-                // 进入到子状态机的默认状态
                 FsmStateNodeData data = RuntimeFsmController.GetDefaultStateNodeData(state.Data.name);
                 if (data != null && States.ContainsKey(data.name))
                 {
@@ -400,23 +408,34 @@ namespace YLFramework.StateMachine
 
         }
 
+        /// <summary>按哈希写入本层布尔参数，类型不匹配或参数不存在时不修改。</summary>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <param name="v">布尔值，以零或一保存。</param>
         public void SetBool(int nameHash, bool v)
         {
             SetParamter(nameHash, v ? 1 : 0, ParameterType.Bool);
         }
 
+        /// <summary>按哈希写入本层浮点参数，变化通知可同步触发过渡。</summary>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <param name="v">新浮点值。</param>
         public void SetFloat(int nameHash, float v)
         {
             SetParamter(nameHash, v, ParameterType.Float);
         }
 
 
+        /// <summary>按哈希写入本层整数参数，底层以浮点数存储。</summary>
+        /// <param name="nameHash">参数名称哈希。</param>
+        /// <param name="v">新整数值。</param>
         public void SetInt(int nameHash, int v)
         {
             SetParamter(nameHash, v, ParameterType.Int);
         }
 
 
+        /// <summary>置位本层 Trigger；已置位时累加待触发次数，后续由逻辑更新逐次取出。</summary>
+        /// <param name="name">Trigger 参数名称哈希。</param>
         public void SetTrigger(int name)
         {
             FsmParameterData parameter;
@@ -440,9 +459,9 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 当Trigger触发后还原trigger
+        /// 清除 Trigger 当前值，但保留排队次数供后续更新处理。
         /// </summary>
-        /// <param name="name"></param>
+        /// <param name="name">Trigger 参数名称哈希。</param>
         internal void ClearTrigger(int name)
         {
             SetParamter(name, 0, ParameterType.Trigger);
@@ -453,12 +472,15 @@ namespace YLFramework.StateMachine
         //    ResetTrigger(FSMController.StringToHash(name));
         //}
 
+        /// <summary>丢弃指定 Trigger 的排队次数并清除当前值。</summary>
+        /// <param name="name">Trigger 参数名称哈希。</param>
         public void ResetTrigger(int name)
         {
             _triggerQueue.Reset(name);
             ClearTrigger(name);
         }
 
+        /// <summary>仅向存活实例中类型匹配的参数提交新值，由参数同步发出变化通知。</summary>
         private void SetParamter(int name, float v, ParameterType type)
         {
             if (IsDisposed || _isClosing)
@@ -482,6 +504,9 @@ namespace YLFramework.StateMachine
         //    return GetParamter(FSMController.StringToHash(name));
         //}
 
+        /// <summary>读取本层参数底层值，缺失时返回零，不检查参数语义类型。</summary>
+        /// <param name="name">参数名称哈希。</param>
+        /// <returns>参数当前值或零。</returns>
         internal float GetParamter(int name)
         {
             FsmParameterData parameter;
@@ -493,11 +518,17 @@ namespace YLFramework.StateMachine
             return 0;
         }
 
+        /// <summary>按名称读取 Trigger 的排队次数，不含当前置位值。</summary>
+        /// <param name="name">Trigger 参数名称。</param>
+        /// <returns>尚未取出的触发次数。</returns>
         internal int GetTriggerCount(string name)
         {
             return GetTriggerCount(FsmController.StringToHash(name));
         }
 
+        /// <summary>按哈希读取 Trigger 的排队次数，不含当前置位值。</summary>
+        /// <param name="name">Trigger 参数名称哈希。</param>
+        /// <returns>尚未取出的触发次数。</returns>
         internal int GetTriggerCount(int name)
         {
 
@@ -505,6 +536,8 @@ namespace YLFramework.StateMachine
         }
 
 
+        /// <summary>对当前节点快照转发逻辑更新，随后尝试为每个已清零的 Trigger 取出一次排队触发。</summary>
+        /// <remarks>过渡主要由参数通知及进入后的检查触发，此处不逐帧无条件扫描全部过渡。</remarks>
         public void Update()
         {
             if (!HasStarted || IsDisposed)
@@ -539,10 +572,10 @@ namespace YLFramework.StateMachine
                 item.OnUpdate();
             }
 
-            // 更新Trigger
             UpdateTrigger();
         }
 
+        /// <summary>对当前节点快照转发后置更新，不推进 Trigger 队列。</summary>
         public void LateUpdate()
         {
             if (!HasStarted || IsDisposed)
@@ -578,6 +611,7 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>对当前节点快照转发固定步长更新，不推进 Trigger 队列。</summary>
         public void FixedUpdate()
         {
             if (!HasStarted || IsDisposed)
@@ -615,6 +649,7 @@ namespace YLFramework.StateMachine
 
 
 
+        /// <summary>遍历待触发哈希快照，每个已清零参数最多取出一次并重新置位。</summary>
         private void UpdateTrigger()
         {
             _triggerQueue.CopyKeysTo(_triggerKeys);
@@ -628,6 +663,9 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>查询指定直接父层中的当前节点。</summary>
+        /// <param name="parent">非 null 的父节点名，空字符串表示基础层。</param>
+        /// <returns>该层当前节点；尚未进入或已退出时为 null。</returns>
         public FsmStateNode GetCurrentState(string parent)
         {
 
@@ -638,6 +676,7 @@ namespace YLFramework.StateMachine
 
             return null;
         }
+        /// <summary>直接恢复构造时保存的参数默认值，不触发变化通知或条件切换。</summary>
         internal void ResetParamter()
         {
             foreach (var item in ParameterDefaults.Keys)

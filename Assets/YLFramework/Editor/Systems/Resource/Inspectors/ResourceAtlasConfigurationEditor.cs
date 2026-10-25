@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>编辑资源项目定义并显式登记自动图集范围，不因绘制或保存而执行构建。</summary>
     [CustomEditor(typeof(ResourceProject))]
     internal sealed class ResourceProjectInspector : UnityEditor.Editor
     {
@@ -14,6 +15,7 @@ namespace YLFramework.Editor.Resource
         private Exception _failure;
         private bool _showTechnical;
 
+        /// <summary>展示项目身份、来源与策略，仅通过明确操作保存项目或新建图集配置。</summary>
         public override void OnInspectorGUI()
         {
             var project = (ResourceProject)target;
@@ -108,6 +110,7 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>编辑自有图集规则，分离计划预览、生成和失效输出删除。</summary>
     [CustomEditor(typeof(ResourceAtlasConfiguration))]
     internal sealed class ResourceAtlasConfigurationEditor : UnityEditor.Editor
     {
@@ -117,6 +120,7 @@ namespace YLFramework.Editor.Resource
         private Exception _failure;
         private bool _showTechnical;
 
+        /// <summary>绘制规则和计划状态，生成与删除交由执行时重新验证归属的入口处理。</summary>
         public override void OnInspectorGUI()
         {
             var configuration = (ResourceAtlasConfiguration)target;
@@ -199,6 +203,7 @@ namespace YLFramework.Editor.Resource
             ResourceWorkbenchGui.FailureDetails(_failure, ref _showTechnical);
         }
 
+        /// <summary>展示显式图集操作结果，失败时清除旧计划并保留异常。</summary>
         private void Run(Func<string> action)
         {
             try

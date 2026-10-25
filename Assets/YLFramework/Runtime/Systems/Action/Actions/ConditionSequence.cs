@@ -29,6 +29,7 @@ namespace YLFramework.Actions
                 }
             });
 
+        /// <summary>仅供对象池创建条件分支，不在构造时判断条件或创建子序列。</summary>
         private ConditionSequence()
         {
         }

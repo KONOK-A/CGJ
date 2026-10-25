@@ -36,6 +36,7 @@ namespace YLFramework.Actions
         private ulong _executionVersion;
         ulong IActionExecutionVersion.ExecutionVersion => _executionVersion;
 
+        /// <summary>仅供对象池创建首值等待动作，不在构造时取得事件源或订阅。</summary>
         private UniRxAction()
         {
         }
@@ -108,6 +109,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>先摘除当前订阅槽再关闭它，释放失败时记录本次租约不可回池。</summary>
         private void ReleaseSubscription()
         {
             var subscription = _subscription;
@@ -184,6 +186,7 @@ namespace YLFramework.Actions
         /// <summary>正常完成时释放订阅，不释放事件源本身。</summary>
         public void OnFinish() => ReleaseSubscription();
 
+        /// <summary>确认通知槽仍属于当前未清理的动作使用周期，拒绝旧槽的迟到信号。</summary>
         private bool IsCurrent(Subscription subscription) => !IsDeinitialized && ActionId == subscription.ActionId &&
             ReferenceEquals(_subscription, subscription);
 
@@ -201,6 +204,7 @@ namespace YLFramework.Actions
             private object _signal;
             private int _closed;
 
+            // 快照动作标识、启动线程和同步上下文，使通知回到本轮启动侧处理。
             internal Subscription(UniRxAction<T> target)
             {
                 _target = target;
@@ -209,6 +213,7 @@ namespace YLFramework.Actions
                 _context = SynchronizationContext.Current;
             }
 
+            // 接收 Subscribe 返回的句柄；若订阅已关闭，立即释放这个晚到的句柄。
             internal void Attach(IDisposable disposable)
             {
                 if (disposable == null)
@@ -226,6 +231,7 @@ namespace YLFramework.Actions
                 }
             }
 
+            // 关闭通知入口并断开目标，至多尝试一次释放当前订阅句柄。
             internal void Close()
             {
                 if (Interlocked.Exchange(ref _closed, 1) != 0)
@@ -240,10 +246,14 @@ namespace YLFramework.Actions
                 disposable?.Dispose();
             }
 
+            /// <summary>提交首值信号，只等待通知到达，不保存或返回 value。</summary>
             public void OnNext(T value) => Publish(_firstValue);
+            /// <summary>提交无值完成信号，若先于首值到达则按取消处理。</summary>
             public void OnCompleted() => Publish(_emptyCompletion);
+            /// <summary>提交错误信号；空错误转换为参数异常，先到的错误按取消处理。</summary>
             public void OnError(Exception error) => Publish(error ?? new ArgumentNullException(nameof(error)));
 
+            /// <summary>用首信号占位并请求投递，忽略后续信号或已关闭的订阅。</summary>
             private void Publish(object signal)
             {
                 if (Volatile.Read(ref _closed) != 0 || Interlocked.CompareExchange(ref _signal, signal, null) != null)
@@ -262,6 +272,7 @@ namespace YLFramework.Actions
                 // 未捕获同步上下文时，由启动线程在 OnExecute 中消费通知。
             }
 
+            // 在启动线程复核通知槽后应用首信号，空完成与错误只清理动作，不通知正常完成。
             internal void Deliver()
             {
                 if (Thread.CurrentThread.ManagedThreadId != _threadId || Volatile.Read(ref _closed) != 0)

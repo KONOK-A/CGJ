@@ -4,8 +4,9 @@ namespace YLFramework.Actions
 {
     /// <summary>通过共享画布遮罩调整透明度的屏幕过渡动作。</summary>
     /// <remarks>
-    /// 请在 Unity 主线程执行，提供可用的画布及 ColorImage 绑定；无场景画布时按资源键 <c>ActionKit/ScreenTransitionCanvas</c> 加载。
+    /// 请在 Unity 主线程执行，提供可用的画布及 colorImage 绑定；无场景画布时按资源键 <c>ActionKit/ScreenTransitionCanvas</c> 加载。
     /// 所有过渡共用同一遮罩，不保证并行执行互不影响。取消不触发正常完成，也不会自动应用目标透明度。
+    /// 池分配只重置执行状态，不恢复颜色、透明度或时长配置；直接 Allocate 后应设置本轮所需配置。
     /// </remarks>
     public class ScreenTransitionFade : AbstractAction<ScreenTransitionFade>
     {
@@ -67,6 +68,7 @@ namespace YLFramework.Actions
         /// <summary>正常完成时将遮罩透明度设为目标值。</summary>
         public override void OnFinish() => SetAlpha(_toAlpha);
 
+        /// <summary>保留共享遮罩的 RGB 颜色，只写入本次透明度。</summary>
         private static void SetAlpha(float alpha)
         {
             var image = ScreenTransitionCanvas.Instance.colorImage;

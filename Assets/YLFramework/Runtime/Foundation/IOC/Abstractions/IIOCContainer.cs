@@ -5,8 +5,9 @@ namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 类型/实例注册、解析与成员注入的容器契约。
-    /// 解析优先级、冲突覆盖、循环检测与 ownership 等具体语义以 <see cref="IOCContainer"/> 的文档为准。
+    /// 解析优先级、冲突覆盖、循环检测与对象所有权等具体语义以 <see cref="IOCContainer"/> 的文档为准。
     /// </summary>
+    /// <remarks>容器不接管对象的释放责任；解析中的构造与注入错误会抛出，不统一转为 null。</remarks>
     public interface IIOCContainer
     {
         /// <summary>
@@ -21,7 +22,7 @@ namespace YLFramework.DependencyInjection
         void Inject(object obj);
 
         /// <summary>
-        /// 对所有已注册实例各执行一次成员注入（快照 + 按引用去重）。
+        /// 对已注册的非空引用类型实例各执行一次成员注入（快照 + 按引用去重）。
         /// </summary>
         void InjectAll();
 
@@ -103,7 +104,7 @@ namespace YLFramework.DependencyInjection
         void RegisterInstance<TBase>(TBase instance, string name, bool injectNow = true) where TBase : class;
 
         /// <summary>
-        /// 解析对象（泛型）：优先已注册实例，其次类型映射，最后自动构造未注册的 concrete class（仅无名），不可用时返回 null。
+        /// 解析对象（泛型）：优先已注册实例，其次类型映射，最后自动构造未注册的具体类（仅无名），不可用时返回 null。
         /// </summary>
         /// <typeparam name="T">要解析的服务类型。</typeparam>
         /// <param name="name">注册名称；null 与空字符串等价。</param>
@@ -113,7 +114,7 @@ namespace YLFramework.DependencyInjection
         T Resolve<T>(string name = null, bool requireInstance = false, params object[] args) where T : class;
 
         /// <summary>
-        /// 解析对象（非泛型）：优先已注册实例，其次类型映射，最后自动构造未注册的 concrete class（仅无名），不可用时返回 null。
+        /// 解析对象（非泛型）：优先已注册实例，其次类型映射，最后自动构造未注册的具体类（仅无名），不可用时返回 null。
         /// </summary>
         /// <param name="baseType">要解析的服务类型。</param>
         /// <param name="name">注册名称；null 与空字符串等价。</param>
@@ -126,7 +127,7 @@ namespace YLFramework.DependencyInjection
         /// 按类型创建实例（自动解析构造函数参数并执行成员注入）。
         /// </summary>
         /// <param name="type">要创建的类型。</param>
-        /// <param name="args">显式构造参数；传入后不再自动解析参数。</param>
+        /// <param name="args">至少含一个元素时按显式实参匹配构造函数；null 或空数组使用自动构造注入。</param>
         /// <returns>新创建的实例。</returns>
         object CreateInstance(Type type, params object[] args);
 

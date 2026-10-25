@@ -10,11 +10,13 @@ namespace YLFramework.Core
     /// </summary>
     public enum ModuleState
     {
+        /// <summary>新建且尚未由启动管线推进的实例。</summary>
         Created,
         /// <summary>已发布启动请求和注册；允许查询，拒绝Close与Abort取消。</summary>
         Starting,
         /// <summary>OnStart成功结束；重复启动不再次执行生命周期。</summary>
         Running,
+        /// <summary>正在结束业务对象与在途表现请求；此时仍可查到模块注册。</summary>
         Closing,
         /// <summary>已解除注册且核心对象索引无残留，允许显式重启同一实例。</summary>
         Closed,
@@ -24,31 +26,33 @@ namespace YLFramework.Core
         CloseFailed
     }
 
-    /// <summary>业务对象的唯一owner。</summary>
+    /// <summary>管理本模块 Model、Controller 与 View 的业务归属，并提供启动、关闭及加载入口。</summary>
     /// <remarks>
     /// 同步LoadView只返回已完成初始化的实例，参数、资源或初始化错误直接抛出。
     /// LoadViewArgs接管成功即由本次操作负责归还，入口拒绝也消耗参数；回调只借读，不得保存容器。
-    /// 异步View请求独立创建；Abort为逻辑取消，owner关闭后失效，终态与原始Exception只提交一次。
+    /// 异步View请求独立创建；Abort为逻辑取消，所属模块关闭后失效，终态与原始Exception只提交一次。
     /// </remarks>
     public abstract partial class Module
     {
 
         #region 字段
         /// <summary>
-        /// 存放 所有的数据
+        /// 按 Model 类型与实例标识建立数据索引。
         /// </summary>
         internal Dictionary<Type, Dictionary<long, Model>> Models = new Dictionary<Type, Dictionary<long, Model>>();
         /// <summary>
-        /// 存放所有的视图(key:string value:Dictionary<int, View>) 使用名称 和 id 查询比较方便
+        /// 按资源名称与实例标识建立视图索引。
         /// </summary>
         internal Dictionary<string, Dictionary<int, View>> Views = new Dictionary<string, Dictionary<int, View>>();
 
         /// <summary>
-        /// 存放所有的视图(key:type value:List<View>) 使用类型查询比较方便
+        /// 按实际类型分组保存视图，供类型查询使用。
         /// </summary>
         internal Dictionary<Type, List<View>> TypeViews = new Dictionary<Type, List<View>>();
+        // 不依赖资源名的完整归属索引，包含显式挂载的场景 View。
         internal Dictionary<int, View> OwnedViews = new Dictionary<int, View>();
         internal int ViewTransactions;
+        // 每次模块注册都换新，防止旧请求在同一模块实例重启后提交结果。
         internal object ViewLifecycle;
         internal readonly HashSet<IPendingViewRequest> PendingViews = new HashSet<IPendingViewRequest>();
 
@@ -68,7 +72,7 @@ namespace YLFramework.Core
 
         #region 属性
         /// <summary>
-        /// 模块名
+        /// 模块具体类型的完整名称，用作 ModuleManager 的注册键，与资源项目名分离。
         /// </summary>
         public string ModuleName => GetType().FullName;
 
@@ -112,7 +116,7 @@ namespace YLFramework.Core
         #region 方法
 
         /// <summary>
-        /// 模块启动完成时触发
+        /// 配表和默认场景处理后执行的业务启动钩子；正常返回后才进入 Running。
         /// </summary>
         public abstract void OnStart();
 
@@ -123,8 +127,10 @@ namespace YLFramework.Core
         {
         }
 
+        /// <summary>由统一关闭管线调用业务关闭钩子，不在此清理对象索引。</summary>
         internal void Exit() => OnClose();
 
+        /// <summary>拒绝向已进入关闭流程或已关闭的模块添加业务对象。</summary>
         internal void EnsureCanAddObjects()
         {
             if (State == ModuleState.Closing || State == ModuleState.Closed || State == ModuleState.CloseFailed)

@@ -12,6 +12,7 @@ using YLFramework.Skill;
 namespace YLFramework.Editor.Skill
 {
 
+    /// <summary>技能配表资产 Inspector，编辑显示名和数据类型绑定，提供技能窗口入口。</summary>
     [CustomEditor(typeof(SkillsConfig))]
     public class SkillsConfigInspector : UnityEditor.Editor
     {
@@ -20,6 +21,7 @@ namespace YLFramework.Editor.Skill
 
         //private SerializedProperty m_Script = null;
 
+        /// <summary>缓存当前技能配表的序列化属性列表。</summary>
         private void OnEnable()
         {
             _serializedProperties = serializedObject.GetAllSerializedProperty();
@@ -28,6 +30,7 @@ namespace YLFramework.Editor.Skill
 
 
 
+        /// <summary>常规字段中只允许编辑显示名，另绘制类型绑定和窗口按钮，最后应用序列化修改。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -63,6 +66,7 @@ namespace YLFramework.Editor.Skill
 
 
 
+        /// <summary>显示技能配置窗口并绑定源配表，空引用不处理。</summary>
         public static void OpenSkillsConfig(SkillsConfig skillsConfig)
         {
             if (skillsConfig == null)
@@ -87,7 +91,7 @@ namespace YLFramework.Editor.Skill
 
         private GUIStyle _labelStyle;
 
-        // 绘制数据类型
+        /// <summary>绘制数据类型脚本绑定，菜单选择时标脏并保存，不转换配表中已有技能数据。</summary>
         private void OnGuiDataType()
         {
             SkillsConfig skillsConfig = target as SkillsConfig;
@@ -211,6 +215,7 @@ namespace YLFramework.Editor.Skill
 
         }
 
+        /// <summary>将数据类型名与灰色命名空间附注组合为显示文本。</summary>
         private string GetDisplayName(Type type)
         {
 
@@ -222,6 +227,7 @@ namespace YLFramework.Editor.Skill
             return string.Format("{0}<color=grey>({1})</color>", type.Name, type.Namespace);
         }
 
+        /// <summary>重新扫描 SkillConfigData 派生类脚本，不包含基础类型，也不排除抽象类型。</summary>
         private List<MonoScript> GetAllConfigDatas()
         {
             if (_configDatas == null)
@@ -259,6 +265,7 @@ namespace YLFramework.Editor.Skill
             return _configDatas;
         }
 
+        /// <summary>解析非空 GUID 对应路径，请求 Unity 打开资产。</summary>
         public static void OpenAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -275,6 +282,7 @@ namespace YLFramework.Editor.Skill
             AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
         }
 
+        /// <summary>按 GUID 解析资产，设置当前选择并高亮定位。</summary>
         public static void SelectAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))

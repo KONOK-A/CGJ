@@ -13,23 +13,28 @@ using YLFramework.Buff;
 namespace YLFramework.Editor.Buff
 {
 #if UNITY_6000_2_OR_NEWER
+    /// <summary>把效果定义关联到选择器行，并提供 ID、名称与描述的文本匹配。</summary>
     public class SelectEffectDataTreeViewItem : TreeViewItem<int>
 #else
+    /// <summary>把效果定义关联到选择器行，并提供 ID、名称与描述的文本匹配。</summary>
     public class SelectEffectDataTreeViewItem : TreeViewItem
 #endif
 
     {
 
 
+        /// <summary>本行可供选择的效果定义资产。</summary>
         public EffectData EffectData;
 
 
+        /// <summary>以效果 ID 与显示名构造平面数据行。</summary>
         public SelectEffectDataTreeViewItem(EffectData effectData) : base(effectData.id, 0, effectData.effectName)
         {
             this.EffectData = effectData;
         }
 
 
+        /// <summary>按 ID 文本、名称或描述执行区分大小写的子串匹配。</summary>
         public bool DoesItemMatchSearch(string search)
         {
 
@@ -55,8 +60,10 @@ namespace YLFramework.Editor.Buff
     }
 
 #if UNITY_6000_2_OR_NEWER
+    /// <summary>在弹窗中搜索效果定义，单击后把资产引用写入目标序列化字段。</summary>
     public class SelectEffectDataListTree : TreeView<int>
 #else
+    /// <summary>在弹窗中搜索效果定义，单击后把资产引用写入目标序列化字段。</summary>
     public class SelectEffectDataListTree : TreeView
 #endif
 
@@ -79,12 +86,14 @@ namespace YLFramework.Editor.Buff
         #region 重写方法
 
 
+        /// <summary>创建效果选择器的默认多列表头状态。</summary>
         internal static MultiColumnHeaderState CreateDefaultMultiColumnHeaderState()
         {
             MultiColumnHeaderState state = new MultiColumnHeaderState(GetColumns());
 
             return state;
         }
+        /// <summary>配置选择器五列的名称、宽度和列头排序标记。</summary>
         private static MultiColumnHeaderState.Column[] GetColumns()
         {
             var retVal = new MultiColumnHeaderState.Column[] {
@@ -143,8 +152,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>仅对效果数据行执行其 ID、名称与描述匹配。</summary>
         protected override bool DoesItemMatchSearch(TreeViewItem<int> item, string search)
 #else
+        /// <summary>仅对效果数据行执行其 ID、名称与描述匹配。</summary>
         protected override bool DoesItemMatchSearch(TreeViewItem item, string search)
 #endif
 
@@ -159,8 +170,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>按项目设置的效果列表建立平面树，跳过空引用。</summary>
         protected override TreeViewItem<int> BuildRoot()
 #else
+        /// <summary>按项目设置的效果列表建立平面树，跳过空引用。</summary>
         protected override TreeViewItem BuildRoot()
 #endif
 
@@ -188,8 +201,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>沿用 TreeView 的行构建与搜索流程。</summary>
         protected override IList<TreeViewItem<int>> BuildRows(TreeViewItem<int> root)
 #else
+        /// <summary>沿用 TreeView 的行构建与搜索流程。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
 #endif
 
@@ -197,6 +212,7 @@ namespace YLFramework.Editor.Buff
             return base.BuildRows(root);
         }
 
+        /// <summary>写入所点效果的共享资产引用，应用并保存后关闭弹窗，不复制效果资产。</summary>
         protected override void SingleClickedItem(int id)
         {
             base.SingleClickedItem(id);
@@ -210,6 +226,7 @@ namespace YLFramework.Editor.Buff
             _editorWindow.Close();
         }
 
+        /// <summary>让鼠标所在行成为当前选择，并绘制该行的所有可见列。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             //base.RowGUI(args);
@@ -233,6 +250,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>按列展示效果 ID、名称、业务类型、数据分类或描述。</summary>
         private void CellGui(Rect cellRect, SelectEffectDataTreeViewItem item, int column, ref RowGUIArgs args)
         {
             if (!_contents.ContainsKey(item.id))
@@ -292,6 +310,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>优先使用 EffectName 显示效果数据类型，未标注时使用类型全名。</summary>
         private string GetEffectData(EffectData effect)
         {
 
@@ -304,13 +323,16 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>把选择变化交给 TreeView 基类处理，不在此提交效果引用。</summary>
         protected override void SelectionChanged(IList<int> selectedIds)
         {
             base.SelectionChanged(selectedIds);
         }
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>限制效果选择器为单选，一次只替换一个字段引用。</summary>
         protected override bool CanMultiSelect(TreeViewItem<int> item)
 #else
+        /// <summary>限制效果选择器为单选，一次只替换一个字段引用。</summary>
         protected override bool CanMultiSelect(TreeViewItem item)
 #endif
 
@@ -323,8 +345,10 @@ namespace YLFramework.Editor.Buff
         #region 方法
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>绑定选择状态、目标字段、所属弹窗和多列表头。</summary>
         public SelectEffectDataListTree(TreeViewState<int> state, SerializedProperty property, SelectEffectPopWindow editorWindow, MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
 #else
+        /// <summary>绑定选择状态、目标字段、所属弹窗和多列表头。</summary>
         public SelectEffectDataListTree(TreeViewState state, SerializedProperty property, SelectEffectPopWindow editorWindow, MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
 #endif
 
@@ -341,6 +365,7 @@ namespace YLFramework.Editor.Buff
     }
 
 
+    /// <summary>承载效果搜索列表，并在弹窗打开期间订阅编辑器更新以重绘。</summary>
     public class SelectEffectPopWindow : PopupWindowContent
     {
 
@@ -358,11 +383,13 @@ namespace YLFramework.Editor.Buff
 
         private string _searchStr;
 
+        /// <summary>保留待写入效果引用的目标序列化属性。</summary>
         public SelectEffectPopWindow(SerializedProperty property)
         {
             this._property = property;
         }
 
+        /// <summary>按需建立效果树，在搜索框下绘制效果列表。</summary>
         public override void OnGUI(Rect rect)
         {
             if (_state == null)
@@ -405,6 +432,7 @@ namespace YLFramework.Editor.Buff
             _listTree.OnGUI(rect);
             _listTree.searchString = _searchStr;
         }
+        /// <summary>先撤销更新订阅，再关闭仍存在的弹窗。</summary>
         public void Close()
         {
 
@@ -419,6 +447,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>弹窗打开时去重订阅编辑器更新。</summary>
         public override void OnOpen()
         {
             base.OnOpen();
@@ -426,12 +455,14 @@ namespace YLFramework.Editor.Buff
             EditorApplication.update += Update;
         }
 
+        /// <summary>弹窗关闭时撤销编辑器更新订阅。</summary>
         public override void OnClose()
         {
             base.OnClose();
             EditorApplication.update -= Update;
         }
 
+        /// <summary>重绘弹窗，失去焦点后停止更新订阅，不在此主动关闭窗口。</summary>
         public void Update()
         {
 
@@ -443,6 +474,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>返回效果选择弹窗的固定尺寸 500 x 200。</summary>
         public override Vector2 GetWindowSize()
         {
             return new Vector2(500, 200);

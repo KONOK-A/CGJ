@@ -9,11 +9,14 @@ using YLFramework.Skill;
 
 namespace YLFramework.Editor.Skill
 {
+    /// <summary>跨全部源技能配表校验 ID 占用，并在有效改动后同步条目资产名称。</summary>
     public class CustomSkillConfigDataIdGui : CustomPropertyGui
     {
 
+        /// <summary>创建 ID 绘制器，请求接入 Inspector 在值改变后重载技能树。</summary>
         public CustomSkillConfigDataIdGui() : base(true) { }
 
+        /// <summary>延迟提交未占用的 ID，应用字段修改后请求资产改名并清空父配表查找缓存。</summary>
         public override void OnPropertyGui(SerializedProperty serializedProperty)
         {
 
@@ -64,6 +67,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>扫描并返回新的可加载技能源配表列表，用于全局 ID 占用检查。</summary>
         internal static List<SkillsConfig> GetAllConfigs()
         {
             List<SkillsConfig> allConfigs = new List<SkillsConfig>();

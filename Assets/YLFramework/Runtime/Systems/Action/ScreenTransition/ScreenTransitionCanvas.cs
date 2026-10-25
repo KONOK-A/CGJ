@@ -10,7 +10,7 @@ namespace YLFramework.Actions
     internal class ScreenTransitionCanvas : MonoSingletonHost<ScreenTransitionCanvas>
     {
         internal const string ResourcePath = "ActionKit/ScreenTransitionCanvas";
-        // Prefab 中的全屏遮罩 Image，透明度由过渡动作直接写入。
+        /// <summary>Prefab 中的全屏遮罩 Image，透明度由过渡动作直接写入。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("ColorImage")]
         public Image colorImage;
 

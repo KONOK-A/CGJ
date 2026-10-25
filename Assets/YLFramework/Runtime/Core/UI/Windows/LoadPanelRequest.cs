@@ -22,14 +22,16 @@ namespace YLFramework.Core
             get; private set;
         }
         private PanelManager.PanelOperation _operation;
+        /// <summary>连接本消费者的进度与终态，不另行启动资源生产。</summary>
         internal LoadPanelRequest(PanelManager.PanelOperation operation)
         {
             this._operation = operation;
             operation.ProgressChanged = value => Progress = value;
             operation.Completed = Complete;
         }
-        /// <summary>仅提交前取消本消费者。进入首个业务初始化回调后不再接受主动取消。</summary>
+        /// <summary>在接受请求的线程取消本消费者；提交、失败收尾或终态后不再接受主动取消。</summary>
         public override void Abort() => _operation?.Abort();
+        /// <summary>先固定独立终态并断开操作引用，再通知异步观察者；观察者异常只记录到日志。</summary>
         private void Complete(Panel result, Exception error, LoadViewStatus status)
         {
             Panel = (T)result;

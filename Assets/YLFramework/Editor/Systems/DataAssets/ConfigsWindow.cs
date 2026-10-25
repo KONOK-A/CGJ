@@ -6,6 +6,7 @@ using YLFramework.Editor.Utilities;
 
 namespace YLFramework.Editor.DataAssets
 {
+    /// <summary>配置根的双栏作者窗口，左侧维护条目顺序，右侧显示条目检查器及根诊断。</summary>
     public sealed class ConfigsWindow : SplitWindow
     {
         [SerializeField] private ScriptableObjectConfigs current;
@@ -15,11 +16,14 @@ namespace YLFramework.Editor.DataAssets
         private ScriptableObjectData _selected;
         private Vector2 _rightScroll;
         private string _search;
+        /// <summary>按工程路径隔离当前根的本机偏好键，不写入配置资产。</summary>
         private static string PreferenceKey => "YLFramework.DataAssets.SelectedRoot." + Hash128.Compute(Application.dataPath);
 
+        /// <summary>新建独立作者窗口，由窗口恢复本工程记住的根引用。</summary>
         [MenuItem("Window/YLFramework/Data Assets")]
         public static void Open() => CreateWindow<ConfigsWindow>().Show();
 
+        /// <summary>打开现有或新建的窗口，并将其编辑目标切换到指定根。</summary>
         public static void Open(ScriptableObjectConfigs root)
         {
             var window = GetWindow<ConfigsWindow>();
@@ -27,6 +31,7 @@ namespace YLFramework.Editor.DataAssets
             window.Show();
         }
 
+        /// <summary>恢复根偏好并订阅 Undo 与工程变化，用于同步窗口展示而非自动保存。</summary>
         private void OnEnable()
         {
             titleContent = new GUIContent("Data Assets");
@@ -40,6 +45,7 @@ namespace YLFramework.Editor.DataAssets
             EditorApplication.projectChanged += Refresh;
         }
 
+        /// <summary>解除窗口订阅，记住根 GUID 并释放树和条目检查器。</summary>
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= Refresh;
@@ -52,6 +58,7 @@ namespace YLFramework.Editor.DataAssets
             ReleaseEditors();
         }
 
+        /// <summary>释放旧目标的编辑器状态后切换根，并重置树选择状态；不登记运行时配置。</summary>
         public void SetCurrentConfigs(ScriptableObjectConfigs root)
         {
             ReleaseEditors();
@@ -60,6 +67,7 @@ namespace YLFramework.Editor.DataAssets
             Repaint();
         }
 
+        /// <summary>释放本窗口的树订阅并清除当前条目检查器，不销毁配置资产。</summary>
         private void ReleaseEditors()
         {
             _tree?.Dispose();
@@ -67,6 +75,7 @@ namespace YLFramework.Editor.DataAssets
             SetSelected(null);
         }
 
+        /// <summary>切换条目检查器并结束旧文本编辑焦点，仅销毁窗口自行创建的 Editor 实例。</summary>
         private void SetSelected(ScriptableObjectData data)
         {
             if (_selected == data && _dataEditor)
@@ -89,6 +98,7 @@ namespace YLFramework.Editor.DataAssets
             }
         }
 
+        /// <summary>使根缓存失效，按对象引用恢复树选择，并清除已离开列表的条目展示。</summary>
         private void Refresh()
         {
             if (current)
@@ -105,6 +115,7 @@ namespace YLFramework.Editor.DataAssets
             Repaint();
         }
 
+        /// <summary>处理未选根和缺失列表的入口，再为有效目标延迟建立树并绘制双栏。</summary>
         protected override void OnGUI()
         {
             if (!current)
@@ -143,6 +154,7 @@ namespace YLFramework.Editor.DataAssets
             base.OnGUI();
         }
 
+        /// <summary>绘制根切换、创建、显式保存及搜索入口，并显示条目树。</summary>
         protected override void DrawGuiLeft(Rect rect)
         {
             GUILayout.BeginArea(rect);
@@ -176,6 +188,7 @@ namespace YLFramework.Editor.DataAssets
             _tree.OnGUI(new Rect(rect.x, rect.y + 43, rect.width, Mathf.Max(0, rect.height - 43)));
         }
 
+        /// <summary>显示选中条目的检查器；未选条目时显示根诊断及需要确认的根删除入口。</summary>
         protected override void DrawGuiRight(Rect rect)
         {
             GUILayout.BeginArea(rect);
@@ -210,6 +223,7 @@ namespace YLFramework.Editor.DataAssets
             GUILayout.EndArea();
         }
 
+        /// <summary>按用户选择路径创建根资产并绑定窗口，此创建流程不注册 Undo。</summary>
         private void CreateRoot()
         {
             var path = EditorUtility.SaveFilePanelInProject("Create DataAssets Root", "DataConfigs", "asset", "Choose the root asset path.");

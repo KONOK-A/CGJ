@@ -16,9 +16,11 @@ namespace YLFramework.Attributes
         /// <summary>字段值改变时是否请求接入方重新加载 TreeView；在 Editor 与 Player 中均可配置。</summary>
         public bool ReloadTreeViewOnValueChange;
 
+        /// <summary>创建默认不请求 TreeView 重载的字段绘制特性。</summary>
         public CustomPropertyGui() : this(false) { }
 
-        /// <param name="reloadTreeViewOnValueChange">字段值改变时是否重新加载 TreeView。</param>
+        /// <summary>记录字段绘制后的刷新请求，具体变更检测与刷新由接入方执行。</summary>
+        /// <param name="reloadTreeViewOnValueChange">字段值改变时是否请求接入方重新加载 TreeView。</param>
         public CustomPropertyGui(bool reloadTreeViewOnValueChange)
         {
             this.ReloadTreeViewOnValueChange = reloadTreeViewOnValueChange;
@@ -29,6 +31,7 @@ namespace YLFramework.Attributes
         /// 在编辑器中绘制当前字段。
         /// </summary>
         /// <param name="serializedProperty">字段对应的序列化属性。</param>
+        /// <remarks>由接入 Inspector 显式调用；序列化变更的应用与 TreeView 刷新仍由该 Inspector 负责。</remarks>
         public abstract void OnPropertyGui(UnityEditor.SerializedProperty serializedProperty);
 #endif
     }

@@ -8,6 +8,7 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>浏览明确登记的发布快照并协调显式交付动作，不以发布索引冒充运行时版本。</summary>
     internal sealed class ResourceDeliveryView
     {
         private ResourceReleaseTable _table;
@@ -15,6 +16,7 @@ namespace YLFramework.Editor.Resource
         private ResourceReleaseIdentity _selected;
         private ResourceRelease _selectedRelease;
         private ResourceRelease _current;
+        // 历史列表、发布索引和所选版本分别失效，读取其中一项不能顺带验证另外两项。
         private bool _hasReadHistory;
         private bool _hasReadIndex;
         private bool _isHistoryStale;
@@ -46,6 +48,7 @@ namespace YLFramework.Editor.Resource
         private string _scope;
         private ResourceBuiltInDeployment _deployment;
 
+        /// <summary>清除项目相关的版本、索引、部署计划和结果上下文，不处理磁盘事务。</summary>
         internal void Reset()
         {
             _table = null;
@@ -64,6 +67,7 @@ namespace YLFramework.Editor.Resource
             _tab = 0;
             _search = "";
         }
+        /// <summary>将已读取快照标记过期并丢弃部署计划，保留旧数据供查看。</summary>
         internal void Invalidate()
         {
             _isHistoryStale = _hasReadHistory;
@@ -72,6 +76,7 @@ namespace YLFramework.Editor.Resource
             _plan = null;
             _planIdentity = null;
         }
+        /// <summary>将新确认的发布结果设为选择，旧历史与索引仍待独立重读。</summary>
         internal void OfferRelease(ResourceRelease release)
         {
             if (release == null)
@@ -85,6 +90,7 @@ namespace YLFramework.Editor.Resource
             Select(release);
             _isSelectionStale = false;
         }
+        /// <summary>捕获精确版本身份和文件事实，同时丢弃上一选择的部署计划。</summary>
         private void Select(ResourceRelease release)
         {
             _selectedRelease = release;
@@ -102,6 +108,7 @@ namespace YLFramework.Editor.Resource
                 .Concat(new[] { ("resource-catalog.json", "已验证目录记录", catalog.CatalogDigest), (".ylr-complete.json", "已验证完成记录", "完成记录不替代 Bundle SHA256、签名或运行时加载检查。") }).ToArray();
         }
 
+        /// <summary>登记本次历史读取时间并重绑表格，仅当原所选版本在此次历史中验证过才更新其状态。</summary>
         private void ApplyHistory(IReadOnlyList<ResourceRelease> read)
         {
             _releases = read;
@@ -119,6 +126,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>更新发布索引快照及比较标记，仅在摘要相同时更新所选版本的验证状态。</summary>
         private void ApplyCurrent(ResourceRelease read)
         {
             _current = read;
@@ -141,6 +149,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>组织版本、内置部署和恢复页面，App 变化时使旧快照失效但不自动重读。</summary>
         internal void Draw(ResourceProject project, ref string app, float width, Action<Func<string>> queue, Action<Func<string>> run)
         {
             EditorGUI.BeginChangeCheck();
@@ -177,6 +186,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>显式读取历史或索引，并以精确所选版本协调导出、签发和部署导航。</summary>
         private void DrawHistory(ResourceProject project, string app, float width, Action<Func<string>> queue, Action<Func<string>> run)
         {
             EditorGUILayout.BeginHorizontal();
@@ -338,6 +348,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>区分只读部署条件检查和实际部署；确认前重取计划，正式服务执行时还会复验。</summary>
         private void DrawDeployment(ResourceProject project, float width, Action<Func<string>> queue)
         {
             _operationScroll = EditorGUILayout.BeginScrollView(_operationScroll, GUILayout.ExpandHeight(true));
@@ -411,6 +422,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按当前项目与平台提供两类独立事务恢复及发布集合常量生成，不以历史选择推定恢复目标。</summary>
         private void DrawRecovery(ResourceProject project, string app, Action<Func<string>> queue)
         {
             _operationScroll = EditorGUILayout.BeginScrollView(_operationScroll, GUILayout.ExpandHeight(true));
@@ -521,6 +533,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndScrollView();
         }
 
+        /// <summary>展示所选快照的完整版本身份，短摘要仅作概览而不参与匹配。</summary>
         private void DrawIdentity(float width)
         {
             GUILayout.Label("所选版本", EditorStyles.boldLabel);
@@ -538,6 +551,7 @@ namespace YLFramework.Editor.Resource
             GUILayout.Label(_selected.ToString(), ResourceWorkbenchGui.Secondary);
             GUILayout.Label(_selectedFacts, ResourceWorkbenchGui.Secondary);
         }
+        /// <summary>虚拟化显示所选版本的文件量和摘要，复用选择时投影的原始事实。</summary>
         private void DrawFiles()
         {
             var rect = GUILayoutUtility.GetRect(80, 144, GUILayout.ExpandWidth(true));
@@ -550,6 +564,7 @@ namespace YLFramework.Editor.Resource
 
             GUI.EndScrollView();
         }
+        /// <summary>按读取、失败和过期状态描述索引关系；未知时不猜测当前版本或运行版本。</summary>
         internal static string DescribeIndex(bool read, bool stale, bool failed, bool selectedStale, string currentDigest, string selectedDigest)
         {
             if (failed)
@@ -586,6 +601,7 @@ namespace YLFramework.Editor.Resource
                 "发布索引当前未指向所选版本；这不代表应用正在使用哪个版本。";
         }
 
+        /// <summary>登记操作输出；异常时标记旧快照过期并继续上抛，不承诺撤销已经发生的 IO。</summary>
         private string Execute(Func<string> operation, bool readingIndex = false)
         {
             try
@@ -609,6 +625,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按需展示本次交付操作的原始异常，旧成功结果仍与失败提示分开保留。</summary>
         private void DrawErrorDetails()
         {
             if (_error == null)
@@ -623,6 +640,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将绝对父路径与完整版本摘要组合为导出路径；工程外归属、链接和占用由导出服务校验。</summary>
         internal static string ExportDirectory(ResourceReleaseIdentity identity, string parent)
         {
             if (identity == null)

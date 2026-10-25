@@ -18,7 +18,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 仅移除本模块拥有且与索引完全一致的实例；退出异常也会清除索引及owner。
+        /// 仅移除本模块拥有且与索引完全一致的实例；退出异常也会清除索引及归属。
         /// </summary>
         public void RemoveController(Controller controller)
         {
@@ -65,8 +65,8 @@ namespace YLFramework.Core
         /// 按完整类型名加载本模块Controller，缺失时才创建并注册到本模块。
         /// </summary>
         /// <param name="controllerTypeFullName">业务逻辑脚本名称(包含命名空间)</param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>已有实例或完成初始化的新实例。</returns>
+        /// <exception cref="Exception">无法解析指定的完整类型名。</exception>
         public Controller LoadController(string controllerTypeFullName)
         {
             if (string.IsNullOrEmpty(controllerTypeFullName))
@@ -84,7 +84,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 移除业务逻辑
+        /// 移除本模块精确类型的 Controller；缺失时无操作，不影响其他模块。
         /// </summary>
         /// <param name="controllerType">业务逻辑类型</param>
         public void RemoveController(Type controllerType)
@@ -96,14 +96,14 @@ namespace YLFramework.Core
         /// 加载本模块Controller，缺失时才创建；初始化期间返回临时注册对象，退出期间拒绝Load。
         /// </summary>
         /// <param name="controllerType">业务逻辑类型</param>
-        /// <returns></returns>
+        /// <returns>已有实例或完成初始化的新实例。</returns>
         public Controller LoadController(Type controllerType)
         {
             return ControllerManager.LoadController(this, controllerType);
         }
 
         /// <summary>
-        /// 清空当前模块的所有Controller
+        /// 按调用时快照逐个移除本模块 Controller；某项退出抛错时停止，未处理项仍保留。
         /// </summary>
         public void ClearController()
         {
@@ -113,15 +113,15 @@ namespace YLFramework.Core
         /// <summary>
         /// 加载本模块Controller，缺失时才创建；初始化期间返回临时注册对象，退出期间拒绝Load。
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <returns></returns>
+        /// <typeparam name="T">要精确匹配的 Controller 类型。</typeparam>
+        /// <returns>已有实例或完成初始化的新实例。</returns>
         public T LoadController<T>() where T : Controller
         {
             return ControllerManager.LoadController<T>(this);
         }
 
         /// <summary>
-        /// 移除业务逻辑(泛型方式)
+        /// 移除本模块精确类型的 Controller；缺失时无操作。
         /// </summary>
         /// <typeparam name="T">类型</typeparam>
         public void RemoveController<T>() where T : Controller

@@ -3,7 +3,7 @@ using UnityEngine;
 namespace YLFramework.Core
 {
 
-    /// <summary>按当前 Canvas 与自身尺寸等比放大以覆盖背景，保留不缩小的既有行为。</summary>
+    /// <summary>按当前 Canvas 与自身尺寸等比设置背景缩放，覆盖倍率不低于 1，不修改锚点或尺寸。</summary>
     [DisallowMultipleComponent]
     public class BackgroundAdaptation : MonoBehaviour
     {
@@ -58,6 +58,7 @@ namespace YLFramework.Core
             return true;
         }
 
+        /// <summary>保留最近的校验失败原因，同一连续错误不重复报告。</summary>
         private bool Reject(string error)
         {
             if (_lastError != error)
@@ -69,11 +70,15 @@ namespace YLFramework.Core
             return false;
         }
 
+        /// <summary>检查 Canvas 与内容尺寸能否参与有限的覆盖比例计算。</summary>
         private static bool IsPositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 &&
             !float.IsInfinity(value.x) && !float.IsInfinity(value.y);
 
+        /// <summary>启用时按当前父 Canvas 更新背景覆盖。</summary>
         private void OnEnable() => Refresh();
+        /// <summary>在 LateUpdate 重新读取当前尺寸并应用覆盖倍率。</summary>
         private void LateUpdate() => Refresh();
+        /// <summary>启用期间换父级后改用新的 Canvas 计算背景覆盖。</summary>
         private void OnTransformParentChanged()
         {
             if (isActiveAndEnabled)

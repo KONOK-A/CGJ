@@ -5,11 +5,13 @@ using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>编辑音乐组件的素材与可选过渡配置，不在检查过程中启动或停止音乐。</summary>
     [CustomEditor(typeof(AudioMusicPlayer)), CanEditMultipleObjects]
     public sealed class AudioMusicPlayerEditor : UnityEditor.Editor
     {
         private bool _showAdvanced;
 
+        /// <summary>绘制音乐配置，通过序列化提交保留 Undo 和 Prefab Override，再逐对象校验已启用的选项。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();

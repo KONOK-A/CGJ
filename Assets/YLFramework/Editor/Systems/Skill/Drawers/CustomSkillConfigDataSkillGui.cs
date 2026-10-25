@@ -11,6 +11,7 @@ using YLFramework.Skill;
 
 namespace YLFramework.Editor.Skill
 {
+    /// <summary>编辑技能并行释放 ID 列表，候选限于当前源配表，排除自身和已列入的技能。</summary>
     public class CustomSkillConfigDataSkillGui : CustomPropertyGui
     {
 
@@ -27,6 +28,7 @@ namespace YLFramework.Editor.Skill
 
         private List<SkillConfigData> _skills = new List<SkillConfigData>();
 
+        /// <summary>字段上下文变化时重建列表绑定，绘制可折叠的并行技能列表。</summary>
         public override void OnPropertyGui(SerializedProperty simultaneousSkillIdsProperty)
         {
             if (this._serializedProperty != simultaneousSkillIdsProperty)
@@ -64,6 +66,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>绘制一项技能 ID 及候选菜单，菜单选择后写入并应用序列化修改。</summary>
         private void OnDrawRow(Rect rect, int index, bool isActive, bool isFocused)
         {
             if (index < 0 || index >= _serializedProperty.arraySize)
@@ -141,6 +144,7 @@ namespace YLFramework.Editor.Skill
             }
         }
 
+        /// <summary>删除有效选中索引的技能 ID，并应用列表修改。</summary>
         private void OnRemove(ReorderableList list)
         {
             if (list.index < 0 || list.index >= list.serializedProperty.arraySize)

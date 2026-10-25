@@ -12,6 +12,7 @@ using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
 
 namespace YLFramework.Editor.Equipment
 {
+    /// <summary>以装备定义列表与内嵌 Inspector 维护配表，运行或切换 PlayMode 时禁用作者修改入口。</summary>
     public sealed class ConfigsWindow : SplitWindow
     {
         private const string SelectionKey = "YLFramework.Equipment.SelectedConfig";
@@ -21,8 +22,10 @@ namespace YLFramework.Editor.Equipment
         private EquipmentConfigDataInspector _entryEditor;
         private Vector2 _scroll;
 
+        /// <summary>从菜单显示装备配表窗口。</summary>
         [MenuItem("Window/YLFramework/EquipmentSystem", false, 10)]
         private static void Open() => GetWindow<ConfigsWindow>().Show();
+        /// <summary>设置窗口外观，优先恢复已序列化或记住的配表，失败时选择项目首表。</summary>
         private void OnEnable()
         {
             titleContent = new GUIContent("装备配置");
@@ -38,6 +41,7 @@ namespace YLFramework.Editor.Equipment
                 SetCurrentConfigs(root);
             }
         }
+        /// <summary>停用时释放树的订阅和拖拽状态，并销毁本窗口创建的内嵌检查器。</summary>
         private void OnDisable()
         {
             EquipmentListTree?.Dispose();
@@ -47,6 +51,7 @@ namespace YLFramework.Editor.Equipment
                 DestroyImmediate(_entryEditor);
             }
         }
+        /// <summary>释放旧树与检查器，切换配表并重建选择状态；null 会清空当前配表。</summary>
         public void SetCurrentConfigs(EquipmentsConfig root)
         {
             EquipmentListTree?.Dispose();
@@ -65,7 +70,9 @@ namespace YLFramework.Editor.Equipment
 
             Repaint();
         }
+        /// <summary>按装备业务 ID 选择行；尚无树时不处理。</summary>
         public void SetSelection(int id) => EquipmentListTree?.SelectEquipment(id);
+        /// <summary>绘制配表菜单、搜索与树列表，运行或切换 PlayMode 时禁用新增和刷新入口。</summary>
         protected override void DrawGuiLeft(Rect rect)
         {
             GUILayout.BeginArea(rect);
@@ -124,6 +131,7 @@ namespace YLFramework.Editor.Equipment
                 GUILayout.EndArea();
             }
         }
+        /// <summary>为首个所选定义复用或重建内嵌 Inspector，离开绘制时始终收束滚动区与分栏。</summary>
         protected override void DrawGuiRight(Rect rect)
         {
             GUILayout.BeginArea(rect);
@@ -161,6 +169,7 @@ namespace YLFramework.Editor.Equipment
                 GUILayout.EndArea();
             }
         }
+        /// <summary>要求用户选择新资产路径，创建配表并按现有最大基数加一千初始化 ID 起点。</summary>
         private void CreateRoot()
         {
             var path = EditorUtility.SaveFilePanelInProject("新建装备配表", "EquipmentsConfig", "asset", "选择新配表位置");

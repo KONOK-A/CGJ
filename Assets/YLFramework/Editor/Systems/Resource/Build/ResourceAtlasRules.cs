@@ -12,6 +12,7 @@ namespace YLFramework.Editor.Resource
     /// <summary>显式Atlas合同：只读输入检查和native读回，不生成Atlas、不注册全局tag、不打包原工程图集。</summary>
     internal static class ResourceAtlasRules
     {
+        /// <summary>要求影响构建的图集被显式选中，并检查打包开关、非变体与 Sprite 名称唯一性。</summary>
         internal static void Validate(IEnumerable<string> sources, IEnumerable<ResourceBuildAsset> assets)
         {
             var paths = new HashSet<string>(sources, StringComparer.Ordinal);
@@ -61,8 +62,10 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>展开图集实际选入的 Sprite，返回去重后的源文件路径。</summary>
         internal static IEnumerable<string> SpritePaths(SpriteAtlas atlas) => Sprites(atlas).Select(AssetDatabase.GetAssetPath).Distinct(StringComparer.Ordinal);
 
+        /// <summary>展开直接 Sprite、纹理和递归目录选择，变体从主图集收集来源。</summary>
         private static Sprite[] Sprites(SpriteAtlas atlas)
         {
             if (atlas.isVariant)
@@ -101,6 +104,7 @@ namespace YLFramework.Editor.Resource
             return result.ToArray();
         }
 
+        /// <summary>对照源图集验证原生产物的 Sprite 数量、纹理引用和具名查找，并释放取得的克隆。</summary>
         internal static void ValidateReadback(SpriteAtlas atlas, string sourcePath)
         {
             var names = Sprites(AssetDatabase.LoadAssetAtPath<SpriteAtlas>(sourcePath)).Select(value => value.name).ToArray();

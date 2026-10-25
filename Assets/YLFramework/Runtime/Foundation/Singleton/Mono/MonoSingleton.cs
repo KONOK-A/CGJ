@@ -6,7 +6,7 @@ namespace YLFramework.Singletons
     /// <summary>
     /// MonoBehaviour 单例基类：通过 <see cref="MonoSingletonProperty{T}"/> 查找或创建实例，支持在场景中预先摆放。
     /// Instance 优先复用场景中已有实例（普通版本不做去重销毁，见 <see cref="SingletonCreator"/> 的警告），
-    /// 找不到时新建以类型名命名的 GameObject；非播放模式下 Instance 返回 null。
+    /// 找不到时新建以类型名命名的 GameObject；默认查找/创建仅限播放中，已有缓存不受此限制。
     /// <see cref="Dispose"/> 销毁当前实例的 GameObject 并清空缓存（若销毁的不是缓存实例，则只销毁自身），下次访问会重新查找/创建。
     /// </summary>
     /// <typeparam name="T">单例类型（继承时传入自身）。</typeparam>

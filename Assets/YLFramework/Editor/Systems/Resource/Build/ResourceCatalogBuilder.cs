@@ -12,15 +12,18 @@ namespace YLFramework.Editor.Resource
     /// <summary>只从本构建内核的完整 Workspace 快照生成目录，不读取旧 ResData 或 XFAB 映射。</summary>
     public static class ResourceCatalogBuilder
     {
+        /// <summary>锁定并逐文件复验构建结果后创建正式 Catalog 文档，不发布或挂载资源。</summary>
         public static ResourceCatalogDocument Create(ResourceBuildResult result, string appContentCompatibilityId)
         {
             using var locked = LockWorkspace(result);
             return CreateLocked(result, appContentCompatibilityId);
         }
 
+        /// <summary>从调用方已锁定验证的快照映射交付文件与资产身份，再经正式编解码器封口校验。</summary>
         internal static ResourceCatalogDocument CreateLocked(ResourceBuildResult result, string app)
         {
             JObject FileRecord(ResourceBuiltFile file) => new JObject { ["RelativeFile"] = PublishedFile(result, file.Name), ["Length"] = file.Length, ["Sha256"] = file.Sha256 };
+            // 子资产沿用主资产地址与别名，以 localId 十进制键区分；原生查找仍使用源路径和唯一名称/编译类型。
             JObject Asset(ResourceBuildAsset main, ResourceBuiltSubAsset sub = null) => new JObject
             {
                 ["AssetId"] = main.Guid + "_" + (sub?.LocalId ?? main.LocalId).ToString(CultureInfo.InvariantCulture),

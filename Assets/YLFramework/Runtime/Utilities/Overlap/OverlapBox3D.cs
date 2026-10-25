@@ -5,9 +5,7 @@ using UnityEngine;
 namespace YLFramework.Overlap
 {
 
-    /// <summary>
-    /// 重叠检测立方体3D
-    /// </summary>
+    /// <summary>以对象世界位置为中心，按世界旋转和缩放检测三维盒体重叠。</summary>
     public class OverlapBox3D : OverlapBase3D
     {
         #region 字段
@@ -20,9 +18,7 @@ namespace YLFramework.Overlap
 
         #region 属性
 
-        /// <summary>
-        /// 大小
-        /// </summary>
+        /// <summary>未缩放的盒体完整尺寸；查询时逐轴缩放、取绝对值后减半作为半尺寸。</summary>
         public Vector3 Size
         {
             get
@@ -39,7 +35,7 @@ namespace YLFramework.Overlap
 
 
 
-        // Fix编码
+        /// <summary>检测当前位置的旋转盒体重叠，过滤触发器后更新进入退出结果。</summary>
         public override void CheckOverlap()
         {
             if (!TryBeginCheck())

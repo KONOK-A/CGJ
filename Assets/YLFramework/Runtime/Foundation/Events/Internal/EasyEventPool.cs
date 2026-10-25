@@ -32,6 +32,7 @@ namespace YLFramework.Events.Internal
             SafeObjectPool<TEvent>.Instance.Recycle(obj);
         }
 
+        /// <summary>仅在当前类型的池入口不存在时配置容量和预热数量，避免覆盖存活池的状态。</summary>
         private static void EnsureInitialized(int prewarmCount)
         {
             if (!SingletonProperty<SafeObjectPool<TEvent>>.HasInstance)

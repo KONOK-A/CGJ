@@ -4,7 +4,7 @@ using UnityEngine.Audio;
 
 namespace YLFramework.Audio
 {
-    /// <summary>Optional category routing configuration. Apply explicitly; editing this asset does not update active routing.</summary>
+    /// <summary>可选的分类路由配置；须显式应用，编辑资产本身不会更新正在使用的路由。</summary>
     [CreateAssetMenu(fileName = "AudioMixerConfig", menuName = "YLFramework/Audio/Mixer Config")]
     public sealed class AudioMixerConfig : ScriptableObject
     {
@@ -17,15 +17,16 @@ namespace YLFramework.Audio
         [Tooltip("Leave empty for direct output. Assigned groups must belong to this configuration's Mixer.")]
         [SerializeField] private AudioMixerGroup soundGroup;
 
-        /// <summary>The native Mixer, which may be empty when all category groups are empty.</summary>
+        /// <summary>原生 Mixer；所有分类输出组都为空时可不配置。</summary>
         public AudioMixer Mixer => mixer;
-        /// <summary>The default music output group; null means direct output.</summary>
+        /// <summary>Music 的默认输出组；null 表示直接输出。</summary>
         public AudioMixerGroup MusicGroup => musicGroup;
-        /// <summary>The default voice output group; null means direct output.</summary>
+        /// <summary>Voice 的默认输出组；null 表示直接输出。</summary>
         public AudioMixerGroup VoiceGroup => voiceGroup;
-        /// <summary>The default sound output group; null means direct output.</summary>
+        /// <summary>Sound 的默认输出组；null 表示直接输出。</summary>
         public AudioMixerGroup SoundGroup => soundGroup;
 
+        /// <summary>在应用任何分类路由前校验 Mixer 和全部组的存活及归属。</summary>
         internal void Validate()
         {
             if (AudioOutputRoute.HasReference(mixer) && !mixer)
@@ -38,6 +39,7 @@ namespace YLFramework.Audio
             ValidateGroup(soundGroup, nameof(soundGroup));
         }
 
+        /// <summary>允许空组直接输出，但已填写的组必须存活且属于配置中的 Mixer。</summary>
         private void ValidateGroup(AudioMixerGroup group, string parameterName)
         {
             if (!AudioOutputRoute.HasReference(group))

@@ -13,6 +13,7 @@ namespace YLFramework.Compression
         private readonly int _originalCodePage;
         private bool _isDisposed;
 
+        /// <summary>在指定编码时保存并切换进程级条目名编码；传入 null 时不改动编码。</summary>
         public CodePageScope(int? nameCodePage)
         {
             _isChanged = nameCodePage.HasValue;
@@ -24,6 +25,7 @@ namespace YLFramework.Compression
             }
         }
 
+        /// <summary>为当前作用域实例恢复一次原编码，不关闭归档或流，也不提供并发互斥。</summary>
         public void Dispose()
         {
             if (_isChanged && !_isDisposed)

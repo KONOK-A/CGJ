@@ -7,7 +7,7 @@ using UnityEditor;
 
 namespace YLFramework.Editor.Resource
 {
-    // 项目生成物的窄承载契约，不为未知业务源码创建/改写程序集。
+    /// <summary>项目生成物的窄承载契约，不为未知业务源码创建/改写程序集。</summary>
     internal static class ResourceReferenceOutput
     {
         internal const string DirectoryPath = "Assets/YLFrameworkData";
@@ -16,6 +16,10 @@ namespace YLFramework.Editor.Resource
         private const string Header = "// YL Catalog references v1 SHA256: ";
         internal const string AssemblyDefinition = "{\n  \"name\": \"" + AssemblyName + "\",\n  \"references\": [],\n  \"autoReferenced\": true,\n  \"overrideReferences\": true,\n  \"precompiledReferences\": [],\n  \"noEngineReferences\": true\n}\n";
 
+        /// <summary>
+        /// 验证源码正文摘要、固定 asmdef 和目录闭包后写入受管常量；无变化返回 false。
+        /// 摘要用于识别既有生成正文是否改变，不是签名或任意目录的接管许可；两份文件不构成跨文件事务。
+        /// </summary>
         internal static bool Publish(string directory, string source)
         {
             directory = Path.GetFullPath(directory).TrimEnd('/', '\\');
@@ -157,17 +161,21 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>计算 UTF-8 正文的 SHA-256 并编码为生成头使用的 Base64。</summary>
         private static string Hash(string text)
         {
             using var hash = SHA256.Create();
             return Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(text)));
         }
 
+        /// <summary>只读取 asmdef 名称的最小 JSON 映射，不改写程序集定义。</summary>
         [Serializable]
         private sealed class AssemblyIdentity
         {
+            /// <summary>asmdef JSON 中原样映射的程序集名称。</summary>
             public string name;
         }
+        /// <summary>从程序集 JSON 中提取名称以检测其他位置的身份占用。</summary>
         private static string JsonUtilityName(string json) => UnityEngine.JsonUtility.FromJson<AssemblyIdentity>(json)?.name;
     }
 }

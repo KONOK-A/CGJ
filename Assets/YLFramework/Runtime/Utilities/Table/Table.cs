@@ -9,11 +9,11 @@ namespace YLFramework.Tables
     /// <para>
     /// 基类自身不保存任何数据，只负责把 <see cref="Add"/> / <see cref="Remove"/> / <see cref="Clear"/> /
     /// <see cref="Dispose"/> 转发给子类的抽象钩子，并约定统一的枚举入口；
-    /// 实际存储与索引由子类维护（例如 ResTable 把数据存放在 TableIndex 中）。
+    /// 实际存储与索引由子类维护，基类不选择存储容器。
     /// </para>
     /// <para>
-    /// Ownership：Table 不拥有 <typeparamref name="TDataItem"/> 的生命周期，
-    /// 任何生命周期方法都不会释放数据项，数据项由创建者负责释放。
+    /// 数据所有权：基类不取得 <typeparamref name="TDataItem"/> 的生命周期，也不直接释放数据项；
+    /// 子类钩子若需要接管或释放数据项，必须另行约定，不能仅凭 Table 的接口判断。
     /// </para>
     /// </summary>
     /// <typeparam name="TDataItem">数据项类型。</typeparam>
@@ -41,7 +41,7 @@ namespace YLFramework.Tables
 
         /// <summary>
         /// 清空表数据，转发到 <see cref="OnClear"/>。
-        /// Clear 只清数据、实例可以继续使用，与 <see cref="Dispose"/> 的销毁语义不同。
+        /// 基类不改变可用状态；子类应按清空后可复用的约定实现，与 <see cref="Dispose"/> 的释放职责区分。
         /// </summary>
         public void Clear()
         {
@@ -49,8 +49,7 @@ namespace YLFramework.Tables
         }
 
         /// <summary>
-        /// 预留的扩展钩子，当前为无行为的空实现，调用无任何副作用。
-        /// TDataItem 通常是引用类型，可直接就地修改，因此基类不提供默认刷新行为。
+        /// 预留的更新入口，当前为空实现，不会遍历数据项或刷新索引。
         /// </summary>
         public void Update()
         {
@@ -101,6 +100,7 @@ namespace YLFramework.Tables
         /// </summary>
         public abstract IEnumerator<TDataItem> GetEnumerator();
 
+        /// <summary>将非泛型枚举入口转发到子类提供的泛型枚举器。</summary>
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
@@ -109,8 +109,7 @@ namespace YLFramework.Tables
         /// <summary>
         /// 释放表，转发到 <see cref="OnDispose"/>。
         /// 基类不跟踪释放状态、不做幂等保护：每次调用都会触发 OnDispose，子类钩子应自行保证可重复调用。
-        /// Dispose 只清理子类自身维护的数据结构，不会 Dispose 任何 <typeparamref name="TDataItem"/>；
-        /// Dispose 后是否还能继续使用由子类决定。
+        /// 基类不会直接 Dispose 数据项；钩子中的数据项处理责任及释放后能否继续使用由子类决定。
         /// </summary>
         public void Dispose()
         {

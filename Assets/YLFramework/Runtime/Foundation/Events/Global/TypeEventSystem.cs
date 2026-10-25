@@ -9,16 +9,22 @@ namespace YLFramework.Events
     /// Dispose 或 Play Session reset 永久关闭旧实例并截断旧在途通知。
     /// 关闭后注册与发送抛出 ObjectDisposedException，退订为空操作；Instance 可创建新实例。
     /// </summary>
+    /// <remarks>
+    /// 重复回调分别注册，由调用方保存句柄并按生命周期解绑；按委托取消只移除最后一个匹配的普通委托子序列。
+    /// 发送同步执行注册顺序的快照，首个异常会中断后续监听；分发中的普通取消不撤回当前快照。
+    /// </remarks>
     public class TypeEventSystem : ISingleton
     {
         private static TypeEventSystem _sessionInstance;
         private readonly EventBus _bus = new();
 
+        /// <summary>登记会话重置回调，使禁用 Domain Reload 时旧实例也能结束生命周期。</summary>
         static TypeEventSystem()
         {
             SingletonSessionState.RegisterSessionReset(ResetSessionState);
         }
 
+        /// <summary>摘除本会话的独立实例引用，再永久关闭旧事件上下文。</summary>
         private static void ResetSessionState()
         {
             // Singleton 自身可能已先清入口，独立保留本轮待关闭实例。
@@ -33,7 +39,7 @@ namespace YLFramework.Events
         public static TypeEventSystem Instance => SingletonProperty<TypeEventSystem>.Instance;
 
         /// <summary>
-        /// 创建并发送一个默认构造的事件实例；无监听时为空操作。
+        /// 默认构造并同步发送事件实例；类型通道未建立时不构造，已有空通道时仍会构造。
         /// </summary>
         /// <typeparam name="T">事件类型。</typeparam>
         public void Send<T>() where T : new()
@@ -52,7 +58,7 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注册指定事件类型的监听，返回注销句柄；类型不存在时自动创建对应事件。
+        /// 注册指定事件类型的监听，返回注销句柄；仅非空回调会创建缺失的类型通道。
         /// </summary>
         /// <typeparam name="T">事件类型。</typeparam>
         /// <param name="eventAction">事件监听回调。</param>
@@ -63,7 +69,7 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注销指定事件类型上的一个监听。
+        /// 注销指定事件类型上最后一个匹配的普通委托子序列，不撤回已开始的分发快照。
         /// </summary>
         /// <typeparam name="T">事件类型。</typeparam>
         /// <param name="eventAction">要注销的监听回调。</param>

@@ -5,10 +5,12 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Utilities
 {
+    /// <summary>提供可拖动分隔线的左右分栏窗口框架，派生窗口分别绘制两侧内容。</summary>
     public class SplitWindow : EditorWindow
     {
         const int PanePadding = 1; // 内边距
 
+        /// <summary>随窗口序列化的左栏宽度比例，拖动时限制在 0.1 至 0.8 之间。</summary>
         [UnityEngine.Serialization.FormerlySerializedAs("horizontal_split_percent")]
         [SerializeField]
         protected float horizontalSplitPercent = 0.3f;
@@ -17,10 +19,12 @@ namespace YLFramework.Editor.Utilities
 
         private bool _isResizingHorizontal;      // 是不是正在调整 水平的比例
 
+        /// <summary>是否在左右内容区域外绘制边框。</summary>
         protected bool ShowBorder = false;
 
         private bool _isLayout;
 
+        /// <summary>读写左栏宽度比例；直接赋值不经过拖动时的范围限制，也不记录 Undo。</summary>
         public float HorizontalSplitPercent
         {
             get
@@ -34,6 +38,7 @@ namespace YLFramework.Editor.Utilities
         }
 
 
+        /// <summary>处理分隔线的鼠标按下、拖动和释放，更新比例并在拖动期间请求重绘。</summary>
         private void HorizontalResize()
         {
             _horizontalSplitRect.Set(position.width * horizontalSplitPercent - PanePadding - 1, 0, PanePadding * 2 + 1, position.height);
@@ -65,8 +70,10 @@ namespace YLFramework.Editor.Utilities
             }
         }
 
+        /// <summary>处理分栏布局及拖动，调用两侧绘制钩子并按需绘制边框。</summary>
         protected virtual void OnGUI()
         {
+            // 仅接受紧随 Layout 的 Repaint，避免在本窗口尚无对应布局时进入内容绘制。
             if (Event.current != null && Event.current.type == EventType.Repaint)
             {
                 if (!_isLayout)
@@ -100,10 +107,14 @@ namespace YLFramework.Editor.Utilities
             Handles.color = origin;
         }
 
+        /// <summary>绘制左侧内容，默认留空供派生窗口实现。</summary>
+        /// <param name="rect">窗口坐标系内分配给左栏的区域。</param>
         protected virtual void DrawGuiLeft(Rect rect)
         {
         }
 
+        /// <summary>绘制右侧内容，默认留空供派生窗口实现。</summary>
+        /// <param name="rect">窗口坐标系内分配给右栏的区域。</param>
         protected virtual void DrawGuiRight(Rect rect)
         {
         }

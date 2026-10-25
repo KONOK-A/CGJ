@@ -3,9 +3,9 @@ using UnityEngine;
 namespace YLFramework.Singletons
 {
     /// <summary>
-    /// 可替换 MonoBehaviour 单例：场景中存在多个实例时保留最后创建的，先创建者被销毁（同一帧内按创建序号区分先后）。
+    /// 可替换 MonoBehaviour 单例：按 Awake 登记次序保留最后登记者，销毁较早登记的实例（同帧内也可区分）。
     /// Instance 首次访问时优先从场景查找，找不到才创建（创建的对象 HideAndDontSave）；
-    /// 所有实例都会 DontDestroyOnLoad；退出流程中 Instance 返回 null。
+    /// Awake 登记时会 DontDestroyOnLoad；退出流程中仅返回已有缓存，不再查找或创建。
     /// </summary>
     /// <typeparam name="T">单例类型（继承时传入自身）。</typeparam>
     public class ReplaceableMonoSingleton<T> : MonoBehaviour where T : ReplaceableMonoSingleton<T>
@@ -19,17 +19,18 @@ namespace YLFramework.Singletons
         protected float InitializationTime;
 
         /// <summary>
-        /// 当前实例的创建顺序，同一帧内也能区分先后
+        /// 当前实例的 Awake 登记顺序，同一帧内也能区分先后
         /// </summary>
         private long _creationOrder;
 
+        /// <summary>登记新 Play 会话的实例缓存和登记计数重置。</summary>
         static ReplaceableMonoSingleton()
         {
             SingletonSessionState.RegisterSessionReset(ResetSessionState);
         }
 
         /// <summary>
-        /// 单例实例；首次访问时从场景查找或创建，退出流程中返回 null。
+        /// 单例实例；首次访问时从场景查找或创建，退出流程中无缓存时返回 null。
         /// </summary>
         public static T Instance
         {
@@ -72,7 +73,7 @@ namespace YLFramework.Singletons
         }
 
         /// <summary>
-        /// 按创建顺序竞争：销毁所有比自身更早创建的实例，最后创建者成为当前单例。
+        /// 按 Awake 登记顺序竞争：销毁序号小于自身的场景实例，并将自身设为当前单例。
         /// </summary>
         protected virtual void Awake()
         {
@@ -93,17 +94,16 @@ namespace YLFramework.Singletons
                 {
                     continue;
                 }
-                //如果搜索到的物体创建顺序早于当前实例，则销毁
                 if (searched._creationOrder < _creationOrder)
                 {
                     Destroy(searched.gameObject);
                 }
             }
 
-            //最后创建的实例成为当前单例
             _instance = this as T;
         }
 
+        /// <summary>进入新 Play 会话时清空实例引用并重置 Awake 登记序号，不主动销毁旧对象。</summary>
         private static void ResetSessionState()
         {
             _instance = null;

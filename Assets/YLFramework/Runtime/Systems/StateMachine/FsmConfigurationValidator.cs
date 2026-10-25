@@ -3,8 +3,14 @@ using System.Collections.Generic;
 
 namespace YLFramework.StateMachine
 {
+    /// <summary>只读检查节点层级、默认状态、参数及过渡引用，不修复数据或构造状态脚本。</summary>
     internal static class FsmConfigurationValidator
     {
+        /// <summary>按节点、参数、过渡顺序检查配置结构，返回首个诊断。</summary>
+        /// <param name="states">包含内置节点的完整节点列表。</param>
+        /// <param name="parameters">参数定义及默认值。</param>
+        /// <param name="transitions">过渡及其所有条件组。</param>
+        /// <returns>首个错误描述；结构有效时返回 null，脚本类型另行验证。</returns>
         public static string Validate(IList<FsmStateNodeData> states, IList<FsmParameterData> parameters, IList<FsmTransitionData> transitions)
         {
             if (states == null || parameters == null || transitions == null)
@@ -148,6 +154,7 @@ namespace YLFramework.StateMachine
             return null;
         }
 
+        /// <summary>检查一组条件的参数引用、比较类型和有限目标值，保留所属过渡标识用于诊断。</summary>
         private static string ValidateConditions(IList<FsmConditionData> conditions, string transition, Dictionary<string, FsmParameterData> parameters)
         {
             if (conditions == null)

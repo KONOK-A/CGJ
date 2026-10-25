@@ -5,6 +5,7 @@ using YLFramework.Core.RoslynAnalyzers;
 namespace YLFramework.Core
 {
 
+    /// <summary>由单个 Module 按具体类型与业务 ID 持有的数据对象，不随 View 关闭而退出。</summary>
     [ProtectedHierarchy(typeof(MonoBehaviour), typeof(View))]
     public abstract class Model
     {
@@ -53,7 +54,7 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 移除Model时调用
+        /// 正常移除或初始化失败回滚时调用；此时归属仍有效，之后无论是否抛错均解除注册。
         /// </summary>
         public virtual void OnExit()
         {

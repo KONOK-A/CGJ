@@ -134,6 +134,7 @@ namespace YLFramework.Editor.Help
         /// <summary>外部链接地址。</summary>
         public readonly string Url;
 
+        /// <summary>保存内容块的展示数据，将可选 null 文本规范为空串。</summary>
         private HelpBlock(HelpBlockKind kind, string title, string content, string context = "", string url = "")
         {
             Kind = kind;
@@ -144,12 +145,25 @@ namespace YLFramework.Editor.Help
         }
 
         /// <summary>创建正文段落。</summary>
+        /// <param name="title">可选段落标题；null 按空文本处理。</param>
+        /// <param name="text">正文文本；null 按空文本处理。</param>
+        /// <returns>供阅读器按正文样式展示的内容块。</returns>
         public static HelpBlock Paragraph(string title, string text) => new HelpBlock(HelpBlockKind.Text, title, text);
         /// <summary>创建只读 C# 代码块。</summary>
+        /// <param name="title">代码块标题。</param>
+        /// <param name="context">代码前的使用上下文。</param>
+        /// <param name="code">仅展示和复制的代码，不会被帮助窗口执行。</param>
+        /// <returns>供阅读器按代码样式展示的内容块。</returns>
         public static HelpBlock Code(string title, string context, string code) => new HelpBlock(HelpBlockKind.Code, title, code, context);
         /// <summary>创建提示或注意事项。</summary>
+        /// <param name="title">提示块标题。</param>
+        /// <param name="text">提示正文。</param>
+        /// <returns>供阅读器突出展示的提示内容块。</returns>
         public static HelpBlock Notice(string title, string text) => new HelpBlock(HelpBlockKind.Notice, title, text);
         /// <summary>创建外部链接，不自动访问网络。</summary>
+        /// <param name="title">链接显示文本。</param>
+        /// <param name="url">点击后打开的地址；此处不校验可达性。</param>
+        /// <returns>只保存显示文本与地址的链接块。</returns>
         public static HelpBlock Link(string title, string url) => new HelpBlock(HelpBlockKind.Link, title, "", url: url);
     }
 
@@ -189,6 +203,11 @@ namespace YLFramework.Editor.Help
 
         /// <summary>建立 XML 说明或模块的稀疏覆盖数据。</summary>
         /// <remarks>null 文本和数组按空值处理；保存传入数组的引用。作为模块覆盖时，空白说明不会清空 XML 内容。</remarks>
+        /// <param name="summary">实际提供的摘要。</param>
+        /// <param name="returns">返回值或属性值说明。</param>
+        /// <param name="remarks">实际提供的约束与备注。</param>
+        /// <param name="parameters">按参数名称关联的说明。</param>
+        /// <param name="typeParameters">按泛型类型参数名称关联的说明。</param>
         public HelpDocumentation(string summary, string returns, string remarks, HelpParameter[] parameters, HelpParameter[] typeParameters = null)
         {
             Summary = summary ?? "";
@@ -207,6 +226,8 @@ namespace YLFramework.Editor.Help
         /// <summary>实际提供的说明，不根据参数名称猜测。</summary>
         public readonly string Description;
         /// <summary>保存一个具名说明。</summary>
+        /// <param name="name">声明中的参数或类型参数名称；null 按空文本处理。</param>
+        /// <param name="description">实际说明；null 按空文本处理。</param>
         public HelpParameter(string name, string description)
         {
             Name = name ?? "";
@@ -231,7 +252,7 @@ namespace YLFramework.Editor.Help
             search.Split((char[])null, StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
         /// <summary>按权重评分：每个词都须命中任一字段（AND），返回总分；任一词未命中返回 -1。</summary>
-        /// <remarks>命中取字段权重加匹配等级（整体等于 +30、前缀 +20、包含 +10）；含点号的词先整体匹配，失败再按点拆分逐段 AND，并扣少量分值。</remarks>
+        /// <remarks>命中取字段权重加匹配等级（整体等于 +30、前缀 +20、包含 +10）；含点号的词同时比较整体与分段 AND 匹配，分段扣分后取较高值。</remarks>
         internal static int Score(IReadOnlyList<HelpSearchField> fields, string[] terms)
         {
             if (terms == null || terms.Length == 0)
@@ -253,6 +274,7 @@ namespace YLFramework.Editor.Help
             return total;
         }
 
+        /// <summary>为单个查询词取最佳分数；限定名允许各段分布在不同字段中，以最弱段得分扣分计入。</summary>
         private static int MatchTerm(IReadOnlyList<HelpSearchField> fields, string term)
         {
             var best = MatchSingle(fields, term);
@@ -284,6 +306,7 @@ namespace YLFramework.Editor.Help
             return best;
         }
 
+        /// <summary>在所有非空字段中按相等、前缀和子串等级取得最高得分；无匹配返回 -1。</summary>
         private static int MatchSingle(IReadOnlyList<HelpSearchField> fields, string term)
         {
             var best = -1;
@@ -340,6 +363,7 @@ namespace YLFramework.Editor.Help
         internal readonly string Text;
         internal readonly int Weight;
 
+        /// <summary>保存评分字段与来源权重，将 null 文本规范为空串。</summary>
         internal HelpSearchField(string text, int weight)
         {
             Text = text ?? "";

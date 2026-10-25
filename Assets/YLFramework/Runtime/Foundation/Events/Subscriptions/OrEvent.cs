@@ -12,6 +12,7 @@ namespace YLFramework.Events
     /// source 描述保留到 Dispose；同一个 source 重复追加按次数连接，不去重。
     /// 取消失败的 source 句柄仍保留，可再次 Dispose 显式重试。
     /// </summary>
+    /// <remarks>源的 Register 可立即同步通知，因此 Register 或 Or 返回前，组合监听就可能执行并重入；重复监听不去重。</remarks>
     public class OrEvent : IEventSource, IUnregisterList, IDisposable
     {
         /// <inheritdoc />
@@ -31,12 +32,15 @@ namespace YLFramework.Events
         /// <summary>当前监听数量，重复监听独立计数。</summary>
         public int ListenerCount => _listeners.ListenerCount;
 
+        /// <summary>在监听数归零时通知组合事件断开当前连接轮次。</summary>
         private sealed class ListenerChannel : EventChannel
         {
             private readonly OrEvent _owner;
 
+            /// <summary>将实例监听通道绑定到负责源连接生命周期的组合事件。</summary>
             public ListenerChannel(OrEvent owner) => _owner = owner;
 
+            /// <summary>监听变更提交后检查空通道，避免在无人观察时继续持有源订阅。</summary>
             protected override void OnListenersChanged()
             {
                 if (!HasListener && _owner._round != null)
@@ -46,33 +50,45 @@ namespace YLFramework.Events
             }
         }
 
+        /// <summary>保留一次追加的源描述，使重复追加与失败撤销各有独立身份。</summary>
         private sealed class Source
         {
+            /// <summary>实际提供观察入口的源事件。</summary>
             public readonly IEventSource Event;
+            /// <summary>该描述是否仍参与当前和后续连接。</summary>
             public bool IsActive = true;
+            /// <summary>保存一次追加的源事件，不在此处注册监听。</summary>
             public Source(IEventSource source) => Event = source;
         }
 
+        /// <summary>隔离一次连接过程的临时注册与源连接，防止旧轮回滚影响重入建立的新轮。</summary>
         private sealed class ConnectionRound
         {
+            /// <summary>该轮是否仍允许源通知转发。</summary>
             public bool IsActive = true;
+            /// <summary>初次连接是否尚未全部完成，期间新监听仍属于可回滚责任。</summary>
             public bool IsConnecting;
+            /// <summary>该轮尚由连接流程持有的源连接。</summary>
             public readonly List<Connection> Connections = new();
-            // 连接尚未完成期间产生的监听注册；该轮失败时整体回滚，成功后转为正式监听。
+            /// <summary>连接尚未完成期间产生的临时监听，失败时整体回滚，成功后转为正式监听。</summary>
             public readonly List<IUnregister> Provisional = new();
         }
 
+        /// <summary>管理一个源描述在某一轮的订阅，屏蔽旧通知并保留失败的取消责任。</summary>
         private sealed class Connection : IUnregister
         {
             private readonly OrEvent _owner;
             private readonly ConnectionRound _round;
+            /// <summary>本连接所属的独立源描述。</summary>
             public readonly Source Source;
             private IUnregister _token;
             private bool _isActive = true;
             private bool _isCanceling;
 
+            /// <summary>本连接是否仍允许通知转发，不代表底层句柄一定已成功取消。</summary>
             public bool IsActive => _isActive;
 
+            /// <summary>记录组合事件、连接轮次和源描述，等待源注册完成后接收句柄。</summary>
             public Connection(OrEvent owner, ConnectionRound round, Source source)
             {
                 _owner = owner;
@@ -80,6 +96,7 @@ namespace YLFramework.Events
                 Source = source;
             }
 
+            /// <summary>仅当连接、源描述和轮次均存活时同步转发到组合监听，回调异常直接向源传播。</summary>
             public void Notify()
             {
                 // source 的旧快照不能转发到重连后的新轮次；普通 listener 取消不截断 channel 快照。
@@ -89,6 +106,7 @@ namespace YLFramework.Events
                 }
             }
 
+            /// <summary>接收源注册返回的句柄；若同步回调已经终结连接，则立即取消这个迟到句柄。</summary>
             public void Attach(IUnregister token)
             {
                 _token = token ?? EmptyUnregister.Instance;
@@ -100,6 +118,7 @@ namespace YLFramework.Events
                 }
             }
 
+            /// <summary>先停止转发再尝试取消底层句柄，成功后解除持有，失败时保留责任供后续清理。</summary>
             public void Unregister()
             {
                 _isActive = false;
@@ -190,6 +209,7 @@ namespace YLFramework.Events
         /// <summary>注册只执行一次的监听，Once 重入规则由共享 channel 保证。</summary>
         public IUnregister RegisterOnce(Action eventAction) => Register(eventAction, true);
 
+        /// <summary>加入监听并在需要时建立首轮源连接，首次连接失败时回滚同轮的全部临时注册。</summary>
         private IUnregister Register(Action callback, bool once)
         {
             ThrowIfDisposed();
@@ -269,6 +289,7 @@ namespace YLFramework.Events
             }
         }
 
+        /// <summary>为指定轮次连接一个源，兼顾 Register 同步通知、注册失败和迟到句柄的收尾。</summary>
         private void ConnectSource(Source source, ConnectionRound round)
         {
             if (!source.IsActive)
@@ -301,6 +322,7 @@ namespace YLFramework.Events
             }
         }
 
+        /// <summary>先终结指定轮次的转发身份，再分离并释放该轮源连接，不触碰重入建立的新轮。</summary>
         private void Disconnect(ConnectionRound round)
         {
             round.IsActive = false;
@@ -314,6 +336,7 @@ namespace YLFramework.Events
             ReleaseConnections(connections);
         }
 
+        /// <summary>分离本轮取消责任并逐项尝试，将失败连接归还公共清理列表以便显式重试。</summary>
         private void ReleaseConnections(List<IUnregister> connections)
         {
             // 同一责任只归还一次；整轮尝试期间不暴露给重入 Dispose，避免隐式重试或丢失。
@@ -338,6 +361,7 @@ namespace YLFramework.Events
             }
         }
 
+        /// <summary>拒绝在永久关闭后追加源或建立新监听。</summary>
         private void ThrowIfDisposed()
         {
             if (_isDisposed)
@@ -347,7 +371,7 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注册事件监听并立即同步调用一次回调，随后保持注册。
+        /// 先同步调用一次回调，成功后才注册监听；首次调用抛异常时不留下本次订阅。
         /// </summary>
         /// <param name="eventAction">事件监听回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
@@ -359,8 +383,7 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注销一个监听回调；仅当最后一个监听回调被注销时才释放所有 source 订阅，
-        /// 与单监听回调场景的历史行为保持一致。
+        /// 移除最后一个匹配的普通委托子序列；只有监听数归零才断开当前 source 连接，Once 须用句柄取消。
         /// </summary>
         /// <param name="eventAction">要注销的监听回调。</param>
         public void Unregister(Action eventAction)

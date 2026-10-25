@@ -49,17 +49,18 @@ namespace YLFramework.Actions
             return self.Start(monoBehaviour, onFinish == null ? (Action<IActionController>)null : _ => onFinish());
         }
 
-        /// <summary>在当前活动场景的模块宿主上启动动作，宿主随场景卸载而销毁。</summary>
+        /// <summary>在模块场景宿主上启动动作，宿主随其所属场景卸载而销毁。</summary>
         /// <param name="self">要启动的动作。</param>
         /// <param name="onFinish">正常完成且清理前调用的回调。</param>
         /// <returns>仅在本次执行期间有效的控制器。</returns>
+        /// <remarks>没有宿主时在当前活动场景创建；已有宿主按单例缓存复用，切换活动场景不会迁移它。</remarks>
         public static IActionController StartCurrentScene(this IAction self,
             Action<IActionController> onFinish = null)
         {
             return self.Start(ActionKitCurrentScene.SceneComponent, onFinish);
         }
 
-        /// <summary>在当前活动场景宿主上启动动作，正常完成时调用不带参数的回调。</summary>
+        /// <summary>在现有或按需创建的场景宿主上启动动作，正常完成时调用不带参数的回调。</summary>
         /// <param name="self">要启动的动作。</param>
         /// <param name="onFinish">正常完成回调，取消时不调用。</param>
         public static IActionController StartCurrentScene(this IAction self, Action onFinish)

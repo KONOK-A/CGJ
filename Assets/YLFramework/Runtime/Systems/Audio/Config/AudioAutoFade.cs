@@ -3,18 +3,18 @@ using UnityEngine;
 
 namespace YLFramework.Audio
 {
-    /// <summary>Optional request envelope bound to clip position, not elapsed wall-clock time. The zero value disables it.</summary>
+    /// <summary>按 Clip 播放位置计算的可选音量包络，不按现实经过时间计时；零值表示禁用。</summary>
     [Serializable]
     public struct AudioAutoFade
     {
-        /// <summary>Clip seconds for the initial fade-in. Short nonlooping clips proportionally compress both fade regions.</summary>
+        /// <summary>开头淡入占用的 Clip 秒数；非循环短片段会按比例压缩首尾淡变区间。</summary>
         public float FadeInSeconds;
-        /// <summary>Clip seconds for the final fade-out before natural completion. Must be zero for looping playback.</summary>
+        /// <summary>自然结束前淡出占用的 Clip 秒数；循环播放时必须为零。</summary>
         public float FadeOutSeconds;
 
-        /// <summary>Store automatic fade durations. Playback validates them before changing an existing request.</summary>
-        /// <param name="fadeInSeconds">Finite, nonnegative clip seconds for the initial fade-in.</param>
-        /// <param name="fadeOutSeconds">Finite, nonnegative clip seconds for the final fade-out; zero when looping.</param>
+        /// <summary>保存自动淡变时长；播放入口会在改变旧请求前校验配置。</summary>
+        /// <param name="fadeInSeconds">开头淡入的有限非负 Clip 秒数。</param>
+        /// <param name="fadeOutSeconds">结尾淡出的有限非负 Clip 秒数；循环播放时为零。</param>
         public AudioAutoFade(float fadeInSeconds, float fadeOutSeconds)
         {
             this.FadeInSeconds = fadeInSeconds;
@@ -22,6 +22,7 @@ namespace YLFramework.Audio
         }
 
         internal bool IsEnabled => FadeInSeconds != 0f || FadeOutSeconds != 0f;
+        /// <summary>拒绝非法时长及循环播放的尾部淡出配置。</summary>
         internal void Validate(bool loop)
         {
             if (!AudioSoundOptions.IsFinite(FadeInSeconds) || FadeInSeconds < 0f)
@@ -40,6 +41,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>启用包络时确认 Clip 具备可用于位置计算的采样信息。</summary>
         internal void ValidateClip(AudioClip clip)
         {
             if (!IsEnabled)
@@ -53,6 +55,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>将淡变区间限制在 Clip 长度内；非循环时按比例压缩重叠的首尾区间。</summary>
         internal void Normalize(double length, bool loop, out double fadeIn, out double fadeOut)
         {
             Validate(loop);
@@ -77,6 +80,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>按当前 Clip 位置取首尾线性包络的较小增益。</summary>
         internal static float Evaluate(double time, double length, double fadeIn, double fadeOut)
         {
             time = Math.Max(0d, Math.Min(length, time));

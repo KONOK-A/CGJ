@@ -15,6 +15,7 @@ namespace YLFramework.Core
         private static readonly List<RaycastResult> _results = new List<RaycastResult>();
         private static bool _isQuerying;
 
+        /// <summary>在执行会话重置时放下缓存的 EventSystem、事件数据和命中结果。</summary>
         static UIPointer()
         {
             SingletonSessionState.RegisterSessionReset(() =>
@@ -25,6 +26,7 @@ namespace YLFramework.Core
             });
         }
 
+        /// <summary>查询屏幕坐标是否命中任意 GraphicRaycaster；无 active EventSystem 时返回 false，射线中重入时报错。</summary>
         public static bool CheckPositionOnUI(Vector2 position)
         {
             if (_isQuerying)
@@ -67,6 +69,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>按当前输入模块和可用后端取得鼠标位置后查询 UI 命中；没有有效鼠标输入时返回 false。</summary>
         public static bool CheckMouseOnUI()
         {
 #if ENABLE_INPUT_SYSTEM

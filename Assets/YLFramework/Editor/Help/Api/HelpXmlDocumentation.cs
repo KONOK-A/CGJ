@@ -23,6 +23,7 @@ namespace YLFramework.Editor.Help
         private readonly HashSet<string> _missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _warnings = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>保存本次索引的显式文档来源与类型范围，读取和缓存留到成员首次查询时进行。</summary>
         internal HelpXmlDocumentation(HelpModule module)
         {
             _module = module;
@@ -131,6 +132,7 @@ namespace YLFramework.Editor.Help
             return null;
         }
 
+        /// <summary>惰性读取并缓存程序集的 XML 条目；无可用文档时保持空表，不生成成员说明。</summary>
         private Dictionary<string, XElement> Entries(Assembly assembly)
         {
             if (_assemblies.TryGetValue(assembly, out var cached))
@@ -242,6 +244,7 @@ namespace YLFramework.Editor.Help
             return null;
         }
 
+        /// <summary>对本次索引内同一路径只报告一次读取或结构警告，不影响反射声明索引。</summary>
         private void Warn(string path, string reason)
         {
             if (_warnings.Add(path))
@@ -286,6 +289,7 @@ namespace YLFramework.Editor.Help
                 Field(xml.Remarks, overrides.Remarks), Named(xml.Parameters, overrides.Parameters), Named(xml.TypeParameters, overrides.TypeParameters));
         }
 
+        /// <summary>提取带非空名称的 param 或 typeparam 说明，供后续按名称合并。</summary>
         private static HelpParameter[] Parameters(XElement entry, string tag) => entry.Elements(tag)
             .Where(element => !string.IsNullOrWhiteSpace((string)element.Attribute("name")))
             .Select(element => new HelpParameter((string)element.Attribute("name"), Text(element))).ToArray();
@@ -380,6 +384,7 @@ namespace YLFramework.Editor.Help
             return id;
         }
 
+        /// <summary>将闭合泛型成员还原为定义声明，以匹配 XML 记录的身份。</summary>
         private static MemberInfo Normalize(MemberInfo member)
         {
             // XML 记录的是泛型定义；闭合类型或方法通过同模块的 MetadataToken 找回原声明。
@@ -403,8 +408,10 @@ namespace YLFramework.Editor.Help
             return member;
         }
 
+        /// <summary>生成 XML 成员所属类型名，保留泛型定义元数并将嵌套类型分隔符转换为点号。</summary>
         private static string TypeName(Type type) => (type.IsGenericType ? type.GetGenericTypeDefinition() : type).FullName.Replace('+', '.');
 
+        /// <summary>编码 XML 参数类型，区分引用、数组及类型/方法的泛型参数。</summary>
         private static string ParameterTypeName(Type type)
         {
             // XML 参数类型编码不同于展示签名：按引用用 @，类型和方法泛型参数分别用 ` 与 ``。
@@ -455,6 +462,7 @@ namespace YLFramework.Editor.Help
             return interfaces.Except(inherited);
         }
 
+        /// <summary>按基类优先、接口随后枚举 inheritdoc 候选；属性和事件经访问器映射回所属成员。</summary>
         private static IEnumerable<MemberInfo> InheritedMembers(MemberInfo member)
         {
             if (member is Type type)
@@ -518,9 +526,9 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>将反射映射得到的访问器还原为对应的属性、事件或方法声明。</summary>
         private static MemberInfo OwningMember(MethodInfo accessor, MemberInfo original)
         {
-            // Reflection 接口/基类映射返回访问器，XML 则归属于属性或事件本身。
             if (accessor == null)
             {
                 return null;

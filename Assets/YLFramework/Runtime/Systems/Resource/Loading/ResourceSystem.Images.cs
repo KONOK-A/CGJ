@@ -16,6 +16,7 @@ namespace YLFramework.Resource
         private int _runningImageLoads;
         private bool _isPumpingImageLoads;
 
+        /// <summary>在会话可用时按图片并发上限启动排队记录，禁止递归泵送。</summary>
         private void PumpImageLoads()
         {
             if (_isPumpingImageLoads)
@@ -57,6 +58,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>单次归还本记录占用的图片生产并发槽。</summary>
         private void ReleaseImageLoadSlot(AssetRecord record)
         {
             if (!record.IsImageLoadRunning)
@@ -70,9 +72,14 @@ namespace YLFramework.Resource
 
         /// <summary>按完整 HTTP(S) URL 或绝对本地路径取得图片。每人独立请求/租约，同一原始定位共享生产。</summary>
         /// <remarks>刷新远端内容请使用显式版本 URL；不会偷偷改写大小写或增加 query。闲置缓存不拥有活跃消费者。</remarks>
+        /// <param name="location">完整 HTTP(S) URL 或绝对本地图片路径。</param>
+        /// <returns>成功后可单次领取纹理租约的请求，不直接交付裸纹理所有权。</returns>
         public ResourceRequest<AssetLease<Texture2D>> AcquireImageAsync(string location) => AcquireImageRequest(location, false);
 
         /// <summary>仅本地冷取得或已 Ready 的远端图片可同步取得；在途请求返回 InProgress。</summary>
+        /// <param name="location">完整 HTTP(S) URL 或绝对本地图片路径。</param>
+        /// <returns>调用方负责归还的纹理租约。</returns>
+        /// <exception cref="ResourceException">定位、来源、会话或同步取得条件不满足。</exception>
         public AssetLease<Texture2D> AcquireImage(string location)
         {
             using var request = AcquireImageRequest(location, true);
@@ -84,6 +91,7 @@ namespace YLFramework.Resource
             return request.TakeResult();
         }
 
+        /// <summary>按未经改写的定位及来源建立图片身份，再复用统一资产取得链。</summary>
         private ResourceRequest<AssetLease<Texture2D>> AcquireImageRequest(string location, bool synchronous)
         {
             CheckThread();
@@ -127,6 +135,7 @@ namespace YLFramework.Resource
             CheckDrain();
         }
 
+        /// <summary>将合格的零租约图片纳入闲置缓存，并按容量和期限裁剪。</summary>
         private bool TryCacheImage(AssetRecord record)
         {
             var options = _configuration.Images;
@@ -150,6 +159,7 @@ namespace YLFramework.Resource
             return true;
         }
 
+        /// <summary>移除闲置缓存节点并结算估算字节数，不自行释放资产。</summary>
         private void RemoveIdleImage(AssetRecord record)
         {
             if (record.ImageCacheNode == null)
@@ -162,6 +172,7 @@ namespace YLFramework.Resource
             _idleImageBytes -= record.ImageBytes;
         }
 
+        /// <summary>按闲置先后淘汰已销毁、过期或超容量的缓存图片。</summary>
         private void TrimImageCache()
         {
             var now = Time.realtimeSinceStartupAsDouble;

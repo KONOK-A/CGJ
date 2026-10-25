@@ -8,6 +8,7 @@ namespace YLFramework.Editor.Resource
     /// <summary>只保存 UI 选择及可失效快照，不拥有 Runtime 状态或第二份发布目录。</summary>
     public sealed class ResServiceView
     {
+        /// <summary>承载绘制、布局与重绘的编辑器窗口，不作为资源所有者。</summary>
         public EditorWindow EditorWindow
         {
             get; set;
@@ -15,6 +16,7 @@ namespace YLFramework.Editor.Resource
         internal string ReferenceDirectory = "Assets/YLFrameworkData";
         private ResourceProject _project;
         private string _projectGuid;
+        // 这些是显式刷新得到的编辑器预览；失效只清引用，不卸载 AssetDatabase 借用对象。
         private ResourceCatalog _catalog;
         private ResourceEditorSimulation _simulation;
         private ResourceBuildMap _map;
@@ -29,6 +31,7 @@ namespace YLFramework.Editor.Resource
         private bool _isStatusExpired;
         private bool _isExecuting;
         private int _observedDirty;
+        // 排队只延迟到后续 Editor update，实际服务仍在主线程同步执行。
         private EditorApplication.CallbackFunction _pending;
         private readonly ResourceDefinitionView _definition = new();
         private readonly ResourceBuildView _build = new();
@@ -41,11 +44,13 @@ namespace YLFramework.Editor.Resource
         private static readonly string[] _tabs = { "资源配置", "分包分析", "构建发布", "版本交付", "诊断" };
         internal bool IsExecuting => _isExecuting;
         internal bool IsBusy => _pending != null || _isExecuting || EditorBlocked;
+        /// <summary>当前编辑器是否正处于禁止配置编辑或构建的运行、编译或导入状态。</summary>
         private static bool EditorBlocked => EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating;
         internal bool CanEdit => _project && !IsBusy && AssetDatabase.IsOpenForEdit(_project);
         internal string VisibleStatus => _statusGuid == _projectGuid && _statusTab == _tab &&
             (_statusType != MessageType.Info || DateTime.UtcNow - _statusAt < TimeSpan.FromSeconds(6)) ? _status : null;
 
+        /// <summary>按配置 GUID 切换上下文，取消旧队列并失效预览；正在执行时拒绝换项目。</summary>
         public void SetProject(ResourceProject value)
         {
             var guid = value ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(value)) : null;
@@ -91,6 +96,7 @@ namespace YLFramework.Editor.Resource
             _status = null;
         }
 
+        /// <summary>丢弃共享解析缓存并标记各页旧结果，不重新计算、构建或保存。</summary>
         public void Invalidate()
         {
             _catalog = null;
@@ -100,8 +106,10 @@ namespace YLFramework.Editor.Resource
             _build.InvalidatePreview();
         }
 
+        /// <summary>更新构建页的配方选择，不切换项目或执行配方。</summary>
         internal void SetRecipe(ResourceBuildRecipe value, string guid) => _build.SetRecipe(value, guid);
 
+        /// <summary>显式重算分包和模拟目录；自动图集待更新时停止，不在预览中生成或打包。</summary>
         public void RefreshPreview()
         {
             if (!_project)
@@ -135,6 +143,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>绘制当前任务和输出，检测定义变更后只失效缓存，并控制诊断页可见性。</summary>
         public void OnGUI(ref string app, ref bool generate, ref bool force, float availableWidth = 0)
         {
             HandleKeyboard();
@@ -175,6 +184,7 @@ namespace YLFramework.Editor.Resource
             DrawOutput();
         }
 
+        /// <summary>切换有效任务页，必要时应用可撤销的分组改名；不执行目标页操作。</summary>
         internal void NavigateTask(int next)
         {
             if (next < 0 || next >= _tabs.Length)
@@ -202,12 +212,14 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>切到诊断页的入门导航，不初始化资源系统。</summary>
         internal void ShowGuide()
         {
             NavigateTask(4);
             _diagnostics.ShowGuide();
         }
 
+        /// <summary>按当前任务分发绘制，并给菜单回调附加打开时的项目范围检查。</summary>
         private void DrawTask(ref string app, ref bool generate, ref bool force, float width)
         {
             if (!_project)
@@ -238,6 +250,7 @@ namespace YLFramework.Editor.Resource
                 return;
             }
             var originGuid = _projectGuid;
+            // 旧菜单可能在项目切换后才回调，不能对新项目沿用旧操作。
             void ScopedRun(Func<string> operation)
             {
                 if (originGuid == _projectGuid)
@@ -249,6 +262,7 @@ namespace YLFramework.Editor.Resource
                     RecordStatus("项目已切换，旧菜单中的操作未执行；请在当前项目重新打开菜单。", MessageType.Warning, _projectGuid, _project ? _project.displayName : "", _tab);
                 }
             }
+            // 队列也绑定菜单来源项目；真正执行前还会检查编辑器状态和项目身份。
             void ScopedQueue(Func<string> operation)
             {
                 if (originGuid == _projectGuid)
@@ -336,6 +350,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>处理保存、搜索、建组及 Esc，遵守编辑门禁并避免落入 Unity 全局保存。</summary>
         private void HandleKeyboard()
         {
             var current = Event.current;
@@ -404,6 +419,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>根据快捷键上下文仅保存当前规则、配方或项目，项目保存前先应用待定改名。</summary>
         private void Save(bool context = false)
         {
             GUI.FocusControl(null);
@@ -429,6 +445,7 @@ namespace YLFramework.Editor.Resource
                 return "项目配置已保存；未保存或修改场景及其他项目。";
             });
         }
+        /// <summary>在当前可编辑时显式保存项目，不采用后台页的配方或图集上下文。</summary>
         internal void SaveProject()
         {
             if (CanEdit)
@@ -437,6 +454,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按构建结果或原选择的 GUID 重取项目引用，避免继续使用导入前的对象引用。</summary>
         private void RebindProject(ResourceBuildResult result)
         {
             var guid = result?.Map.ProjectGuid ?? _projectGuid;
@@ -456,6 +474,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>仅在窗口可操作且没有队列或执行时立即运行一次动作。</summary>
         private void RunOperation(Func<string> operation)
         {
             if (IsBusy || !GUI.enabled)
@@ -466,6 +485,7 @@ namespace YLFramework.Editor.Resource
             PerformOperation(operation, _projectGuid, _project ? _project.displayName ?? _project.projectId : "未选资源项目", _tab);
         }
 
+        /// <summary>同步执行动作并记录分阶段结果，始终解除临时进度订阅；异常捕获不回滚服务写入。</summary>
         private void PerformOperation(Func<string> operation, string originGuid, string originName, int originTab)
         {
             _isExecuting = true;
@@ -498,6 +518,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>记录当前项目最近到达的阶段；通知不提供百分比，也不让同步构建变为可交互取消。</summary>
         private void ObserveStage(ResourceBuildStage stage)
         {
             if (!_isExecuting || stage.ProjectGuid != _projectGuid)
@@ -512,6 +533,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将完整输出及简短提示绑定到来源项目、任务页和时间，避免切页后误用旧状态。</summary>
         private void RecordStatus(string text, MessageType type, string guid, string name, int page, string brief = null, Exception error = null)
         {
             _statusError = error;
@@ -531,6 +553,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>应用待定改名后登记一次编辑器更新回调，在实际进入服务前重查项目与编辑器状态。</summary>
         private void QueueOperation(Func<string> operation)
         {
             if (IsBusy)
@@ -584,6 +607,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>解除尚未开始的更新回调，不中断已进入正式服务的同步操作。</summary>
         private void CancelPending()
         {
             if (_pending != null)
@@ -592,6 +616,7 @@ namespace YLFramework.Editor.Resource
             }
             _pending = null;
         }
+        /// <summary>展示来源明确的状态、最近阶段和窗口内执行记录，仅允许取消排队。</summary>
         private void DrawOutput()
         {
             var height = EditorWindow ? EditorWindow.position.height : 720;
@@ -655,6 +680,7 @@ namespace YLFramework.Editor.Resource
                 EditorGUILayout.EndScrollView();
             }
         }
+        /// <summary>推进当前诊断工作并在普通提示到期时重绘，不自动刷新分包或发布数据。</summary>
         internal void TickDiagnostics()
         {
             if (EditorApplication.isCompiling || EditorApplication.isUpdating)
@@ -675,12 +701,15 @@ namespace YLFramework.Editor.Resource
                 }
             }
         }
+        /// <summary>停止自动采样和分段磁盘查询，保留已取得的诊断结果。</summary>
         internal void PauseDiagnostics() => _diagnostics.SetVisible(false);
+        /// <summary>在编辑器状态转换时撤销未开始队列并暂停诊断。</summary>
         internal void OnEditorTransition()
         {
             CancelPending();
             PauseDiagnostics();
         }
+        /// <summary>撤销队列、解除进度订阅并释放诊断；允许时应用改名并保存 UI 状态，但不保存配置资产。</summary>
         public void OnDispose()
         {
             CancelPending();

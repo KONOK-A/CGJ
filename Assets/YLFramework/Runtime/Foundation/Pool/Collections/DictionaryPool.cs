@@ -7,7 +7,7 @@ namespace YLFramework.Pooling
     /// <summary>
     /// Dictionary&lt;TKey, TValue&gt; 的静态对象池。
     /// 回收时只清空元素、保留容量。
-    /// 非线程安全，只接受从本池取得的默认 comparer 字典。
+    /// 非线程安全，只接受从本池取得的默认比较器字典。
     /// </summary>
     /// <typeparam name="TKey">键类型。</typeparam>
     /// <typeparam name="TValue">值类型。</typeparam>
@@ -17,6 +17,7 @@ namespace YLFramework.Pooling
         private static readonly ObjectPool<Dictionary<TKey, TValue>> _pool = new(
             Create, reset: dictionary => dictionary.Clear(), cacheOrder: PoolCacheOrder.Lifo);
 
+        /// <summary>登记会话清理，进入新运行会话时丢弃旧的空闲字典缓存。</summary>
         static DictionaryPool()
         {
             SingletonSessionState.RegisterSessionReset(Clear);
@@ -84,6 +85,7 @@ namespace YLFramework.Pooling
             _pool.Clear();
         }
 
+        /// <summary>按当前请求的初始容量冷创建字典，使用默认键比较器。</summary>
         private static Dictionary<TKey, TValue> Create() => new(_createCapacity);
     }
 
@@ -95,6 +97,7 @@ namespace YLFramework.Pooling
         /// <summary>
         /// 将字典回收进 DictionaryPool。
         /// </summary>
+        /// <param name="self">从同类型 DictionaryPool 借出的字典；归还后不得继续使用，null 会被忽略。</param>
         public static void RecycleToPool<TKey, TValue>(this Dictionary<TKey, TValue> self)
         {
             DictionaryPool<TKey, TValue>.Recycle(self);

@@ -19,9 +19,11 @@ namespace YLFramework.Core
         private readonly Dictionary<UITipsItem, UITipHandle> _activeTips = new Dictionary<UITipsItem, UITipHandle>();
         private bool _isEnding;
         private bool _isCleanupRunning;
+        /// <summary>当前仍登记在本 Presenter 的提示借用数，不等于实际可见数。</summary>
         public int ActiveCount => _activeTips.Count;
 
-        /// <summary>默认使用 unscaled 时间；零时长立即完成。取消与宿主退出同样可靠释放会话和调用方引用。</summary>
+        /// <summary>从池取得提示并由指定 Module 挂载，使用 unscaled 时间；零时长在本调用内完成。</summary>
+        /// <remarks>必须预先绑定提示 Prefab、对应位置和池容器；完成回调在归还或丢弃借用后调用，异常可向外传播。</remarks>
         public UITipHandle Show(Module owner, string content, UITipPos position = UITipPos.Middle, float duration = 2,
             bool fade = true, Color? textColor = null, Sprite sprite = null, Action<UITipHandle> completed = null)
         {
@@ -122,6 +124,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>仅接收仍匹配的原借用，先归还或丢弃物理项，再通知该句柄的回调。</summary>
         internal void Return(UITipsItem tip, UITipHandle handle)
         {
             if (!_activeTips.TryGetValue(tip, out var current) || !ReferenceEquals(current, handle))
@@ -142,8 +145,11 @@ namespace YLFramework.Core
             handle.Notify();
         }
 
+        /// <summary>Presenter 停用时结束活动提示，不让它们继续占用会话或池借用。</summary>
         private void OnDisable() => End();
+        /// <summary>Presenter 销毁时补走结束入口，重复生命周期通知由结束标记拦住。</summary>
         private void OnDestroy() => End();
+        /// <summary>允许清理完成后的宿主再次显示提示，不在尚未结束的清理栈中重新开放。</summary>
         private void OnEnable()
         {
             if (!_isCleanupRunning)
@@ -151,6 +157,7 @@ namespace YLFramework.Core
                 _isEnding = false;
             }
         }
+        /// <summary>逐一结束活动提示并处理未归还借用，再释放池；单个提示的清理错误汇总后报告。</summary>
         private void End()
         {
             if (_isEnding)

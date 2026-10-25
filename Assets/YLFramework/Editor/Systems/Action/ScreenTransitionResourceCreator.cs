@@ -11,10 +11,13 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Actions
 {
+    /// <summary>在固定路径缺少资源及其元数据时，创建 ActionKit 自有的屏幕过渡预制体。</summary>
     internal static class ScreenTransitionResourceCreator
     {
         private const string AssetPath = "Assets/YLFramework/Runtime/Systems/Action/Resources/ActionKit/ScreenTransitionCanvas.prefab";
 
+        /// <summary>在预览场景中构建并保存新预制体，保留已有资源，最后释放本次临时对象和场景。</summary>
+        /// <remarks>资产创建直接写入磁盘，不登记 Undo；失败清理不回滚已创建的目录或已保存的资产。</remarks>
         [MenuItem("YLFramework/Action/创建屏幕过渡资源")]
         private static void CreateResource()
         {
@@ -133,6 +136,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>通过 AssetDatabase 逐层补建资源目录，创建失败时报告错误。</summary>
+        /// <param name="path">以 Assets 为根、使用正斜杠分隔的目录路径。</param>
         private static void EnsureFolder(string path)
         {
             var segments = path.Split('/');

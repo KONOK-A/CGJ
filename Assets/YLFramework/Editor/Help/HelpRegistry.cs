@@ -12,6 +12,7 @@ namespace YLFramework.Editor.Help
         public readonly string DisplayName;
         private readonly Func<HelpModule> _create;
 
+        /// <summary>保存已由注册入口校验的身份和工厂引用，不提前创建内容。</summary>
         internal HelpRegistration(string id, string displayName, Func<HelpModule> create)
         {
             Id = id;
@@ -29,6 +30,7 @@ namespace YLFramework.Editor.Help
     public static class HelpRegistry
     {
         private static readonly List<HelpRegistration> _modules = new List<HelpRegistration>();
+        /// <summary>注册集合变化时同步通知窗口，使其在下一次绘制前重新读取快照。</summary>
         internal static event Action Changed;
 
         /// <summary>注册一个内容工厂；相同标识替换原注册，保持原显示顺序。</summary>

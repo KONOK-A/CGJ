@@ -8,33 +8,42 @@ namespace YLFramework.Resource
     /// <summary>只定位一个完整 Catalog 快照，不复制资产表，不表示运行时激活或生产签名授权。</summary>
     public sealed class ResourceReleaseIndex
     {
+        /// <summary>索引采用的固定持久化 Schema 版本。</summary>
         public int SchemaVersion => 1;
+        /// <summary>索引指向的资源项目标识。</summary>
         public string ProjectId
         {
             get;
         }
+        /// <summary>所选发布声明的目标平台。</summary>
         public string Platform
         {
             get;
         }
+        /// <summary>所选发布要求精确匹配的 Unity 兼容值。</summary>
         public string UnityCompatibility
         {
             get;
         }
+        /// <summary>应用明确约定的内容兼容标识。</summary>
         public string AppContentCompatibilityId
         {
             get;
         }
+        /// <summary>所选目录有效载荷的 BuildId，索引读取不会自行打开目录来复核。</summary>
         public string BuildId
         {
             get;
         }
+        /// <summary>所选最终目录字节的 SHA-256；不等同于签名授权。</summary>
         public string CatalogDigest
         {
             get;
         }
+        /// <summary>由摘要目录与固定目录文件名组成的相对定位，不接受任意文件路径。</summary>
         public string CatalogFile => CatalogDigest + "/resource-catalog.json";
 
+        /// <summary>保存已经由目录或索引读取流程校验的明确发布身份。</summary>
         private ResourceReleaseIndex(string project, string platform, string unity, string app, string build, string digest)
         {
             ProjectId = project;
@@ -45,6 +54,7 @@ namespace YLFramework.Resource
             CatalogDigest = digest;
         }
 
+        /// <summary>从已读取的目录文档建立索引，不写文件或激活运行时版本。</summary>
         public static ResourceReleaseIndex Create(ResourceCatalogDocument catalog)
         {
             if (catalog == null)
@@ -56,6 +66,7 @@ namespace YLFramework.Resource
                 catalog.AppContentCompatibilityId, catalog.BuildId, catalog.CatalogDigest);
         }
 
+        /// <summary>输出包含固定目录定位的规范 JSON 字节，不访问发布文件。</summary>
         public byte[] Write() => ResourceCatalogCodec.CanonicalBytes(new JObject
         {
             ["SchemaVersion"] = 1,
@@ -68,6 +79,7 @@ namespace YLFramework.Resource
             ["CatalogFile"] = CatalogFile
         });
 
+        /// <summary>有界读取索引，精确匹配兼容值并要求定位与全部字节符合规范；不验证目标文件存在或签名。</summary>
         public static ResourceReleaseIndex Read(byte[] bytes, string projectId, string platform, string unityCompatibility, string appContentCompatibilityId)
         {
             if (bytes == null || bytes.Length > 8192)

@@ -12,10 +12,11 @@ namespace YLFramework.Actions
     {
     }
 
-    // 并行组合：每次执行按加入顺序逐一推进未完成子动作，全部完成后标记完成；
+    // 并行组合在同一次推进中处理多个子动作，不创建线程，也不保证始终按加入顺序执行。
     // 任一子动作取消或租约失效都会取消整个组合，组合自身取消时会释放所有仍匹配的子动作。
     internal class Parallel : IParallel
     {
+        /// <summary>仅供对象池创建空并行组合，子动作由 Append 加入。</summary>
         private Parallel()
         {
         }
@@ -27,6 +28,7 @@ namespace YLFramework.Actions
 
         private int _finishedCount = 0;
 
+        /// <summary>取得空并行组合并分配新标识，不在分配时执行子动作。</summary>
         public static Parallel Allocate()
         {
             var parallel = _pool.Allocate();
@@ -35,27 +37,34 @@ namespace YLFramework.Actions
             parallel.Reset();
             return parallel;
         }
+        /// <inheritdoc />
         public bool IsPaused
         {
             get; set;
         }
+        /// <inheritdoc />
         public bool IsDeinitialized
         {
             get; set;
         }
+        /// <inheritdoc />
         public ulong ActionId
         {
             get; set;
         }
+        /// <inheritdoc />
         public ActionStatus Status
         {
             get; set;
         }
+        /// <summary>只检查子动作是否已取消或租约失效，不推进子动作。</summary>
         public void OnStart()
         {
             TryCancelIfChildDeinited();
         }
 
+        /// <summary>遍历当前排列中的未完成子动作，非空组合的最后一项完成后结束。</summary>
+        /// <param name="dt">传给各个未完成子动作的同一时间增量，单位为秒。</param>
         public void OnExecute(float dt)
         {
             if (TryCancelIfChildDeinited())
@@ -106,19 +115,21 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>正常完成时保留子动作，由组合 Deinit 统一释放。</summary>
         public void OnFinish()
         {
         }
 
+        /// <inheritdoc />
         public ISequence Append(IAction action)
         {
             _actions.Add(new ActionLease(action));
             return this;
         }
 
+        /// <summary>子动作取消或租约失效时取消整个组合，不能视为正常完成。</summary>
         private bool TryCancelIfChildDeinited()
         {
-            // 子动作取消或租约失效时取消整个组合，不能视为正常完成。
             if (IsDeinitialized)
             {
                 return true;
@@ -137,6 +148,7 @@ namespace YLFramework.Actions
             return false;
         }
 
+        /// <summary>逐项清理仍匹配的子动作并安排自身延迟回收；清理异常汇总后抛出。</summary>
         public void Deinit()
         {
             if (!IsDeinitialized)
@@ -186,6 +198,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>重置完成计数和有效子动作进度，不恢复被完成项交换改变的排列。</summary>
         public void Reset()
         {
             Status = ActionStatus.NotStart;

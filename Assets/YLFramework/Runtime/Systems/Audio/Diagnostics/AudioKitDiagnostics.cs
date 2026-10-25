@@ -3,11 +3,12 @@ using UnityEngine;
 
 namespace YLFramework.Audio
 {
-    /// <summary>Passive IMGUI diagnostics with explicit statistics reset. Does not initialize playback or create a listener.</summary>
+    /// <summary>被动读取音频状态的 IMGUI 诊断界面，仅提供显式统计重置，不初始化播放或创建监听器。</summary>
     public static class AudioKitDiagnostics
     {
         private static readonly List<AudioHandle> _sounds = new List<AudioHandle>();
         /// <summary>在当前 GUILayout 区域绘制被动诊断界面；唯一的写操作是显式的 Sound 统计重置。</summary>
+        /// <param name="scrollPosition">由调用方保留并由本次绘制更新的滚动位置。</param>
         public static void Draw(ref Vector2 scrollPosition)
         {
             var settings = AudioKit.CurrentSettings;
@@ -49,7 +50,9 @@ namespace YLFramework.Audio
             _sounds.Clear();
             GUILayout.EndScrollView();
         }
+        /// <summary>将零容量显示为不限，其余显示实际数值。</summary>
         private static string FormatLimit(int limit) => limit == 0 ? "unlimited" : limit.ToString();
+        /// <summary>绘制 Sound 累计统计和当前资源量，并处理显式重置按钮。</summary>
         private static void DrawSoundStats()
         {
             if (GUILayout.Button("Reset Sound statistics"))
@@ -68,6 +71,7 @@ namespace YLFramework.Audio
             GUILayout.Label("Sound sources owned: " + stats.OwnedSourceCount + " / Created: " + stats.SourceCreatedCount +
                 " / Release requests: " + stats.SourceReleasedCount);
         }
+        /// <summary>按有效原句柄显示播放、预算、进度和路由，不创建缺失的播放对象。</summary>
         private static void DrawPlayer(string title, AudioHandle handle)
         {
             if (!handle.IsValid)
@@ -98,6 +102,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>区分有效组、已销毁引用和直接输出，展示路由诊断信息。</summary>
         private static void DrawGroup(string title, UnityEngine.Audio.AudioMixerGroup group)
         {
             GUILayout.Label(title + ": " + (group ? group.name + " / " + (group.audioMixer ? group.audioMixer.name : "(missing mixer)") :

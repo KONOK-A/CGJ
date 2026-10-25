@@ -6,7 +6,9 @@ namespace YLFramework.Extensions
 {
     /// <summary>
     /// Component 链式扩展，与 GameObjectExtension 对应。
-    /// 变更类方法返回原组件以便串联；查询方法在 transform 无效时返回零值或中性值（identity、one）而不抛异常；
+    /// 变更类方法通常返回原组件；坐标查询会先访问自身的 transform，不保证 null 或已销毁组件可调用。
+    /// 取得的 transform 无效时，查询按各方法说明返回默认值；显隐操作改变所在对象的 activeSelf，而非组件 enabled。
+    /// 父子关系变更保留世界变换，新增组件可能触发 Unity 生命周期回调。
     /// 强制销毁类方法不做判空，Gracefully 版本按 Unity fake-null 跳过已销毁对象。
     /// </summary>
     public static class ComponentExtension
@@ -540,14 +542,14 @@ namespace YLFramework.Extensions
             }
         }
 
-        /// <summary>延迟 delay 秒后销毁所在 GameObject，返回原组件。</summary>
+        /// <summary>延迟 delay 个受 Time.timeScale 影响的秒后销毁所在 GameObject，返回原组件。</summary>
         public static T DestroyGameObjectWithDelay<T>(this T selfBehaviour, float delay) where T : Component
         {
             selfBehaviour.gameObject.DestroySelfWithDelay(delay);
             return selfBehaviour;
         }
 
-        /// <summary>延迟 delay 秒后销毁所在 GameObject；组件或对象为 null / 已销毁时跳过，返回原组件。</summary>
+        /// <summary>按受 Time.timeScale 影响的 delay 秒延迟销毁所在 GameObject；组件或对象无效时跳过，返回原组件。</summary>
         public static T DestroyGameObjectWithDelayGracefully<T>(this T selfBehaviour, float delay) where T : Component
         {
             if (selfBehaviour && selfBehaviour.gameObject)

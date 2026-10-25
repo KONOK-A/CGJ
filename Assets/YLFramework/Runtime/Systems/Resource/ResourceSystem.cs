@@ -10,63 +10,82 @@ using UnityEditor;
 
 namespace YLFramework.Resource
 {
+    /// <summary>单个资源系统实例从显式初始化到关闭或会话失效的状态。</summary>
     public enum ResourceSystemState
     {
+        /// <summary>正在验证配置、挂载目录或认证内容，尚不接受资源取得。</summary>
         Initializing,
+        /// <summary>初始化完成，可在有效会话内接受资源请求。</summary>
         Ready,
+        /// <summary>停止接受新取得，等待无主在途操作和清理责任排空。</summary>
         ShuttingDown,
+        /// <summary>正常关闭完成，不再作为当前资源权威。</summary>
         Closed,
+        /// <summary>初始化失败，不能提供资源服务。</summary>
         Failed,
+        /// <summary>执行环境退出导致本资源会话失效，旧责任由原系统继续收尾。</summary>
         Invalidated
     }
 
     /// <summary>逻辑记账快照，不代表 Unity native memory 用量或物理卸载。</summary>
     public readonly struct ResourceDiagnosticsSnapshot
     {
+        /// <summary>仍登记的共享资产记录数，包含在途和闲置缓存记录。</summary>
         public int RecordCount
         {
             get;
         }
+        /// <summary>仍处于加载状态的资产记录数，不单独统计 Bundle 生产。</summary>
         public int ProducerCount
         {
             get;
         }
+        /// <summary>共享资产记录上仍等待交付的消费者总数。</summary>
         public int WaiterCount
         {
             get;
         }
+        /// <summary>资产记录的持有责任总数，包含实例缓存内部 pin。</summary>
         public int LeaseCount
         {
             get;
         }
+        /// <summary>尚未回收的 Bundle 图节点数。</summary>
         public int BundleRecordCount
         {
             get;
         }
+        /// <summary>公共及内部 Bundle 图根租约的持有计数。</summary>
         public int BundleRootPinCount
         {
             get;
         }
+        /// <summary>由依赖者节点持有的 Bundle 依赖入边总数。</summary>
         public int BundleDependencyPinCount
         {
             get;
         }
+        /// <summary>占用异步 Bundle 并发槽的节点数，包含输入准备阶段。</summary>
         public int RunningBundleCount
         {
             get;
         }
+        /// <summary>依赖已就绪、正在等待并发槽的 Bundle 节点数。</summary>
         public int QueuedBundleCount
         {
             get;
         }
+        /// <summary>本系统累计启动或调用原生 Bundle 加载的次数。</summary>
         public int NativeBundleLoadCount
         {
             get;
         }
+        /// <summary>本系统累计完成 Bundle.Unload 调用的次数，不表示物理内存已回收。</summary>
         public int NativeBundleUnloadCount
         {
             get;
         }
+        /// <summary>保存一次逻辑账本采样，不持有采样涉及的资源。</summary>
         internal ResourceDiagnosticsSnapshot(int records, int producers, int waiters, int leases, int bundles,
             int roots, int edges, int running, int queued, int loads, int unloads)
         {
@@ -85,6 +104,10 @@ namespace YLFramework.Resource
     }
 
     /// <summary>每会话唯一、显式初始化的资源权威。所有入口仅用于 Unity 主线程，不创建协程宿主。</summary>
+    /// <remarks>
+    /// 一个系统实例管理自己的资源会话；正常关闭后可在同一 ExecutionSession 内重新初始化另一实例。
+    /// 捕获的 ExecutionSession 仅用于识别执行环境是否已更替，不能替代资源系统自身的状态和责任账本。
+    /// </remarks>
     public sealed partial class ResourceSystem
     {
         private static ResourceSystem _authority;
@@ -104,11 +127,15 @@ namespace YLFramework.Resource
         /// <summary>读取不加载资源、不初始化服务、不创建宿主；初始化失败或关闭后为 null。</summary>
         public static ResourceSystem Current => _authority != null &&
             (_authority.State == ResourceSystemState.Ready || _authority.State == ResourceSystemState.ShuttingDown) ? _authority : null;
+        /// <summary>本资源系统实例的初始化、关闭或失效状态。</summary>
         public ResourceSystemState State { get; private set; } = ResourceSystemState.Initializing;
+        /// <summary>是否处于 Ready 且执行环境仍有效，可接受新的资源取得。</summary>
         public bool IsAvailable => State == ResourceSystemState.Ready && IsSessionActive;
+        /// <summary>执行环境身份及资源会话状态是否仍有效；初始化和正常关闭排空期间也可为 true。</summary>
         internal bool IsSessionActive => !_isEnding && SingletonSessionState.CanRunExecution && ReferenceEquals(_session, SingletonSessionState.ExecutionSession) &&
             (State == ResourceSystemState.Ready || State == ResourceSystemState.Initializing || State == ResourceSystemState.ShuttingDown);
 
+        /// <summary>安装执行会话、应用退出及 Editor 生命周期回调，不创建资源服务。</summary>
         static ResourceSystem()
         {
             SingletonSessionState.RegisterSessionReset(ResetSession);
@@ -125,11 +152,14 @@ namespace YLFramework.Resource
 #endif
         }
 
+        /// <summary>记录 Unity 运行初始化所在的主线程身份。</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void InitializeThread() => _mainThreadId = Thread.CurrentThread.ManagedThreadId;
 #if UNITY_EDITOR
+        /// <summary>在 Editor 加载时建立相同的主线程检查基准。</summary>
         [InitializeOnLoadMethod]
         private static void InitializeEditorThread() => InitializeThread();
+        /// <summary>在编辑与运行模式切换的退出边界使当前资源会话失效。</summary>
         private static void OnPlayModeChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode || state == PlayModeStateChange.ExitingEditMode ||
@@ -140,6 +170,7 @@ namespace YLFramework.Resource
         }
 #endif
 
+        /// <summary>保存显式配置并创建本实例的内容预算，不在构造时加载资源。</summary>
         private ResourceSystem(ResourceConfiguration configuration)
         {
             this._configuration = configuration;
@@ -148,6 +179,8 @@ namespace YLFramework.Resource
 
         /// <summary>8.1 内存验证可即时完成。同一配置对象的在途初始化可 join；不同配置须先成功 Shutdown。</summary>
         /// <remarks>结果为借用的唯一服务，不因初始化 Request Dispose 而关闭；不提供自动领取 await。</remarks>
+        /// <param name="config">本次资源会话使用的显式配置；合并初始化按配置对象身份判断。</param>
+        /// <returns>独立初始化请求，须显式领取服务引用；旧会话未排空时返回 Busy 错误。</returns>
         public static ResourceRequest<ResourceSystem> InitializeAsync(ResourceConfiguration config)
         {
             AssertThread();
@@ -219,6 +252,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>登记来源与冻结目录，验证项目身份、平台、路径及来源约束。</summary>
         private void ValidateConfiguration(IReadOnlyList<ResourceLocalSnapshot> mounted)
         {
             if (_configuration == null)
@@ -281,12 +315,25 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>按资源类型及不区分大小写的 Resources 路径检测冲突。</summary>
         private sealed class ResourcesPathComparer : IEqualityComparer<(string, Type)>
         {
+            /// <summary>比较声明类型和不区分大小写的定位路径。</summary>
+            /// <param name="left">第一个路径与声明类型。</param>
+            /// <param name="right">第二个路径与声明类型。</param>
+            /// <returns>声明类型相同且路径忽略大小写相等时为 true。</returns>
             public bool Equals((string, Type) left, (string, Type) right) => left.Item2 == right.Item2 && StringComparer.OrdinalIgnoreCase.Equals(left.Item1, right.Item1);
+            /// <summary>为相同类型及等价路径生成一致哈希。</summary>
+            /// <param name="value">参与比较的路径与声明类型。</param>
+            /// <returns>忽略路径大小写并包含声明类型的哈希。</returns>
             public int GetHashCode((string, Type) value) => StringComparer.OrdinalIgnoreCase.GetHashCode(value.Item1) ^ value.Item2.GetHashCode();
         }
 
+        /// <summary>同步取得一份独立资产租约；不阻塞等待已经在途的异步生产。</summary>
+        /// <typeparam name="T">要借读的 Unity 资源类型，须能接收目录声明类型。</typeparam>
+        /// <param name="address">冻结目录中的资源地址。</param>
+        /// <returns>由调用方负责归还的租约，共享资源不得自行销毁。</returns>
+        /// <exception cref="ResourceException">资源不可取得、类型不符、仍在加载或来源不支持同步生产。</exception>
         public AssetLease<T> Acquire<T>(ResourceAddress address) where T : UnityEngine.Object
         {
             using var request = AcquireRequest<T>(address, true);
@@ -298,7 +345,13 @@ namespace YLFramework.Resource
             return request.TakeResult();
         }
 
+        /// <summary>建立独立消费者请求，同一目录资产复用共享生产及记录。</summary>
+        /// <typeparam name="T">要借读的 Unity 资源类型，须能接收目录声明类型。</typeparam>
+        /// <param name="address">冻结目录中的资源地址。</param>
+        /// <returns>成功后可单次领取资产租约的请求；等待本身不转移租约责任。</returns>
         public ResourceRequest<AssetLease<T>> AcquireAsync<T>(ResourceAddress address) where T : UnityEngine.Object => AcquireRequest<T>(address, false);
+        /// <summary>创建绑定本系统的责任域，用于集中管理显式接管的请求和租约。</summary>
+        /// <returns>由调用方关闭的空责任域，不预先持有资源。</returns>
         public ResourceScope CreateScope()
         {
             CheckThread();
@@ -310,6 +363,7 @@ namespace YLFramework.Resource
             return new ResourceScope(this);
         }
 
+        /// <summary>校验会话、项目屏障及资源地址，再将取得意图交给目录条目处理。</summary>
         private ResourceRequest<AssetLease<T>> AcquireRequest<T>(ResourceAddress address, bool synchronous) where T : UnityEngine.Object
         {
             CheckThread();
@@ -347,6 +401,7 @@ namespace YLFramework.Resource
             return AcquireEntry<T>(catalog, entry, address, synchronous, request);
         }
 
+        /// <summary>复用或建立共享资产记录，为本请求登记独立等待或已就绪租约。</summary>
         private ResourceRequest<AssetLease<T>> AcquireEntry<T>(ResourceCatalog catalog, ResourceCatalogEntry entry,
             ResourceAddress address, bool synchronous, ResourceRequest<AssetLease<T>> request, bool cacheImage = false) where T : UnityEngine.Object
         {
@@ -445,6 +500,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>将图片生产加入限流队列，其他来源直接启动异步操作。</summary>
         private void StartAsyncProducer(AssetRecord record)
         {
             if (record.Source is TextureResourceSource)
@@ -458,6 +514,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>接管来源操作和完成订阅，兼容来源即时完成的情况。</summary>
         private void StartSourceOperation(AssetRecord record)
         {
             var operation = record.Source.LoadAsync(record.Entry, record.Entry.Location.AssetType) ?? throw new InvalidOperationException("The source did not return a producer operation.");
@@ -474,6 +531,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>无人等待时移除未启动图片任务，或请求支持取消的来源结束生产。</summary>
         private void CancelUnobservedProducer(AssetRecord record)
         {
             if (record.Waiters.Count == 0 && record.ImageQueueNode != null)
@@ -494,6 +552,7 @@ namespace YLFramework.Resource
             record.Operation.Cancel();
         }
 
+        /// <summary>跟踪本系统请求，直到失败终态或成功结果的持有责任结束。</summary>
         internal void Track<T>(ResourceRequest<T> request)
         {
             TrackDiagnostics(request);
@@ -511,6 +570,7 @@ namespace YLFramework.Resource
             request.OwnershipEnded = () => _ownedRequests.Remove(request);
         }
 
+        /// <summary>接收来源终态并释放操作；已取消生产有新等待者时，先结清旧结果再重新生产。</summary>
         private void FinishOperation(AssetRecord record)
         {
             if (!record.IsLoading)
@@ -554,6 +614,7 @@ namespace YLFramework.Resource
             PumpImageLoads();
         }
 
+        /// <summary>验证生产结果并统一准备消费者终态，结算无主结果后再通知业务。</summary>
         private void CompleteRecord(AssetRecord record, ResourceSourceResult result, Exception cause)
         {
             var asset = result.Asset;
@@ -596,6 +657,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>同一目录、规范资产及声明类型的共享生产与引用计数记录。</summary>
         internal sealed class AssetRecord
         {
             internal readonly ResourceSystem Owner;
@@ -620,6 +682,7 @@ namespace YLFramework.Resource
             internal bool HasStarted;
             internal ResourceSourceOperation Operation;
             internal Action Completion;
+            /// <summary>建立尚未启动的加载记录，绑定唯一来源和资源会话。</summary>
             internal AssetRecord(ResourceSystem owner, (ResourceCatalog, string, Type) key, ResourceCatalogEntry entry, IResourceSource source)
             {
                 Owner = owner;
@@ -629,21 +692,30 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>将消费者终态准备与通知分开，避免交付一半时发生业务重入。</summary>
         internal interface IWaiter
         {
+            /// <summary>为一个消费者创建租约或登记错误，但不通知观察者。</summary>
             void Prepare(AssetRecord record, ResourceException failure);
+            /// <summary>通知已准备终态的消费者。</summary>
             void Notify();
         }
 
+        /// <summary>将共享记录的结果投影为一个指定类型消费者的独立租约。</summary>
+        /// <typeparam name="T">该消费者借读的 Unity 资源类型。</typeparam>
         private sealed class Waiter<T> : IWaiter where T : UnityEngine.Object
         {
             private readonly ResourceRequest<AssetLease<T>> _request;
             private readonly ResourceAddress _address;
+            /// <summary>保存消费者及其原始地址，不增加资产引用计数。</summary>
             internal Waiter(ResourceRequest<AssetLease<T>> request, ResourceAddress address)
             {
                 this._request = request;
                 this._address = address;
             }
+            /// <summary>仅为仍在等待的请求登记一份租约或错误终态。</summary>
+            /// <param name="record">完成生产的共享资产记录。</param>
+            /// <param name="failure">生产失败原因；成功时为 null。</param>
             public void Prepare(AssetRecord record, ResourceException failure)
             {
                 if (_request.IsDone)
@@ -660,9 +732,11 @@ namespace YLFramework.Resource
                     _request.SetFailure(failure.Kind == ResourceError.SessionUnavailable ? ResourceRequestStatus.Invalidated : ResourceRequestStatus.Failed, failure);
                 }
             }
+            /// <summary>派发本消费者的完成通知。</summary>
             public void Notify() => _request.Notify();
         }
 
+        /// <summary>结算一份租约，末份归还时尝试图片缓存或释放；失效公共租约不扣除仍存活的实例 pin。</summary>
         internal void ReleaseLease(AssetRecord record, bool instancePin = false)
         {
             if (!instancePin && !IsSessionActive)
@@ -688,6 +762,7 @@ namespace YLFramework.Resource
             CheckDrain();
         }
 
+        /// <summary>移除当前共享记录并清空其持有字段，再归还来源生产结果。</summary>
         private void ReleaseRecord(AssetRecord record)
         {
             RemoveIdleImage(record);
@@ -704,6 +779,7 @@ namespace YLFramework.Resource
             ReleaseProduction(record.Source, new ResourceSourceResult(asset, retention));
         }
 
+        /// <summary>归还生产结果的来源对象和附带保活责任。</summary>
         private static void ReleaseProduction(IResourceSource source, ResourceSourceResult result)
         {
             if (!ReferenceEquals(result.Asset, null))
@@ -718,10 +794,13 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 上面的 catch 仅隔离 source.Release；Retention.Dispose 失败仍向调用方传播。
             result.Retention?.Dispose();
         }
 
         /// <summary>live Lease/等待者返回 Busy 并保持可用；零 owner 原生操作由同一 cleanup owner 排空后关闭。</summary>
+        /// <returns>正常关闭后结果为 true 的请求；Busy 不会消费仍由调用方持有的责任。</returns>
+        /// <remarks>关闭检查会清空闲置图片并退休实例缓存；取消返回请求不撤销已经开始的系统关闭。</remarks>
         public ResourceRequest<bool> ShutdownAsync()
         {
             CheckThread();
@@ -795,6 +874,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>确认全部资源和清理账本排空，再完成正常关闭及等待它的请求。</summary>
         private void CheckDrain()
         {
             if (_isCheckingShutdown)
@@ -835,6 +915,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>撤销当前权威并冻结请求，旧实例继续承担原生迟到结果和销毁收尾。</summary>
         private static void EndSession()
         {
             _isEnding = true;
@@ -914,12 +995,15 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>结束旧资源会话并重新开放执行入口，不丢弃尚未排空的旧清理责任。</summary>
         private static void ResetSession()
         {
             EndSession();
             _isEnding = false;
         }
 
+        /// <summary>采样本系统资产及 Bundle 的逻辑责任计数，不执行加载或回收。</summary>
+        /// <returns>当前计数的值快照，不保活其中涉及的资源。</returns>
         public ResourceDiagnosticsSnapshot GetDiagnosticsSnapshot()
         {
             CheckThread();
@@ -951,6 +1035,7 @@ namespace YLFramework.Resource
                 _runningBundles, queued, _nativeBundleLoads, _nativeBundleUnloads);
         }
 
+        /// <summary>为请求登记标准资源错误并通知，然后返回同一请求。</summary>
         private static ResourceRequest<T> Fail<T>(ResourceRequest<T> request, ResourceError kind, string message,
             ResourceAddress? address = null, ResourceSourceId? source = null, Exception cause = null)
         {
@@ -959,7 +1044,9 @@ namespace YLFramework.Resource
             return request;
         }
 
+        /// <summary>要求实例操作发生在记录的 Unity 主线程。</summary>
         internal void CheckThread() => AssertThread();
+        /// <summary>拒绝在非 Unity 主线程调用资源系统入口。</summary>
         internal static void AssertThread()
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)

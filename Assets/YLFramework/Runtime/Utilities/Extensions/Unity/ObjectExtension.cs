@@ -5,7 +5,8 @@ namespace YLFramework.Extensions
     /// <summary>
     /// UnityEngine.Object 扩展：实例化、命名与销毁。
     /// Gracefully 系列使用 Unity fake-null 语义：C# 引用非 null 但已被 Destroy 的对象会被跳过；
-    /// 非 Gracefully 的销毁方法不做判空，属于强制操作。
+    /// 其他销毁方法直接转交 Object.Destroy，不额外判空。
+    /// 克隆对象不表示复制其引用的共享资源，销毁克隆体也不负责释放这些共享资源。
     /// </summary>
     public static class ObjectExtension
     {
@@ -21,7 +22,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 在指定位置与旋转克隆对象。
+        /// 在指定世界位置与世界旋转克隆对象，返回克隆体。
         /// </summary>
         public static T Instantiate<T>(this T selfObj, Vector3 position, Quaternion rotation)
             where T : Object
@@ -31,7 +32,7 @@ namespace YLFramework.Extensions
 
 
         /// <summary>
-        /// 在指定位置与旋转克隆对象，并挂到 parent 下；parent 可为 null。
+        /// 在指定世界位置与世界旋转克隆对象，并挂到 parent 下；parent 可为 null。
         /// </summary>
         public static T Instantiate<T>(this T selfObj, Vector3 position, Quaternion rotation, Transform parent)
             where T : Object
@@ -50,7 +51,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 克隆对象并挂到 parent 下；parent 为 null 或已销毁时挂到场景根。
+        /// 克隆对象并挂到 parent 下，按 worldPositionStays 决定保留世界还是局部变换；parent 无效时挂到场景根。
         /// </summary>
         public static T InstantiateWithParent<T>(this T selfObj, Component parent, bool worldPositionStays)
             where T : Object
@@ -111,7 +112,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 延迟 afterDelay 秒后销毁对象，返回原对象。
+        /// 延迟 afterDelay 个受 Time.timeScale 影响的秒后销毁对象，返回原对象。
         /// </summary>
         public static T DestroySelfWithDelay<T>(this T selfObj, float afterDelay) where T : Object
         {
@@ -120,7 +121,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 延迟 delay 秒后销毁对象；对象为 null 或已销毁时跳过，返回原对象。
+        /// 按受 Time.timeScale 影响的 delay 秒延迟销毁对象；对象为 null 或已销毁时跳过，返回原对象。
         /// </summary>
         public static T DestroySelfWithDelayGracefully<T>(this T selfObj, float delay) where T : Object
         {
@@ -133,7 +134,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 切换场景时保留对象，返回原对象。
+        /// 请求跨场景保留根 GameObject 或其组件，并保留整个子层级；适用限制由 Unity 检查，返回原对象。
         /// </summary>
         public static T DontDestroyOnLoad<T>(this T selfObj) where T : Object
         {

@@ -18,7 +18,10 @@ namespace YLFramework.Events
         private readonly Dictionary<int, SubscriptionSet<IUnregister>> _sceneSubscriptions = new();
         private bool _isCleaningScenes;
 
-        /// <summary>托管到指定的已加载场景；无效或已卸载场景立即取消，不保留存活责任。</summary>
+        /// <summary>托管到指定已加载场景；无效或已卸载时立即尝试取消，失败责任交给基类保留并向外抛错。</summary>
+        /// <param name="subscription">待托管的注销句柄；为 null 时忽略。</param>
+        /// <param name="scene">捕获卸载归属的场景，后续不随宿主迁移改变。</param>
+        /// <returns>原句柄；自动取消不会创建新订阅。</returns>
         public IUnregister AddUnregister(IUnregister subscription, Scene scene)
         {
             if (subscription == null)
@@ -74,6 +77,7 @@ namespace YLFramework.Events
         {
         }
 
+        /// <summary>将宿主设为常驻隐藏对象，并连接全局场景卸载通知。</summary>
         private void Awake()
         {
             DontDestroyOnLoad(gameObject);
@@ -81,12 +85,14 @@ namespace YLFramework.Events
             SceneManager.sceneUnloaded += OnSceneUnloaded;
         }
 
+        /// <summary>先解除全局场景通知，再由基类关闭托管并尝试清理全部订阅。</summary>
         protected override void OnDestroy()
         {
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             base.OnDestroy();
         }
 
+        /// <summary>清理任意场景责任及本场景的定向责任，将该轮聚合清理异常记录到 Unity 日志。</summary>
         private void OnSceneUnloaded(Scene scene)
         {
             try
@@ -102,6 +108,8 @@ namespace YLFramework.Events
         /// <summary>显式清理及宿主销毁涵盖 AnyScene 与所有指定 Scene 的责任。</summary>
         protected override void TriggerUnregisters() => ReleaseSubscriptions(null);
 
+        /// <summary>捕获指定场景的本轮责任并逐项清理，同时保留失败项和重入新增项。</summary>
+        /// <param name="sceneHandle">指定场景句柄；为 null 时涵盖全部场景，任意场景责任始终参与本轮。</param>
         private void ReleaseSubscriptions(int? sceneHandle)
         {
             if (_isCleaningScenes)

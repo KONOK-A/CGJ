@@ -3,8 +3,8 @@ using System.IO;
 namespace YLFramework.Extensions
 {
     /// <summary>
-    /// 文件与目录路径扩展。路径分隔符统一交给 <see cref="System.IO.Path"/> 处理，兼容 Windows / Unix 形式。
-    /// 除查询方法外均有真实 IO 副作用，IO 异常向上抛出，不吞掉。
+    /// 文件、目录操作与路径处理扩展；路径解析和拼接遵循运行平台的 <see cref="System.IO.Path"/> 规则。
+    /// 创建、删除和清空方法会实际修改文件系统，未捕获其 IO 异常；其余方法只处理路径文本。
     /// </summary>
     public static class SystemIOExtension
     {
@@ -95,7 +95,7 @@ namespace YLFramework.Extensions
 
 
         /// <summary>
-        /// 获取所在目录路径。空字符串返回 <see cref="string.Empty"/>；无目录部分的输入可能返回 null 或空字符串（由 Path 决定）。
+        /// 获取所在目录路径。null 或空字符串返回 <see cref="string.Empty"/>；其他输入由 Path.GetDirectoryName 解析。
         /// </summary>
         public static string GetFolderPath(this string path)
         {

@@ -141,12 +141,14 @@ namespace YLFramework.Actions
         public static ActionHandle ReplaceNamedGlobal(this IAction self, string flag, Action onFinish) =>
             self.ReplaceNamedGlobal(flag, onFinish == null ? (Action<IActionController>)null : _ => onFinish());
 
+        /// <summary>在获取宿主前校验名字与动作，避免无效请求创建执行设施。</summary>
         private static void ValidateNamedStart(IAction action, string flag)
         {
             MonoUpdateActionExecutor.ValidateFlag(flag);
             MonoUpdateActionExecutor.ValidateAction(action);
         }
 
+        /// <summary>校验宿主与动作后初始化模块，在宿主 GameObject 上登记命名根执行。</summary>
         private static ActionHandle StartNamedOn(IAction action, MonoBehaviour owner, string flag, bool replace,
             Action<IActionController> onFinish)
         {

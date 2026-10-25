@@ -49,6 +49,7 @@ namespace YLFramework.Singletons
         /// </summary>
         protected virtual bool PersistentHost => true;
 
+        /// <summary>为当前宿主类型登记跨 Play 会话的引用和退出标记重置。</summary>
         static MonoSingletonHost()
         {
             SingletonSessionState.RegisterSessionReset(ResetHostSession);
@@ -281,6 +282,7 @@ namespace YLFramework.Singletons
             }
         }
 
+        /// <summary>为新 Play 会话兜底释放已销毁宿主，并确保缓存和退出标记最终被重置。</summary>
         private static void ResetHostSession()
         {
             try
@@ -293,6 +295,7 @@ namespace YLFramework.Singletons
             }
         }
 
+        /// <summary>仅当自身仍为当前宿主时清空缓存，避免旧对象的迟到清理移除替换实例。</summary>
         private void ClearIfCurrent()
         {
             if (ReferenceEquals(_instance, this))

@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>区分当前配置预估与真实构建报告的分包分析页，只展示原快照保留的来源和测量。</summary>
     internal sealed class ResourceAnalysisView
     {
         private ResourceBundleTable _table;
@@ -32,11 +33,13 @@ namespace YLFramework.Editor.Resource
         private Vector2 _fileScroll;
         internal Exception Error;
         internal ResourceAtlasPlan AtlasPending;
+        /// <summary>选择实际构建来源并请求下次绘制重新绑定该报告。</summary>
         internal void UseExact()
         {
             _source = 1;
             _displayed = null;
         }
+        /// <summary>清除分析来源、表格选择和错误上下文，准备切换项目。</summary>
         internal void Reset()
         {
             _displayed = null;
@@ -50,6 +53,7 @@ namespace YLFramework.Editor.Resource
             AtlasPending = null;
         }
 
+        /// <summary>按选定来源展示分包快照及其独立过期状态，计算动作仅通过显式回调触发。</summary>
         internal void Draw(ResourceProject project, ResourceBuildMap preview, ResourceEditorBuildReport report, bool reportStale, bool previewStale,
             float width, Action refresh, Action<ResourceBuildSource> locate)
         {
@@ -156,6 +160,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>切换显示快照并缓存来源与制品查找表，避免重绘时反复投影同份数据。</summary>
         private void Bind(ResourceBuildMap map, ResourceBuildResult build)
         {
             _table ??= new ResourceBundleTable();
@@ -174,6 +179,7 @@ namespace YLFramework.Editor.Resource
             _tree = null;
         }
 
+        /// <summary>展示所选包的源文件、包级依赖或构建值，不推断文件级引入链。</summary>
         private void DrawDetails(ResourceProject project, float width, Action<ResourceBuildSource> locate)
         {
             if (_selected == null)
@@ -240,6 +246,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndScrollView();
         }
 
+        /// <summary>区分可加载主资源与依赖文件，按保留的 GUID 或过期状态限制旧路径定位。</summary>
         private void DrawFiles(float width, Action<ResourceBuildSource> locate)
         {
             GUILayout.Label("主资源有直接加载地址；依赖文件随包参与构建，没有独立加载地址。", ResourceWorkbenchGui.Secondary);
@@ -319,6 +326,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>仅在真实构建存在时展示原始与交付文件量及摘要，不由字节量推测原生内存。</summary>
         private void DrawBuildValues(float width)
         {
             if (_displayedBuild == null)
@@ -343,6 +351,7 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>按展开路径展示包级正向或反向依赖，用路径身份保持节点状态并限制单次展开量。</summary>
     internal sealed class ResourceBundleDependencyTree : TreeView
     {
         private readonly ResourceBundleTable _table;
@@ -351,6 +360,7 @@ namespace YLFramework.Editor.Resource
         private readonly Action<string> _locate;
         private readonly Dictionary<string, int> _ids = new(StringComparer.Ordinal);
         private readonly Dictionary<int, string> _names = new();
+        /// <summary>绑定当前分包表、起始包和依赖方向，默认展开起始节点。</summary>
         internal ResourceBundleDependencyTree(ResourceBundleTable table, string bundle, bool reverse, Action<string> locate) : base(new TreeViewState())
         {
             this._table = table;
@@ -362,6 +372,7 @@ namespace YLFramework.Editor.Resource
             Reload();
             SetExpanded(1, true);
         }
+        /// <summary>迭代生成已展开的依赖路径，标记重复引用；单次最多处理 16384 个待访节点。</summary>
         protected override TreeViewItem BuildRoot()
         {
             var root = new TreeViewItem(0, -1, "包依赖");
@@ -412,7 +423,9 @@ namespace YLFramework.Editor.Resource
             root.children ??= new List<TreeViewItem>();
             return root;
         }
+        /// <summary>按新的展开状态重建可见依赖节点。</summary>
         protected override void ExpandedStateChanged() => Reload();
+        /// <summary>将有效节点的完整包名交回分析页定位。</summary>
         protected override void DoubleClickedItem(int id)
         {
             if (_names.TryGetValue(id, out var name))

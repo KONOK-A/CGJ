@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>在调用方提供的项目快照中搜索和选择，创建与切换均交回调用方处理。</summary>
     internal sealed class ResourceProjectPicker : PopupWindowContent
     {
         private readonly ResourceProject[] _projects;
@@ -15,6 +16,7 @@ namespace YLFramework.Editor.Resource
         private Vector2 _scroll;
         private bool _focusSearch = true;
 
+        /// <summary>绑定候选项目及操作回调，打开弹层本身不创建配置。</summary>
         internal ResourceProjectPicker(ResourceProject[] values, Action<ResourceProject> selected, Action createProject, Func<bool> canCreateProject)
         {
             _projects = values;
@@ -23,8 +25,10 @@ namespace YLFramework.Editor.Resource
             _canCreate = canCreateProject;
         }
 
+        /// <summary>提供搜索和列表所需的固定弹层尺寸。</summary>
         public override Vector2 GetWindowSize() => new(440, 360);
 
+        /// <summary>过滤候选项目并回传选择；新建入口仍需调用方再次检查当前状态。</summary>
         public override void OnGUI(Rect rect)
         {
             GUILayout.Space(6);

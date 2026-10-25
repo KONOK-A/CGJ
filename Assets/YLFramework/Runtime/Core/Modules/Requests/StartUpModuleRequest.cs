@@ -8,6 +8,7 @@ using UnityEngine.SceneManagement;
 namespace YLFramework.Core
 {
 
+    /// <summary>启动请求公开的资源处理阶段，不表示 Module 已进入 Running。</summary>
     public enum StartingModuleSteps
     {
         /// <summary>
@@ -28,11 +29,13 @@ namespace YLFramework.Core
     public sealed class StartUpModuleRequest : YLFramework.Async.CustomAsyncOperation<StartUpModuleRequest>
     {
 
+        /// <summary>当前资源处理阶段；业务 OnStart 仍在场景阶段之后执行。</summary>
         public StartingModuleSteps Step
         {
             get; private set;
         }
 
+        /// <summary>本请求启动的模块实例；请求完成后仍保留此引用供调用方检查。</summary>
         public Module Module
         {
             get;
@@ -56,6 +59,7 @@ namespace YLFramework.Core
             get;
         }
 
+        /// <summary>记录模块初态及旧默认上下文，供启动失败时恢复，不在构造时启动或注册模块。</summary>
         internal StartUpModuleRequest(Module module, Module previousCurrentModule = null)
         {
             Module = module;
@@ -71,6 +75,7 @@ namespace YLFramework.Core
             throw new NotSupportedException("Module startup does not support Abort.");
         }
 
+        /// <summary>先提交模块生命周期与回滚结果，再完成请求；完成回调异常只记日志，不改写结果。</summary>
         internal void Finish(Exception error = null)
         {
             if (IsDone)
@@ -96,6 +101,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>逐步推进启动迭代器，收集原始失败和迭代器释放错误后统一结束请求。</summary>
         internal IEnumerator StartUp()
         {
             var routine = RunStartup();
@@ -143,6 +149,7 @@ namespace YLFramework.Core
             Finish(failure);
         }
 
+        /// <summary>把后续清理错误附到原始异常的数据中，不替换最初的失败原因。</summary>
         internal static void AttachCleanupError(Exception error, Exception cleanupError)
         {
             const string Key = "YLFramework.Core.CleanupException";
@@ -151,6 +158,7 @@ namespace YLFramework.Core
                 new AggregateException("Startup cleanup failed.", previous, cleanupError);
         }
 
+        /// <summary>使用入口捕获的资源项目依次读取配表、加载默认场景并调用业务启动钩子。</summary>
         private IEnumerator RunStartup()
         {
             var module = Module;
@@ -164,7 +172,6 @@ namespace YLFramework.Core
 
             Step = StartingModuleSteps.PreloadConfigTables;
 
-            // 加载配表
 #pragma warning disable CS0618 // 类型或成员已过时
             var tables = module.PreloadConfigTables;
             if (tables != null && tables.Count != 0)
@@ -206,6 +213,7 @@ namespace YLFramework.Core
                         }
                     }
 
+                    // 文本请求已释放；之后的 JSON 构造及 Model 初始化不再占用本次文本请求。
                     var models = JsonConvert.DeserializeObject(json, table.Value,
                         new JsonSerializerSettings { CheckAdditionalContent = true }) as Model[];
                     if (models == null)
@@ -227,7 +235,6 @@ namespace YLFramework.Core
 
             Step = StartingModuleSteps.LoadScene;
 
-            // 加载默认场景
             string sceneName = module.DefaultStartUpScene;
             if (!string.IsNullOrEmpty(sceneName))
             {
@@ -253,6 +260,7 @@ namespace YLFramework.Core
                     throw new InvalidOperationException($"Default scene result is not loaded: {projectName}/{sceneName}");
                 }
 
+                // 纳管真实加载结果的场景实例；模块关闭只结束这些表现会话，不负责卸载场景。
                 module.AttachViews(loadedScene);
             }
 

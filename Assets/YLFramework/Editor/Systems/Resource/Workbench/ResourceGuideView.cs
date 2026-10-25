@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>提供入门任务导航和正式文档、样例源码入口，不执行样例或代填应用配置。</summary>
     internal sealed class ResourceGuideView
     {
         private Vector2 _scroll;
@@ -20,6 +21,7 @@ namespace YLFramework.Editor.Resource
             ("定位内置部署实现", "Assets/YLFramework/Editor/Systems/Resource/Publishing/ResourceBuiltInDeployer.cs"),
             ("定位运行时显式配置入口", "Assets/YLFramework/Runtime/Systems/Resource/ResourceConfiguration.cs")
         };
+        /// <summary>绘制入门流程、技术引用及本窗口报告入口，页面跳转不自动触发资源操作。</summary>
         internal void Draw(ResourceEditorBuildReport report, Action showBuild, Action<int> navigate = null)
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.MinHeight(0), GUILayout.ExpandHeight(true));
@@ -95,6 +97,7 @@ namespace YLFramework.Editor.Resource
 
             EditorGUILayout.EndScrollView();
         }
+        /// <summary>仅在指定文件真实存在时定位并打开它，缺失时报告原路径而不猜替代位置。</summary>
         private void Link(string label, string path)
         {
             if (!GUILayout.Button(new GUIContent(label, path), ResourceWorkbenchGui.Button))

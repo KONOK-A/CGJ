@@ -20,7 +20,10 @@ namespace YLFramework.Actions
         /// <param name="dt">本次时间增量，单位为秒。</param>
         /// <param name="onFinish">正常完成回调；取消或绑定失效时不调用。</param>
         /// <returns>任务已完成、取消或绑定失效时为 true，执行器应将其移出更新列表。</returns>
-        /// <remarks>此方法不回收控制器，也不选择时间源，仍由调用方管理。</remarks>
+        /// <remarks>
+        /// 此方法不回收控制器，也不选择时间源，仍由调用方管理。
+        /// 完成回调异常会向外传播，但仍尝试清理当前动作；Execute 自身抛异常时不进入此完成清理分支。
+        /// </remarks>
         public static bool UpdateAction(this IActionExecutor self, IActionController controller, float dt,
             Action<IActionController> onFinish = null)
         {

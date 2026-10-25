@@ -6,15 +6,18 @@ using UnityEngine;
 namespace YLFramework.Actions
 {
     // 在所属 GameObject 每帧推进动作任务：所有 Start* 路径的运行时实现，对象、场景与全局宿主共用同一套调度逻辑。
-    // 任务记录在 mTasks 中按创建顺序推进；释放与回收集中在最外层执行栈退出时进行，避免回调期间复用对象。
+    // 任务记录在 _tasks 中按创建顺序推进；任务释放集中在最外层执行栈退出时进行，避免回调期间复用控制器。
     [ExecuteAlways]
     internal class MonoUpdateActionExecutor : MonoBehaviour, IActionExecutor
     {
-        // 一次调度的运行时记录：绑定动作与控制器，并保存用于检测租约失效的标识快照。
+        /// <summary>一次调度的运行时记录，绑定动作与控制器，并保存用于检测租约失效的标识快照。</summary>
         public class ActionTask
         {
+            /// <summary>本次调度接管的根动作。</summary>
             public IAction Action;
+            /// <summary>绑定本次动作执行的控制器，任务结束后由执行器归还池。</summary>
             public IActionController Controller;
+            /// <summary>根动作正常完成且释放前调用的通知，取消不触发。</summary>
             public Action<IActionController> OnFinish;
             // 调度时快照的动作标识；运行中与当前值不一致说明动作已被复用，任务应立即作废。
             internal ulong ActionId;
@@ -35,9 +38,12 @@ namespace YLFramework.Actions
         // 匿名执行不创建名字索引，也不分配额外包装对象。
         private Dictionary<string, ActionTask> _namedTasks;
         private ulong _nextNameToken;
+        // 动作所有权按对象身份登记，不受动作实现自定义 Equals 或 GetHashCode 的影响。
         private sealed class ActionIdentity : IEqualityComparer<IAction>
         {
+            /// <summary>比较是否为同一个动作对象，不按状态或业务数据判断相等。</summary>
             public bool Equals(IAction first, IAction second) => ReferenceEquals(first, second);
+            /// <summary>取得与对象身份比较一致的哈希值。</summary>
             public int GetHashCode(IAction value) => RuntimeHelpers.GetHashCode(value);
         }
         // 全局唯一所有权：某个动作实例同一时间只能被一个执行任务持有，防止池对象被重复调度或跨执行器共享。
@@ -48,7 +54,9 @@ namespace YLFramework.Actions
         {
             get; private set;
         }
+        // 登记模块级执行作用域，阻止 Shutdown 在业务回调栈内实际释放资源。
         internal static void EnterExecutionScope() => ExecutionScopes++;
+        // 最外层模块级作用域退出时，继续处理此前请求的关停。
         internal static void LeaveExecutionScope()
         {
             ExecutionScopes--;
@@ -75,6 +83,9 @@ namespace YLFramework.Actions
         internal int ScheduledCount => _tasks.Count;
         internal bool IsStopping => _isStopping;
 
+        /// <summary>以匿名根任务接管控制器并同步首次推进动作，后续由 Update 驱动。</summary>
+        /// <param name="controller">已经绑定动作及匹配标识的控制器。</param>
+        /// <param name="onFinish">正常完成且清理前调用的可选通知。</param>
         public void Execute(IActionController controller, Action<IActionController> onFinish = null)
         {
             Execute(controller, onFinish, null);
@@ -260,6 +271,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>释放仍属于本任务的名字登记，并清空任务保存的名字与登记代次。</summary>
         private void RemoveName(ActionTask task)
         {
             if (task.Flag == null)
@@ -379,9 +391,9 @@ namespace YLFramework.Actions
             return handle;
         }
 
+        /// <summary>响应宿主 Update；ExecuteAlways 仅用于生命周期清理，编辑状态不自动推进动作。</summary>
         private void Update()
         {
-            // ExecuteAlways 用于编辑器生命周期清理，编辑状态不自动推进动作。
             if (Application.IsPlaying(gameObject))
             {
                 Tick(Time.deltaTime, Time.unscaledDeltaTime);
@@ -449,6 +461,7 @@ namespace YLFramework.Actions
             task.Controller.ActionId == task.ActionId && ReferenceEquals(task.Controller.Action, task.Action) &&
             (!(task.Controller is ActionController concrete) || concrete.Generation == task.ControllerGeneration);
 
+        /// <summary>推进单个任务并处理终止登记，只有仍有效的正常完成任务才发出完成通知。</summary>
         private void Step(ActionTask task, float dt)
         {
             try
@@ -498,6 +511,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>结束一次执行，按嵌套深度衔接任务释放与延后请求的模块关停。</summary>
         private void ExitExecution()
         {
             _executionDepth--;
@@ -533,15 +547,17 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>把次级清理异常附加到主异常的诊断项，已有诊断时合并保存。</summary>
         private static void AddDiagnostic(Exception primary, string key, Exception secondary)
         {
             primary.Data[key] = primary.Data[key] is Exception previous
                 ? new AggregateException(previous, secondary) : secondary;
         }
 
+        /// <summary>移除已终止任务，按租约释放动作和控制器；停止期间一并释放尚未完成的任务。</summary>
         private void ReleaseFinished()
         {
-            // 逆序移除（原地删除不影响前面的索引）；mStopping 时连未 Done 的任务一起释放，即取消语义。
+            // 逆序移除，避免原地删除改变尚未访问项的索引。
             List<Exception> errors = null;
             for (var index = _tasks.Count - 1; index >= 0; index--)
             {
@@ -605,6 +621,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>执行器销毁时取消其全部任务，不发出正常完成通知。</summary>
         private void OnDestroy() => StopAll();
     }
 

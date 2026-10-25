@@ -5,8 +5,10 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>根据同一部署计划描述确认范围，只生成说明，不创建目录、锁或部署记录。</summary>
     internal static class ResourceBuiltInScope
     {
+        /// <summary>提炼身份、写入范围和恢复约束供确认窗口展示，不将预检计划视为执行凭据。</summary>
         internal static ResourceConfirmationSummary Summarize(ResourceProject project, ResourceBuiltInPlan plan) => new()
         {
             Fields = new[] { ("资源项目", project.displayName + " / " + plan.Source.Document.ProjectId), ("构建平台", plan.Source.Document.Platform),
@@ -28,6 +30,7 @@ namespace YLFramework.Editor.Resource
                 "\n提交未确认时，请使用“恢复内置部署事务”，由事务记录决定恢复步骤。不清理其他内容，不覆盖旧部署，不修改发布索引，也不切换运行版本或最近可用版本。")
         };
 
+        /// <summary>列出部署可能涉及的工作目录、控制记录、元数据及导入影响，不据复制量承诺磁盘峰值。</summary>
         internal static string Describe(ResourceBuiltInPlan plan)
         {
             if (plan == null)

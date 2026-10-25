@@ -14,6 +14,8 @@ namespace YLFramework.Editor.Buff
 {
 
 
+    /// <summary>展示单个 Buff 配表的定义，并把创建、复制、删除及拖拽重排接入作者工具。</summary>
+    /// <remarks>拖拽沿用基类的 Undo 与标脏，不在此立即保存；创建、复制和删除各自按对应入口处理保存。</remarks>
     public class BuffListTree : ReorderableTreeView<BuffConfigData>
     {
 
@@ -32,13 +34,17 @@ namespace YLFramework.Editor.Buff
         private GUIStyle _styleName;
 
 
+        /// <summary>此树当前维护的共享配表资产。</summary>
         public BuffsConfig BuffsConfig => _buffsConfig;
+        /// <summary>把 Buff 业务 ID 映射为配表列表的首个匹配槽位。</summary>
         protected override int GetItemIndex(int id) => _buffsConfig.buffs.FindIndex(data => data && data.id == id);
 
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>为配表建立可重排的定义树；使用结束后须 Dispose 以解除基类订阅。</summary>
         public BuffListTree(TreeViewState<int> state, BuffsConfig buffsConfig) : base(buffsConfig, () => buffsConfig.buffs, state)
 #else
+        /// <summary>为配表建立可重排的定义树；使用结束后须 Dispose 以解除基类订阅。</summary>
         public BuffListTree(TreeViewState state, BuffsConfig buffsConfig) : base(buffsConfig, () => buffsConfig.buffs, state)
 #endif
 
@@ -49,8 +55,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>按定义列表顺序构建平面行，跳过空项并使用业务 ID 作为行标识。</summary>
         protected override void OnBuildRoot(TreeViewItem<int> root, IList<BuffConfigData> datas)
 #else
+        /// <summary>按定义列表顺序构建平面行，跳过空项并使用业务 ID 作为行标识。</summary>
         protected override void OnBuildRoot(TreeViewItem root, IList<BuffConfigData> datas)
 #endif
 
@@ -75,6 +83,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>绘制 Buff 图标、名称、描述提示与 ID，不编辑定义内容。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             if (_buffsConfig == null)
@@ -130,8 +139,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>允许同时选择多行以执行批量复制、删除或重排。</summary>
         protected override bool CanMultiSelect(TreeViewItem<int> item)
 #else
+        /// <summary>允许同时选择多行以执行批量复制、删除或重排。</summary>
         protected override bool CanMultiSelect(TreeViewItem item)
 #endif
 
@@ -139,6 +150,7 @@ namespace YLFramework.Editor.Buff
             return true;
         }
 
+        /// <summary>在空白区提供创建菜单，并避开同次右键已经处理过的条目菜单。</summary>
         protected override void ContextClicked()
         {
             base.ContextClicked();
@@ -153,6 +165,7 @@ namespace YLFramework.Editor.Buff
             CreateBuff(menu);
         }
 
+        /// <summary>为当前选择提供删除、复制和创建入口，完成后刷新树与资产状态。</summary>
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
@@ -202,6 +215,7 @@ namespace YLFramework.Editor.Buff
             CreateBuff(menu);
         }
 
+        /// <summary>按配表绑定的数据基类列出创建菜单，创建后选中并定位新条目。</summary>
         private void CreateBuff(GenericMenu menu)
         {
             //  查找项目中所有继承自
@@ -238,6 +252,7 @@ namespace YLFramework.Editor.Buff
             menu.ShowAsContext();
         }
 
+        /// <summary>按资产归属删除条目或仅解除外部引用，再清除配表缓存并刷新树。</summary>
         private void DeleteBuff(int id)
         {
             if (_buffsConfig == null)
@@ -257,6 +272,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>复制定义后通过创建入口分配新 ID，再设置本表内不重名的显示名。</summary>
         private int CopyBuff(BuffConfigData buff)
         {
             if (buff == null)
@@ -275,6 +291,7 @@ namespace YLFramework.Editor.Buff
             return data.id;
         }
 
+        /// <summary>从原名称的数字后缀继续寻找本表内未占用的复制名称。</summary>
         private string GetBuffName(string buffName)
         {
 
@@ -308,6 +325,7 @@ namespace YLFramework.Editor.Buff
             return name;
         }
 
+        /// <summary>检查当前配表中是否已有相同的 Buff 显示名。</summary>
         private bool IsContainsBuffName(string buffName)
         {
 
@@ -322,6 +340,7 @@ namespace YLFramework.Editor.Buff
             return false;
         }
 
+        /// <summary>返回给定配置基类及扫描到的派生脚本类型，不过滤抽象类型。</summary>
         public static List<Type> GetAllBuffTypes(Type parent)
         {
             List<Type> states = new List<Type>();
@@ -356,6 +375,7 @@ namespace YLFramework.Editor.Buff
             return states;
         }
 
+        /// <summary>沿用基类重建树的流程，并使配表的 ID 查询缓存失效。</summary>
         protected override void RefreshDatas()
         {
             base.RefreshDatas();

@@ -4,9 +4,11 @@ using UnityEngine.Audio;
 
 namespace YLFramework.Audio
 {
+    /// <summary>承载一份可复用播放记录，统一管理音源、暂停原因、音量包络及原请求资源责任。</summary>
     internal sealed class AudioVoice
     {
         private readonly AudioManager _owner;
+        /// <summary>决定分类设置、Sound 池回收和固定槽归属的内核分类。</summary>
         internal enum Kind
         {
             Sound,
@@ -82,14 +84,17 @@ namespace YLFramework.Audio
         {
             get; private set;
         }
+        /// <summary>绑定原宿主与分类，记录 Sound 是否参与池回收；音源延迟创建。</summary>
         internal AudioVoice(AudioManager owner, Kind category, bool pooledSound = true)
         {
             _owner = owner;
             Category = category;
             PooledSound = pooledSound;
         }
+        /// <summary>同时检查活跃标记、原代次与宿主可用性，不以音源是否正在播放判断身份。</summary>
         internal bool IsValid(ulong generation) => IsActive && Generation == generation && _owner && _owner.IsAvailable;
 
+        /// <summary>绑定资源与新代次，配置自有或借入音源；按分类启用、暂停和提交选项决定是否立即启动。</summary>
         internal AudioHandle Begin(AudioClip clip, in AudioPlaybackOptions options, bool enabled, float sharedVolume, bool muted,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             bool spatial = false, Vector3 position = default, Transform target = null,
@@ -186,6 +191,7 @@ namespace YLFramework.Audio
                 throw;
             }
         }
+        /// <summary>组合共享音量、请求倍率和两层包络后写入当前音源。</summary>
         internal void SetVolume(float sharedVolume)
         {
             if (!IsActive || !Source)
@@ -193,6 +199,7 @@ namespace YLFramework.Audio
                 return;
             }
 
+            // 基础音量先限幅，再乘请求淡变和音乐过渡，避免高倍率抵消淡出包络。
             var value = Mathf.Clamp01(sharedVolume * Options.Volume) * _fadeGain * TransitionGain;
             if (_borrowed != null)
             {
@@ -203,12 +210,15 @@ namespace YLFramework.Audio
                 Source.volume = value;
             }
         }
+        /// <summary>只更新音乐过渡增益，并使用最新共享音量重算输出。</summary>
         internal void SetTransitionGain(float value)
         {
             TransitionGain = Mathf.Clamp01(value);
             SetVolume(_owner.GetSharedVolume(this));
         }
+        /// <summary>撤销音乐尾轨的自然完成回调，保留原请求的终态与资源收尾。</summary>
         internal void SuppressCompletion() => _onFinished = null;
+        /// <summary>仅启动配置完成且仍属于指定代次的请求。</summary>
         internal void StartConfigured(ulong generation)
         {
             if (IsValid(generation))
@@ -216,6 +226,7 @@ namespace YLFramework.Audio
                 StartSource();
             }
         }
+        /// <summary>更新当前音源静音，并重算音量以保持最新倍率与包络。</summary>
         internal void SetMute(bool value)
         {
             if (!IsActive || !Source)
@@ -231,9 +242,10 @@ namespace YLFramework.Audio
             {
                 Source.mute = value;
             }
-            // Unmuting must restore the latest channel volume and request scale, not a stale Unity snapshot.
+            // 取消静音应使用最新通道音量和请求倍率，不能恢复过期的 Unity 音量快照。
             SetVolume(_owner.GetSharedVolume(this));
         }
+        /// <summary>仅对继承路由的活跃请求更新分类输出组，不覆盖显式组或直接输出。</summary>
         internal void SetInheritedOutputGroup(AudioMixerGroup group)
         {
             if (IsActive && Source && Options.OutputRoute.Mode == AudioOutputRoute.RouteMode.Inherit)
@@ -241,6 +253,7 @@ namespace YLFramework.Audio
                 SetOutput(group ? group : null);
             }
         }
+        /// <summary>按音源归属写入输出组，借源路径同时保留最后写入值以供恢复。</summary>
         private void SetOutput(AudioMixerGroup group)
         {
             if (_borrowed != null)
@@ -252,6 +265,7 @@ namespace YLFramework.Audio
                 Source.outputAudioMixerGroup = group;
             }
         }
+        /// <summary>校验并替换本请求音量倍率，立即按最新共享音量重算输出。</summary>
         internal void SetVolumeScale(float volumeScale)
         {
             if (!AudioSoundOptions.IsFinite(volumeScale) || volumeScale < 0)
@@ -262,6 +276,7 @@ namespace YLFramework.Audio
             _options.Volume = volumeScale;
             SetVolume(_owner.GetSharedVolume(this));
         }
+        /// <summary>校验并更新本请求音高，不重新启动音源。</summary>
         internal void SetPitch(float pitch)
         {
             if (!AudioSoundOptions.IsFinite(pitch) || pitch <= 0 || pitch > 3)
@@ -279,8 +294,11 @@ namespace YLFramework.Audio
                 Source.pitch = pitch;
             }
         }
+        /// <summary>以满增益为目标启动手动淡入，首次正时长淡入可从无声开始。</summary>
         internal void FadeIn(float duration, bool ignoreTimeScale) => BeginFade(1f, duration, false, ignoreTimeScale, true);
+        /// <summary>以零增益为目标启动手动淡出，并保留是否停止原请求的选项。</summary>
         internal void FadeOut(float duration, bool stopWhenDone, bool ignoreTimeScale) => BeginFade(0f, duration, stopWhenDone, ignoreTimeScale, false);
+        /// <summary>从当前增益接管自动或旧手动包络，零时长立即应用目标和可选停止。</summary>
         private void BeginFade(float target, float duration, bool stopWhenDone, bool ignoreTimeScale, bool fromSilence)
         {
             if (!AudioSoundOptions.IsFinite(duration) || duration < 0f)
@@ -318,6 +336,7 @@ namespace YLFramework.Audio
                 Stop();
             }
         }
+        /// <summary>播放与数据均可推进时更新自动或手动包络；暂停和分类关闭时不累计手动时钟。</summary>
         internal void TickFade(float deltaTime, float unscaledDeltaTime)
         {
             if (!IsActive || !_hasStarted || IsPaused || !_isEnabled || !_clip || _clip.loadState != AudioDataLoadState.Loaded)
@@ -350,6 +369,7 @@ namespace YLFramework.Audio
                 Stop();
             }
         }
+        /// <summary>清除手动、自动及音乐过渡包络状态，供下一代次重新配置。</summary>
         private void ResetFade()
         {
             _fadeGain = _fadeFrom = _fadeTarget = 1f;
@@ -361,12 +381,14 @@ namespace YLFramework.Audio
             _autoLength = _autoFadeIn = _autoFadeOut = _autoPreviousTime = 0d;
             TransitionGain = 1f;
         }
+        /// <summary>重置自动包络的位置观察和循环首轮标记，准备从头播放。</summary>
         private void ResetAutoPosition()
         {
             _autoPreviousTime = 0d;
             _hasCompletedAutoLoop = false;
             _fadeGain = _autoFadeIn > 0d ? 0f : 1f;
         }
+        /// <summary>按采样位置计算自动包络；循环请求只在首轮淡入，不在每轮重复淡变。</summary>
         private void RefreshAutoFade()
         {
             if (!IsActive || !_hasStarted || IsPaused || !_isEnabled || !Source || !_clip || !Source.isPlaying)
@@ -389,6 +411,7 @@ namespace YLFramework.Audio
             _fadeGain = _hasCompletedAutoLoop ? 1f : AudioAutoFade.Evaluate(position, _autoLength, _autoFadeIn, _autoFadeOut);
             SetVolume(_owner.GetSharedVolume(this));
         }
+        /// <summary>确认原音源与目标可用后提交 Play，并以原 Clip 和句柄通知首次启动。</summary>
         private void StartSource()
         {
             if (!IsActive || IsPaused || !_isEnabled)
@@ -448,6 +471,7 @@ namespace YLFramework.Audio
                 throw;
             }
         }
+        /// <summary>分类关闭时停止 Source 但保留请求，重新启用后从头启动而非解除暂停。</summary>
         internal void SetEnabled(bool value)
         {
             if (!IsActive || _isEnabled == value)
@@ -469,16 +493,21 @@ namespace YLFramework.Audio
                 StartSource();
             }
         }
+        /// <summary>增加手动暂停原因，不覆盖通道或自动暂停状态。</summary>
         internal void Pause()
         {
             SetPauseReason(ref _isManuallyPaused, true);
         }
+        /// <summary>仅解除手动暂停，其他暂停原因仍可阻止恢复。</summary>
         internal void Resume()
         {
             SetPauseReason(ref _isManuallyPaused, false);
         }
+        /// <summary>同步命名通道的局部暂停原因。</summary>
         internal void SetChannelPaused(bool value) => SetPauseReason(ref _isChannelPaused, value);
+        /// <summary>仅在请求显式启用时跟随 timeScale 的零值状态自动暂停。</summary>
         internal void RefreshAutomaticPause(bool timeScaleZero) => SetPauseReason(ref _isAutomaticallyPaused, Options.AutoPauseWhenTimeScaleZero && timeScaleZero);
+        /// <summary>更新单一暂停原因，仅在综合暂停状态改变时暂停、续播或首次启动音源。</summary>
         private void SetPauseReason(ref bool reason, bool value)
         {
             if (!IsActive || reason == value)
@@ -521,6 +550,7 @@ namespace YLFramework.Audio
                 StartSource();
             }
         }
+        /// <summary>检查资源和跟随目标存活、更新空间位置，并在自然结束通知后按原代次收尾。</summary>
         internal void CheckFinished()
         {
             if (!IsActive)
@@ -603,6 +633,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>先使旧代次失效，再按 Sound 池、命名通道或固定槽归属清理，最后结算原资源责任。</summary>
         internal void Stop(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
             if (!IsActive)
@@ -639,6 +670,7 @@ namespace YLFramework.Audio
                 resource?.Dispose();
             }
         }
+        /// <summary>清空播放记录和回调；借源有条件恢复，自有音源复位并停用，不销毁共享 Clip。</summary>
         internal void ResetPlayback()
         {
             _isManuallyPaused = _isAutomaticallyPaused = _isChannelPaused = false;
@@ -676,6 +708,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>停止并复位框架自有音源的播放、路由及空间字段，避免池复用继承旧配置。</summary>
         private void ResetSource()
         {
             if (!Source)
@@ -699,13 +732,14 @@ namespace YLFramework.Audio
             Source.dopplerLevel = 0f;
             Source.transform.localPosition = Vector3.zero;
         }
+        /// <summary>按需创建归属本宿主的音源对象，部分创建失败时归还已取得的对象责任。</summary>
         internal void EnsureSource()
         {
             if (Source)
             {
                 return;
             }
-            // The component may be destroyed independently; keep ownership of its GameObject until released.
+            // AudioSource 组件可能单独被外部销毁，其 GameObject 仍由本声部负责释放。
             ReleaseSource();
             var root = new GameObject(IsSound ? "Sound" : "Slot");
             _sourceRoot = root;
@@ -729,6 +763,7 @@ namespace YLFramework.Audio
                 throw;
             }
         }
+        /// <summary>以关闭原因停止原请求，并最终释放自有音源对象；不销毁借入 Source。</summary>
         internal void DestroySource()
         {
             try
@@ -740,6 +775,7 @@ namespace YLFramework.Audio
                 ReleaseSource();
             }
         }
+        /// <summary>撤销自有音源登记和统计后请求销毁原根对象，不释放 Clip 资产。</summary>
         private void ReleaseSource()
         {
             var root = _sourceRoot;

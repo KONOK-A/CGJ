@@ -8,16 +8,23 @@ namespace YLFramework.Audio
     /// <summary>素材定位方式；ExternalProvider 必须由调用方显式提供后端，不自动注册 XFAB。</summary>
     public enum AudioClipSource
     {
+        /// <summary>直接借用条目中的 Clip，由调用方保活。</summary>
         Clip,
+        /// <summary>仅保留旧 Resources 定位值供显式迁移；运行时不选择此模式。</summary>
         Resources,
+        /// <summary>仅保留旧 AssetBundle 定位值供显式迁移；运行时不选择此模式。</summary>
         AssetBundle,
+        /// <summary>使用调用方显式传入的 Provider 和条目的完整 key。</summary>
         ExternalProvider,
+        /// <summary>使用已初始化 ResourceSystem 中的 ProjectId 与逻辑地址。</summary>
         Resource
     }
     /// <summary>组内抽选规则；Weighted 的零权重排除条目。</summary>
     public enum AudioClipSelectionMode
     {
+        /// <summary>在可选条目间均匀抽选，忽略权重。</summary>
         Uniform,
+        /// <summary>按有限非负相对权重抽选，零权重条目不参与。</summary>
         Weighted
     }
 
@@ -75,6 +82,7 @@ namespace YLFramework.Audio
         }
         /// <summary>本次选择是否使用显式 provider。</summary>
         public bool IsNamed => Address.Provider != null;
+        /// <summary>保存本次选曲的直接引用或命名地址，不在此处取得资源。</summary>
         internal AudioClipSelection(AudioClip clip, AudioClipAddress address)
         {
             Clip = clip;
@@ -93,6 +101,9 @@ namespace YLFramework.Audio
         /// <summary>精确按组名抽选一次。缺组、重名、非法权重或定位失败返回 false，不创建播放/通道。</summary>
         /// <remarks>均匀模式忽略 Weight；空 Clip/空 key 为不可选条目。非法枚举、负数/非有限加权权重使整组失败。
         /// ExternalProvider 只使用显式传入的实例；Resource 必须先显式初始化 ResourceSystem。旧配置须显式迁移。</remarks>
+        /// <param name="groupName">区分大小写的素材组名，不是播放控制通道名。</param>
+        /// <param name="selection">成功时的定位快照；失败时为默认值。</param>
+        /// <param name="externalProvider">仅供 ExternalProvider 条目使用的显式后端。</param>
         public bool TrySelect(string groupName, out AudioClipSelection selection, IAudioClipProvider externalProvider = null)
         {
             selection = default;
@@ -190,6 +201,7 @@ namespace YLFramework.Audio
             return true;
         }
 
+        /// <summary>判断条目能否定位有效候选；命名模式只检查定位前提，不加载 Clip。</summary>
         private static bool CanSelect(AudioClipEntry entry, IAudioClipProvider externalProvider)
         {
             if (entry.source == AudioClipSource.Clip)

@@ -11,9 +11,15 @@ using YLFramework.Editor.Utilities;
 
 namespace YLFramework.Editor.Buff
 {
+    /// <summary>创建效果定义资产并登记到 Buff 项目设置，供效果列表与选择器使用。</summary>
     public class EffectsDataController
     {
 
+        /// <summary>创建并选中效果资产，登记并保存设置；效果 ID 与显示名由外层创建流程赋值。</summary>
+        /// <param name="scriptableObject">待创建的 EffectData 数据实例。</param>
+        /// <param name="path">保存目录，不存在时创建。</param>
+        /// <param name="ping">是否在 Project 窗口中高亮。</param>
+        /// <param name="preName">候选文件名；为空时使用实例类型名。</param>
         public static void CreateAsset(ScriptableObject scriptableObject, string path, bool ping = true, string preName = null)
         {
             if (!System.IO.Directory.Exists(path))
@@ -37,6 +43,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>以设置中的效果显示名为占用集合，为候选名称递增数字后缀。</summary>
         private static string GetName(string name, string path)
         {
 
@@ -76,6 +83,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>检查项目设置登记的效果是否已使用指定显示名。</summary>
         private static bool IsContainEffectName(string name)
         {
             foreach (var item in BuffSystemSettings.Instance.AllEffectDatas)

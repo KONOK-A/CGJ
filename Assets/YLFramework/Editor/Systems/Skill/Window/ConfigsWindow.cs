@@ -10,9 +10,11 @@ using YLFramework.Skill;
 
 namespace YLFramework.Editor.Skill
 {
+    /// <summary>技能配表分栏窗口，左侧选择源技能定义，右侧编辑单条数据。</summary>
     public class ConfigsWindow : SplitWindow
     {
 
+        /// <summary>从菜单取得并显示技能配表窗口。</summary>
         [MenuItem("Window/YLFramework/SkillSystem", false, 10)]
         static void Open()
         {
@@ -40,14 +42,18 @@ namespace YLFramework.Editor.Skill
         [SerializeField]
         private TreeViewStateGroup treeViewStateGroup = new TreeViewStateGroup();
 
+        /// <summary>由窗口负责在切表或停用时释放的技能树。</summary>
         internal SkillListTree SkillListTree;
 
+        /// <summary>当前编辑的源技能配表。</summary>
         internal SkillsConfig CurrentSkillConfig;
 
         private float _timer = 0;
 
+        /// <summary>窗口保留的技能显示 ID 状态。</summary>
         internal int CurrentShowSkillId = 0;
 
+        /// <summary>窗口保留的默认技能选择标记，-1 表示未指定。</summary>
         internal static int DefaultSelectSkillId = -1;
 
         private Vector2 _rightScrollPosition;
@@ -56,6 +62,7 @@ namespace YLFramework.Editor.Skill
 
 
         private int _currentId;
+        /// <summary>详情选择切换保护的 GUI 事件计数，不是技能 ID 的修改次数。</summary>
         public int idChangeCount;
 
         #endregion
@@ -63,6 +70,7 @@ namespace YLFramework.Editor.Skill
 
         #region 属性
 
+        /// <summary>通过 EditorPrefs 保存的当前技能配表 GUID。</summary>
         internal static string SelectGuid
         {
             get
@@ -81,11 +89,13 @@ namespace YLFramework.Editor.Skill
 
         #region 生命周期
 
+        /// <summary>设置技能窗口标题和悬停说明。</summary>
         private void Awake()
         {
             titleContent = new GUIContent("技能配置窗口", "技能配置窗口");
         }
 
+        /// <summary>按编辑器更新次数节流窗口重绘。</summary>
         private void Update()
         {
             _lastRepaintCount++;
@@ -96,6 +106,7 @@ namespace YLFramework.Editor.Skill
             }
         }
 
+        /// <summary>未绑定配表时限频恢复选择，随后绘制分栏或无配表提示。</summary>
         protected override void OnGUI()
         {
             if (Time.realtimeSinceStartup - _timer > 1 && CurrentSkillConfig == null)
@@ -120,6 +131,7 @@ namespace YLFramework.Editor.Skill
 
         #region 方法
 
+        /// <summary>恢复已保存 GUID 对应的源配表；失效时选择扫描到的首张配表并保存选择。</summary>
         internal SkillsConfig GetCurrentConfig()
         {
             if (!string.IsNullOrEmpty(SelectGuid))
@@ -145,6 +157,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>在左侧分栏区域绘制配表选择、搜索和技能列表。</summary>
         protected override void DrawGuiLeft(Rect rect)
         {
             base.DrawGuiLeft(rect);
@@ -154,6 +167,7 @@ namespace YLFramework.Editor.Skill
             GUILayout.EndArea();
         }
 
+        /// <summary>在右侧分栏区域绘制选择详情或提示。</summary>
         protected override void DrawGuiRight(Rect rect)
         {
             base.DrawGuiRight(rect);
@@ -166,6 +180,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>无技能配表时显示提示和配表创建入口。</summary>
         private void EmptyGui()
         {
 
@@ -187,6 +202,7 @@ namespace YLFramework.Editor.Skill
 
         }
 
+        /// <summary>处理源配表切换与搜索，按需创建或释放技能列表树。</summary>
         private void DrawLeft(Rect rect)
         {
             if (_currentSkillConfigContent == null)
@@ -280,6 +296,7 @@ namespace YLFramework.Editor.Skill
             }
         }
 
+        /// <summary>按有效条目和选择数量显示详情、空状态或多选不支持提示。</summary>
         private void DrawRight()
         {
 
@@ -328,25 +345,23 @@ namespace YLFramework.Editor.Skill
 
         }
 
+        /// <summary>选择稳定后在滚动区域内调用共享技能条目 Inspector。</summary>
         private void DrawData()
         {
             int id = SkillListState.selectedIDs[0];
 
+            // 避免延迟字段的旧输入写入新选择；等非 Layout 事件再切换详情，保持布局与重绘配对。
             if (_currentId != id)
             {
                 idChangeCount++;
                 if (idChangeCount > 1)
                 {
-                    // 如果当前帧是Layout ，不能设置，因为当前帧会被return
-                    // 如果当前帧被return , 下一帧repaint 会报错，因为没有位置数据
                     if (Event.current.type != EventType.Layout)
                     {
                         _currentId = id;
                         idChangeCount = 0;
                     }
                 }
-                // 这样处理的目的是 为了防止 EditorGUILayout.DelayedIntField 在编辑时 ,
-                // 直接切换id,  EditorGUILayout.DelayedIntField  返回的值会直接给新选中的数据， 导致数据错误的情况
                 return;
             }
 
@@ -358,6 +373,7 @@ namespace YLFramework.Editor.Skill
             GUILayout.EndScrollView();
         }
 
+        /// <summary>判断当前配表是否缺少非空技能条目。</summary>
         internal bool IsEmpty()
         {
             if (CurrentSkillConfig == null)
@@ -378,6 +394,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>请求选择技能 ID；树尚未创建时仅安排一次延迟尝试。</summary>
         public void SetSelection(int id)
         {
             if (SkillListTree != null)
@@ -396,6 +413,7 @@ namespace YLFramework.Editor.Skill
             }
         }
 
+        /// <summary>释放旧树并切换源配表，重置详情选择与控件焦点，保存配表 GUID。</summary>
         public void SetCurrentConfigs(SkillsConfig item)
         {
             SkillListTree?.Dispose();
@@ -410,6 +428,7 @@ namespace YLFramework.Editor.Skill
             SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
         }
 
+        /// <summary>窗口停用时释放树订阅，并清理共享技能 Inspector 的序列化选择缓存。</summary>
         private void OnDisable()
         {
             SkillListTree?.Dispose();
@@ -422,6 +441,7 @@ namespace YLFramework.Editor.Skill
 
         #region 创建
 
+        /// <summary>在用户选定的 Assets 内目录创建技能配表，并记录新的配表选择 GUID。</summary>
         private void CreateNew()
         {
             string path = EditorUtility.OpenFolderPanel("请选择文件夹", Application.dataPath, string.Empty);
@@ -454,6 +474,7 @@ namespace YLFramework.Editor.Skill
             }
         }
 
+        /// <summary>以现有配表最大起始 ID 加 1000 初始化新配表，不检查所有技能 ID 的全局占用。</summary>
         private int InitIdStart()
         {
             int maxIdStart = 0;

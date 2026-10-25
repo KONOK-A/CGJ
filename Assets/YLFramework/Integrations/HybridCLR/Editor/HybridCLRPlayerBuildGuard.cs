@@ -11,8 +11,10 @@ namespace YLFramework.Integrations.HybridCLR.Editor
         private static HybridCLRBuildProfile _profile;
         private static bool _scriptsOnly;
         private static string _fingerprint;
+        /// <summary>在较早的预构建回调中检查本管线显式上下文。</summary>
         public int callbackOrder => -1000;
 
+        // 建立唯一的剥离或正式 Player 构建作用域，并固定进入时的全局设置指纹。
         internal static IDisposable Enter(HybridCLRBuildProfile selected, bool strip)
         {
             if (_profile)
@@ -26,6 +28,8 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return new Scope();
         }
 
+        /// <summary>仅在显式作用域内复核环境、目标、构建模式与设置指纹，普通构建无操作。</summary>
+        /// <param name="report">Unity 当前构建报告；无显式配置时不读取。</param>
         public void OnPreprocessBuild(BuildReport report)
         {
             if (!_profile)
@@ -50,8 +54,10 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        /// <summary>退出后清除本管线构建上下文，不修改外部 Player 设置。</summary>
         private sealed class Scope : IDisposable
         {
+            /// <summary>释放显式上下文，后续普通构建不再受本次配置约束。</summary>
             public void Dispose()
             {
                 _profile = null;

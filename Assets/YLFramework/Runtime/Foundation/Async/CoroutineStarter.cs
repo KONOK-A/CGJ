@@ -19,11 +19,14 @@ namespace YLFramework.Async
         private object _session;
         private bool _isReleased;
 
+        /// <summary>登记新 Play 会话的协程宿主及句柄归属清理。</summary>
         static CoroutineStarter() => SingletonSessionState.RegisterSessionReset(ResetSession);
 
+        /// <summary>自身是否仍是未释放的当前宿主，且属于当前执行会话。</summary>
         private bool IsCurrent => !_isReleased && ReferenceEquals(_instance, this) &&
             ReferenceEquals(_session, SingletonSessionState.ExecutionSession);
 
+        /// <summary>让协程宿主跨场景存活，不在此处认领静态宿主身份。</summary>
         private void Awake() => DontDestroyOnLoad(gameObject);
 
         /// <summary>
@@ -101,6 +104,7 @@ namespace YLFramework.Async
             }
         }
 
+        /// <summary>在激活前提交执行会话和缓存身份，创建失败时释放本次产生的宿主。</summary>
         private static CoroutineStarter CreateHost()
         {
             GameObject obj = null;
@@ -132,6 +136,7 @@ namespace YLFramework.Async
             }
         }
 
+        /// <summary>幂等停止本宿主的全部协程，仅当自身仍为当前宿主时清空缓存和句柄归属表。</summary>
         private void ReleaseOwner()
         {
             if (_isReleased)
@@ -151,6 +156,7 @@ namespace YLFramework.Async
             }
         }
 
+        /// <summary>先切断旧句柄路由，再停止并销毁旧宿主，防止其迟到消息接管新会话。</summary>
         private static void ResetSession()
         {
             var old = _instance;
@@ -166,6 +172,7 @@ namespace YLFramework.Async
             Destroy(old.gameObject);
         }
 
+        /// <summary>仅由当前执行会话的宿主关闭门禁并释放自身，忽略旧宿主的迟到退出消息。</summary>
         private void OnApplicationQuit()
         {
             if (!IsCurrent)
@@ -179,6 +186,7 @@ namespace YLFramework.Async
             Destroy(gameObject);
         }
 
+        /// <summary>外部销毁宿主时停止其协程并释放原有归属，不恢复旧工作。</summary>
         private void OnDestroy() => ReleaseOwner();
     }
 }

@@ -38,16 +38,18 @@ namespace YLFramework.Core
         }
     }
 
-    // 绑定完整构造成功后才由 Module 替换；后续请求只持有这份不可变数据。
+    /// <summary>Module 绑定时复制的规则快照；后续请求不会观察调用方集合的增删。</summary>
     internal sealed class PanelRuleSnapshot
     {
         internal static readonly PanelRuleSnapshot Empty = new PanelRuleSnapshot(Array.Empty<PanelRule>());
         private readonly PanelRule[] _rows;
+        /// <summary>接管已完成校验的私有规则数组，不再次枚举调用方数据。</summary>
         private PanelRuleSnapshot(PanelRule[] rows)
         {
             this._rows = rows;
         }
 
+        /// <summary>完整校验身份、覆盖值和重复规则后生成快照；失败时由调用方保留原绑定。</summary>
         internal static PanelRuleSnapshot Capture(IEnumerable<PanelRule> rules)
         {
             if (rules == null)
@@ -87,6 +89,7 @@ namespace YLFramework.Core
             return values.Count == 0 ? Empty : new PanelRuleSnapshot(values.ToArray());
         }
 
+        /// <summary>按完整地址或存活 Prefab 引用寻找唯一规则；两种身份命中不同规则时拒绝猜测。</summary>
         internal int Match(string assetName, GameObject prefab)
         {
             int match = -1;
@@ -108,6 +111,7 @@ namespace YLFramework.Core
             }
             return match;
         }
+        /// <summary>返回唯一命中项的覆盖值，无规则时返回全部未指定的覆盖值。</summary>
         internal PanelOverrides Resolve(string assetName, GameObject prefab)
         {
             int index = Match(assetName, prefab);

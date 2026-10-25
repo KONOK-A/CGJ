@@ -3,8 +3,8 @@ using System;
 namespace YLFramework.Extensions
 {
     /// <summary>
-    /// System.Object 通用扩展。
-    /// 注意：本类所有方法只处理托管引用，不能判断 UnityEngine.Object 的 fake-null（已销毁对象）。
+    /// 通用对象扩展：链式回调、托管判空与引用转换。
+    /// IsNull / IsNotNull 只检查托管引用，不能判断 UnityEngine.Object 的 fake-null（已销毁对象）。
     /// </summary>
     public static class SystemObjectExtension
     {

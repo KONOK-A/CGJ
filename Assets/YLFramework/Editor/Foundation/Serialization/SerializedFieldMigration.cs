@@ -13,11 +13,14 @@ namespace YLFramework.Editor.Foundation
     public static class SerializedFieldMigration
     {
         /// <summary>在调用方加载的 Prefab 内容上迁移旧路径；冲突时不写入，保存仍由调用方负责。</summary>
+        /// <param name="prefab">已加载的 Prefab 对象，必须在 EditMode 下调用且对象仍然存活。</param>
+        /// <returns>是否替换了旧路径或合并了指向同一字段的等值覆盖记录。</returns>
         public static bool MigratePrefabOverrides(GameObject prefab)
         {
             return MigratePrefabOverrides(prefab, _ => true);
         }
 
+        /// <summary>仅迁移筛选通过的目标，先完成路径解析和冲突检查，再一次性写回覆盖记录。</summary>
         internal static bool MigratePrefabOverrides(GameObject prefab, Predicate<Object> include)
         {
             if (!prefab)
@@ -69,6 +72,8 @@ namespace YLFramework.Editor.Foundation
             return changed;
         }
 
+        /// <summary>沿字段和数组路径解析 YL 程序集声明的旧字段别名，拒绝不可序列化或无法匹配的路径。</summary>
+        /// <returns>校验通过且确有改名的路径；未变化、字段不适用或路径无效时返回 null。</returns>
         private static string ResolvePath(Object target, string path)
         {
             var parts = path.Split('.');

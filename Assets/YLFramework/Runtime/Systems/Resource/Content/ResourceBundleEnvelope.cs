@@ -13,7 +13,8 @@ using Org.BouncyCastle.Crypto.Parameters;
 
 namespace YLFramework.Resource
 {
-    // YL C# adaptation adds the outer context envelope and ownership/failure contracts.
+    // YL 的 C# 适配增加外层上下文封装，并明确所有权与失败约定。
+    /// <summary>保存封装头字段、编码前缀与计算后的分段布局；头部描述本身不表示认证已经完成。</summary>
     internal sealed class ResourceBundleEnvelopeHeader
     {
         internal string KeyId
@@ -42,6 +43,7 @@ namespace YLFramework.Resource
             get;
         }
 
+        /// <summary>保存已检查的头部字段，按明文长度计算分段数量和交付长度，并拒绝计数或算术溢出。</summary>
         internal ResourceBundleEnvelopeHeader(string keyId, long plainLength, string plainSha256, byte[] prefix)
         {
             KeyId = keyId;
@@ -66,6 +68,7 @@ namespace YLFramework.Resource
     }
 
     /// <summary>独立于冻结 Catalog v1 的有界文件编码；调用方须先验证完整交付 length/SHA。</summary>
+    /// <remarks>外层头部通过文件密钥派生绑定到分段认证；Inspect 仅检查格式和上下文，不认证内容或建立发布信任。</remarks>
     internal static class ResourceBundleEnvelope
     {
         internal const int MaximumHeaderBytes = 4096;
@@ -81,7 +84,7 @@ namespace YLFramework.Resource
         private static readonly UTF8Encoding _utf8 = new(false, true);
         internal static bool IsSupported => CngSegmentAead.IsSupported;
 
-        // Inspect 不认证，不获取密钥，不改变调用方游标，头不能替代可信 Catalog context。
+        /// <summary>按签名区分原始 UnityFS 与封装，封装核对上下文与交付长度；恢复游标，不取密钥或认证内容。</summary>
         internal static ResourceBundleEnvelopeHeader Inspect(Stream input, ResourceBundleContext context)
         {
             RequireInput(input);
@@ -177,6 +180,8 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>将原始流编码为上下文绑定的分段认证交付字节，写入前后两次哈希检查输入是否变化。</summary>
+        /// <remarks>不关闭输入输出流；失败或取消可能留下部分输出，由调用方负责丢弃，不自动回滚。</remarks>
         internal static void Encrypt(Stream raw, Stream output, ResourceBundleContext context, string keyId,
             byte[] key, CancellationToken token = default)
         {
@@ -241,6 +246,7 @@ namespace YLFramework.Resource
                 }
 
                 tinkHeader[0] = 40;
+                // 外层规范头部进入 HKDF 的 info，使相同应用密钥下不同上下文的文件密钥派生输入不同。
                 fileKey = DeriveKey(key, prefix, tinkHeader);
                 aead = new CngSegmentAead(fileKey);
                 Array.Clear(fileKey, 0, fileKey.Length);
@@ -284,6 +290,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>在调用方已校验交付字节的流上检查封装、密钥长度与平台，再建立按需认证解密视图。</summary>
         internal static ResourceDecryptStream OpenDecrypt(Stream verifiedStream, ResourceBundleContext context,
             byte[] key, bool leaveOpen = false, CancellationToken token = default)
         {
@@ -294,6 +301,8 @@ namespace YLFramework.Resource
             return new ResourceDecryptStream(verifiedStream, header, key, leaveOpen, token);
         }
 
+        /// <summary>验证整份加密明文，或按提供的预期值核对原始流；可额外绑定独立构建产物的明文身份。</summary>
+        /// <remarks>原始流未提供预期摘要时不计算全文摘要；本方法不关闭调用方流，也不替代交付文件的目录校验。</remarks>
         internal static void ValidateAll(Stream verifiedStream, ResourceBundleContext context, byte[] key,
             CancellationToken token = default, string expectedPlainSha256 = null, long? expectedPlainLength = null)
         {
@@ -338,6 +347,7 @@ namespace YLFramework.Resource
             stream.ValidateAll(token);
         }
 
+        /// <summary>限定密钥版本标识的长度与 ASCII 字符集，不获取或验证对应密钥内容。</summary>
         internal static void ValidateKeyId(string value)
         {
             if (string.IsNullOrEmpty(value) || value.Length > 64 || value.Any(character =>
@@ -348,6 +358,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>要求调用方提供确切 32 字节的密钥副本，不校验其来源或授权。</summary>
         internal static void ValidateKey(byte[] key)
         {
             if (key == null)
@@ -361,6 +372,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>分块读取确切字节数并检查取消，截断或不合约的读取量立即失败。</summary>
         internal static void ReadExact(Stream input, byte[] buffer, int offset, int count, CancellationToken token = default)
         {
             while (count > 0)
@@ -377,6 +389,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>以分段头的随机盐和包含外层前缀的域上下文执行 HKDF-SHA256，返回调用方须清除的文件密钥。</summary>
         internal static byte[] DeriveKey(byte[] key, byte[] prefix, byte[] tinkHeader)
         {
             var salt = new byte[32];
@@ -404,6 +417,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>组合文件 nonce 前缀、四字节大端段序号及末段标记，拒绝超出分段计数范围。</summary>
         internal static void SetNonce(byte[] header, long index, bool last, byte[] nonce)
         {
             if (index < 0 || index > uint.MaxValue)
@@ -419,8 +433,10 @@ namespace YLFramework.Resource
             nonce[11] = last ? (byte)1 : (byte)0;
         }
 
+        /// <summary>将已经计算好的摘要字节转为小写十六进制，不在此执行哈希。</summary>
         internal static string Digest(byte[] bytes) => BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
 
+        /// <summary>同时要求可用的 CNG 后端与 Windows64 内容平台，不为其他平台启用软件回退。</summary>
         private static void RequireSupported(ResourceBundleContext context)
         {
             if (!IsSupported || context.Platform != "StandaloneWindows64")
@@ -429,6 +445,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>要求可读且可定位的输入；独占所有权由调用方遵守，不能靠 Stream 能力属性证明。</summary>
         private static void RequireInput(Stream input)
         {
             if (input == null)
@@ -442,6 +459,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>从头计算指定长度的 SHA-256，并核对末尾与流长，检测本次遍历期间可观察的长度变化。</summary>
         private static string HashRaw(Stream raw, long length, byte[] buffer, CancellationToken token)
         {
             raw.Position = 0;
@@ -464,6 +482,7 @@ namespace YLFramework.Resource
             return Digest(hash.Hash);
         }
 
+        /// <summary>按较小深度上限读取封装头对象，拒绝重复字段、非法 UTF-8 与额外 JSON 内容。</summary>
         private static JObject Parse(byte[] json)
         {
             try
@@ -488,6 +507,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>按精确字段名排序并使用固定转义和数值文化写出有界规范头部字节。</summary>
         private static byte[] Canonical(JObject data)
         {
             var sorted = new JObject(data.Properties().OrderBy(value => value.Name, StringComparer.Ordinal)
@@ -512,6 +532,7 @@ namespace YLFramework.Resource
             return bytes;
         }
 
+        /// <summary>严格读取有界、无控制字符及首尾空白的头部字符串。</summary>
         private static string Text(JObject data, string name)
         {
             if (data[name]?.Type != JTokenType.String)
@@ -528,6 +549,7 @@ namespace YLFramework.Resource
             return value;
         }
 
+        /// <summary>严格读取可表示为 Int64 的头部整数，不接受浮点或字符串替代。</summary>
         private static long Integer(JObject data, string name)
         {
             try
@@ -545,6 +567,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>检查 SHA-256 描述是否为固定长度的小写十六进制，不核对其内容来源。</summary>
         private static void ValidateDigest(string digest)
         {
             if (digest == null || digest.Length != 64 || digest.Any(value => !(value >= '0' && value <= '9' || value >= 'a' && value <= 'f')))

@@ -9,6 +9,7 @@ namespace YLFramework.Core
     /// <remarks>主线程使用。完成后调用方负责消费/释放原请求；退出会取消并释放仍在途的请求，不能回滚原生 Single。</remarks>
     public sealed class SceneController : Controller
     {
+        /// <summary>一笔在途加载的占位与跟踪订阅，身份独立于相同地址的后续请求。</summary>
         private sealed class PendingLoad
         {
             internal readonly (string Project, string Address) Key;
@@ -17,6 +18,7 @@ namespace YLFramework.Core
             internal Action<CoreResourceRequest<CoreSceneResult>> Tracker;
             internal bool IsSubscribed;
 
+            /// <summary>捕获去重键和错误上下文，不在构造时请求后端。</summary>
             internal PendingLoad(string project, string address, LoadSceneMode mode, Module owner)
             {
                 Key = (project, address);
@@ -28,6 +30,7 @@ namespace YLFramework.Core
         private object _registration;
         private int _threadId;
 
+        /// <summary>为本次 Module 注册建立新的身份与线程约束，不延用上次注册的加载意图。</summary>
         public override void OnInit()
         {
             CheckThread();
@@ -147,6 +150,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>先使本次注册失效，再取消在途请求；已交付的完成结果仍由调用方负责。</summary>
         public override void OnExit()
         {
             CheckThread();
@@ -154,6 +158,7 @@ namespace YLFramework.Core
             CancelPendingLoads();
         }
 
+        /// <summary>在首次注册已确定线程后，拒绝从其他线程操作加载跟踪状态。</summary>
         private void CheckThread()
         {
             if (_threadId != 0 && _threadId != Thread.CurrentThread.ManagedThreadId)
@@ -162,6 +167,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>取得仍可接收业务对象的有效归属，并拒绝未注册或正在退出的 Controller。</summary>
         private Module RequireOwner()
         {
             CheckThread();
@@ -175,6 +181,7 @@ namespace YLFramework.Core
             return owner;
         }
 
+        /// <summary>跨越可能重入的后端或订阅调用后，确认仍属于接受请求时的同一次注册。</summary>
         private void EnsureRegistration(object stamp, Module owner)
         {
             if (!ReferenceEquals(_registration, stamp) || !ReferenceEquals(Module, owner) || IsExiting)
@@ -185,6 +192,7 @@ namespace YLFramework.Core
             owner.EnsureCanAddObjects();
         }
 
+        /// <summary>仅移除匹配身份的占位并退订跟踪回调，不取消请求或消费结果。</summary>
         private void Detach(PendingLoad entry)
         {
             if (_pending.TryGetValue(entry.Key, out var current) && ReferenceEquals(current, entry))
@@ -201,6 +209,7 @@ namespace YLFramework.Core
             entry.Request.Completed -= entry.Tracker;
         }
 
+        /// <summary>解除跟踪后按策略取消并释放本笔请求，将各步失败写入共享错误列表。</summary>
         private void Release(PendingLoad entry, bool pendingOnly, List<Exception> errors)
         {
             try

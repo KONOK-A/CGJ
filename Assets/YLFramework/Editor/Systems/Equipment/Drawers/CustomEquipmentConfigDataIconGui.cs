@@ -4,8 +4,10 @@ using YLFramework.Attributes;
 using YLFramework.Editor.Utilities;
 namespace YLFramework.Editor.Equipment
 {
+    /// <summary>维护装备显示图标的独立资源地址，并通过 Editor 资产工具显示预览。</summary>
     internal sealed class CustomEquipmentConfigDataIconGui : CustomPropertyGui
     {
+        /// <summary>绘制图标资源项目与路径，二者非空时尝试显示纹理预览。</summary>
         public override void OnPropertyGui(SerializedProperty property)
         {
             EditorGUILayout.LabelField("Icon", EditorStyles.boldLabel);

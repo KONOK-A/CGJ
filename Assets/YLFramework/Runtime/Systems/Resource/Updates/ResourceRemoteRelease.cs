@@ -25,6 +25,7 @@ namespace YLFramework.Resource
             get; private set;
         }
 
+        /// <summary>使用挂载配置的公钥验签，并校验发布范围、序号和有效期结构；可选择是否要求尚未过期。</summary>
         internal ResourceRemoteRelease(byte[] envelope, ResourceProjectMount mount, string unity, DateTimeOffset now, bool fresh = true)
         {
             Source = mount.Remote ?? throw new InvalidDataException("The project has no explicitly trusted remote source.");
@@ -66,6 +67,7 @@ namespace YLFramework.Resource
             Envelope = (byte[])envelope.Clone();
         }
 
+        /// <summary>按给定本地时间拒绝已到期的发布授权，不替代已确认序号检查。</summary>
         internal void RequireFresh(DateTimeOffset now)
         {
             if (Expires <= now.ToUnixTimeSeconds())
@@ -74,6 +76,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>核对 Catalog 的签名绑定摘要、长度与 BuildId，并检查整个发布的下载预算。</summary>
         internal void ReadCatalog(byte[] bytes, ResourceProjectMount mount, string unity)
         {
             if (bytes.LongLength != CatalogLength || ResourceCatalogCodec.Digest(bytes) != CatalogDigest)
@@ -105,6 +108,7 @@ namespace YLFramework.Resource
             Catalog = catalog;
         }
 
+        /// <summary>生成此发布的历史门槛描述；生成描述本身不表示发布已提交确认。</summary>
         internal JObject Floor() => new() { ["ProjectId"] = ProjectId, ["Platform"] = Platform, ["Channel"] = Channel, ["Sequence"] = Sequence, ["CatalogDigest"] = CatalogDigest };
     }
 }

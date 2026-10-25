@@ -5,10 +5,13 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>维护参数定义及所有条件组中的名称引用，修改前记录配置 Undo，完成后标脏。</summary>
     internal class FsmParameterFactory
     {
 
-        // 创建参数
+        /// <summary>生成未占用的参数名称，并向配置追加指定类型、初值为零的参数。</summary>
+        /// <param name="controller">接收参数的配置。</param>
+        /// <param name="type">参数语义类型。</param>
         public static void CreateParamter(RuntimeFsmController controller, ParameterType type)
         {
             UnityEditor.Undo.RecordObject(controller, "Create FSM Parameter");
@@ -21,6 +24,7 @@ namespace YLFramework.Editor.StateMachine
             controller.AddParameters(parameter);
         }
 
+        /// <summary>以参数类型为默认前缀，递增序号直到名称未被配置占用。</summary>
         private static string GetDefualtName(RuntimeFsmController controller, ParameterType type)
         {
             string name = string.Format("New {0}", type.ToString());
@@ -36,7 +40,9 @@ namespace YLFramework.Editor.StateMachine
             return tempName;
         }
 
-        // 删除参数
+        /// <summary>非运行期移除参数；存在条件引用时经用户确认一并删除这些条件，不删除过渡本身。</summary>
+        /// <param name="controller">拥有参数及条件引用的配置。</param>
+        /// <param name="index">参数列表中的下标。</param>
         public static void RemoveParamter(RuntimeFsmController controller, int index)
         {
 
@@ -54,7 +60,7 @@ namespace YLFramework.Editor.StateMachine
 
             List<FsmTransitionData> transitions = new List<FsmTransitionData>();
 
-            // 查询引用了这个参数的过渡
+            // 基础组和附加组都按参数名关联，删除时必须一并收集，避免残留失效条件。
             foreach (var item in controller.transitions)
             {
                 foreach (var condition in item.conditions)
@@ -125,18 +131,19 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
-        // 重命名参数
+        /// <summary>校验新名称后同步基础组、附加组中的所有引用，再清理参数索引并标脏。</summary>
+        /// <param name="controller">拥有参数和过渡的配置。</param>
+        /// <param name="parameter">待重命名参数。</param>
+        /// <param name="newName">配置内尚未使用的非空名称。</param>
         public static void RenameParamter(RuntimeFsmController controller, FsmParameterData parameter, string newName)
         {
 
-            // 判断名称是否为空
             if (string.IsNullOrEmpty(newName))
             {
                 FsmEditorWindow.ShowNotification("参数名称不能为空!");
                 Debug.LogError("参数名称不能为空!");
                 return;
             }
-            // 判断新的名称是否已经存在
             if (controller.GetParameterData(newName) != null)
             {
                 FsmEditorWindow.ShowNotification("参数名称已经存在!");
@@ -145,10 +152,8 @@ namespace YLFramework.Editor.StateMachine
             }
 
             UnityEditor.Undo.RecordObject(controller, "Rename FSM Parameter");
-            // 查找到所有引用此参数的过渡 修改名称
             foreach (var item in controller.transitions)
             {
-                // 遍历所有的条件
                 foreach (var condition in item.conditions)
                 {
                     if (condition.parameterName != null && condition.parameterName.Equals(parameter.name))
@@ -157,7 +162,6 @@ namespace YLFramework.Editor.StateMachine
                     }
                 }
 
-                // 遍历其他组的条件
                 foreach (var group in item.groupConditions)
                 {
                     foreach (var condition in group.conditions)
@@ -173,7 +177,6 @@ namespace YLFramework.Editor.StateMachine
 
 
 
-            // 修改参数名称
             parameter.name = newName;
             controller.ClearCache();
             controller.Save();

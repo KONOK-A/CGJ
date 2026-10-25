@@ -8,7 +8,7 @@ namespace YLFramework.Timing
 {
     /// <summary>
     /// Foundation 的秒/帧到期内核，仅主线程使用；显式实例不读取 Unity Time、不创建宿主。
-    /// 三域共享 run 状态和派发算法。登记不执行回调，fixed-delay、不补发，每个 rendered frame 至多执行一次。
+    /// 三域共享 run 状态和派发算法。登记不执行到期回调，fixed-delay、不补发，每个 rendered frame 至多执行一次。
     /// </summary>
     /// <remarks>默认实例由内部 TimerDriver 驱动，禁止调用其手动推进入口。</remarks>
     public sealed class TimerScheduler : IDisposable
@@ -30,8 +30,10 @@ namespace YLFramework.Timing
         private bool _isFrameReady = true;
         private bool _isSecondsReady = true;
         private long _lastDispatchedFrame;
+        /// <summary>调度器是否已永久关闭；关闭后不再接收任务或样本推进。</summary>
         internal bool IsDisposed => _isDisposed;
 
+        /// <summary>创建由宿主采样的自动内核，首个合法样本到达前延后锚定任务期限。</summary>
         internal TimerScheduler(Action synchronize) : this(0, 0, 0)
         {
             _isAutomatic = true;
@@ -39,8 +41,10 @@ namespace YLFramework.Timing
             _isFrameReady = _isSecondsReady = false;
         }
 
+        /// <summary>请求自动宿主同步当前合法样本；手动内核不执行额外采样。</summary>
         internal void Refresh() => _synchronize?.Invoke();
 
+        /// <summary>接收自动宿主的帧身份和样本就绪状态，秒样本不可用时保留先前双时钟值。</summary>
         internal void Sample(double scaledTime, double unscaledTime, long frame, bool secondsReady)
         {
             _renderedFrame = frame;
@@ -55,9 +59,10 @@ namespace YLFramework.Timing
             _unscaledTime = unscaledTime;
         }
 
+        /// <summary>使用宿主最近提交的样本推进自动内核，执行权限由宿主在调用前核对。</summary>
         internal void AdvanceAutomatic() => AdvanceCore(_scaledTime, _unscaledTime, _renderedFrame);
 
-        // 替换先核对当前样本的可表示范围；取消通知可能改变样本，正式登记仍再次校验。
+        /// <summary>为命名替换预先检查期限是否可表示；取消通知可能改变样本，正式登记时仍需重新校验。</summary>
         internal void ValidateDeadline(TimerClock clock, double delay, long frames)
         {
             Refresh();
@@ -145,6 +150,7 @@ namespace YLFramework.Timing
             return Schedule(TimerClock.RenderedFrame, 0, Math.Max(1, firstDelay), 0, interval, count, null, callback, onCancelled);
         }
 
+        /// <summary>为已校验的入口分配或复用任务存储，更新代次并加入延后队列，不内联执行到期回调。</summary>
         internal TimerHandle Schedule(TimerClock clock, double delay, long frames, double intervalSeconds,
             long intervalFrames, int? count, Action callback, Action<long> tickCallback,
             Action<TimerCancellationReason> onCancelled, TimerRun storage = null)
@@ -202,6 +208,7 @@ namespace YLFramework.Timing
             AdvanceCore(scaledTime, unscaledTime, renderedFrame);
         }
 
+        /// <summary>防止递归推进，接收非回拨样本，并在新渲染帧依次检查绑定、转移待登记任务和派发三个域。</summary>
         private void AdvanceCore(double scaledTime, double unscaledTime, long renderedFrame)
         {
             if (_isAdvancing)
@@ -280,6 +287,7 @@ namespace YLFramework.Timing
             ThrowErrors(errors);
         }
 
+        /// <summary>逐项派发当前域的到期任务，收集失败，并为仍有调度责任的周期任务安排下一轮。</summary>
         private void Dispatch(TimerHeap heap, ref List<Exception> errors)
         {
             while (!_isDisposed && heap.Count > 0)
@@ -363,6 +371,7 @@ namespace YLFramework.Timing
             }
         }
 
+        /// <summary>取消仍归属本内核的精确代次，先提交终态及解除引用，再按手动或自动边界通知取消。</summary>
         internal bool Cancel(TimerRun run, ulong generation)
         {
             Refresh();
@@ -389,6 +398,7 @@ namespace YLFramework.Timing
             return true;
         }
 
+        /// <summary>冻结当前等待量；非末轮回调内只请求下一轮暂停，保留 Executing 状态直至回调返回。</summary>
         internal bool Pause(TimerRun run, ulong generation)
         {
             Refresh();
@@ -419,6 +429,7 @@ namespace YLFramework.Timing
             return true;
         }
 
+        /// <summary>恢复精确代次的冻结等待，或在回调尚未退出时撤销暂停请求。</summary>
         internal bool Resume(TimerRun run, ulong generation)
         {
             Refresh();
@@ -448,17 +459,23 @@ namespace YLFramework.Timing
             return true;
         }
 
+        /// <summary>读取秒任务的当前或冻结剩余量；未锚定任务保留原等待量，其他状态返回零。</summary>
         internal double RemainingSeconds(TimerRun run) => run.Clock == TimerClock.RenderedFrame ? 0 :
             run.State == TimerState.Paused ? run.FrozenSeconds :
             run.State == TimerState.Scheduled ? run.NeedsAnchor ? run.FrozenSeconds : Math.Max(0, run.DueSeconds - ReadClock(run.Clock)) : 0;
+        /// <summary>读取帧任务的当前或冻结剩余量，不将秒域或执行中任务换算为帧数。</summary>
         internal long RemainingFrames(TimerRun run) => run.Clock != TimerClock.RenderedFrame ? 0 :
             run.State == TimerState.Paused ? run.FrozenFrames :
             run.State == TimerState.Scheduled ? run.NeedsAnchor ? run.FrozenFrames : Math.Max(0, run.DueFrame - _renderedFrame) : 0;
 
+        /// <summary>同时核对调度归属和代次，拒绝终态任务及复用前的旧控制请求。</summary>
         private bool Owns(TimerRun run, ulong generation) => ReferenceEquals(run.Owner, this) && run.Generation == generation;
+        /// <summary>取得指定秒域最近保存的样本，调用方负责排除帧域。</summary>
         private double ReadClock(TimerClock clock) => clock == TimerClock.Scaled ? _scaledTime : _unscaledTime;
+        /// <summary>取得指定计时域独立维护的到期堆。</summary>
         private TimerHeap Heap(TimerClock clock) => clock == TimerClock.RenderedFrame ? _frames :
             clock == TimerClock.Scaled ? _scaled : _unscaled;
+        /// <summary>以当前样本计算新的秒或帧期限，不以旧期限补发遗漏周期，并检查范围溢出。</summary>
         private void SetNextDeadline(TimerRun run, double seconds, long frames)
         {
             if (run.Clock == TimerClock.RenderedFrame)
@@ -471,6 +488,7 @@ namespace YLFramework.Timing
             }
         }
 
+        /// <summary>分配新的稳定顺序并加入待登记列表，确保本轮新建、恢复或续期任务最早下一帧执行。</summary>
         private void Queue(TimerRun run)
         {
             run.EarliestFrame = checked(_renderedFrame + 1);
@@ -479,6 +497,7 @@ namespace YLFramework.Timing
             _pending.Add(run);
         }
 
+        /// <summary>解除任务的堆或待登记位置，待登记列表以尾项补位并维护反向索引。</summary>
         private void RemoveQueued(TimerRun run)
         {
             run.Heap?.Remove(run);
@@ -498,6 +517,7 @@ namespace YLFramework.Timing
             run.PendingIndex = -1;
         }
 
+        /// <summary>解除队列、调度器、范围与对象绑定责任，并清空用户委托；不在此处改写任务状态。</summary>
         private void Detach(TimerRun run)
         {
             RemoveQueued(run);
@@ -511,11 +531,13 @@ namespace YLFramework.Timing
             run.PauseNext = false;
         }
 
+        /// <summary>增加监听器在本内核中的绑定计数，确保暂停任务仍参与对象存活检查。</summary>
         internal void AddBinding(TimerLifetimeListener listener)
         {
             _bindingOwners.TryGetValue(listener, out var count);
             _bindingOwners[listener] = count + 1;
         }
+        /// <summary>减少监听器的绑定计数，最后一项解除后停止由本内核检查该监听器。</summary>
         internal void RemoveBinding(TimerLifetimeListener listener)
         {
             if (!_bindingOwners.TryGetValue(listener, out var count))
@@ -533,6 +555,7 @@ namespace YLFramework.Timing
             }
         }
 
+        /// <summary>快照检查本内核持有的对象监听器，容许取消过程改动绑定集合，并收集通知异常。</summary>
         private void CheckBindings(ref List<Exception> errors)
         {
             if (_bindingOwners.Count == 0)
@@ -562,6 +585,7 @@ namespace YLFramework.Timing
             }
         }
 
+        /// <summary>先提交指定终态，再解除该任务的全部调度及订阅责任。</summary>
         private void Finish(TimerRun run, TimerState state)
         {
             run.State = state;
@@ -618,6 +642,7 @@ namespace YLFramework.Timing
             ThrowErrors(errors);
         }
 
+        /// <summary>拒绝在永久关闭的内核上继续登记或推进工作。</summary>
         private void ThrowIfDisposed()
         {
             if (_isDisposed)
@@ -625,6 +650,7 @@ namespace YLFramework.Timing
                 throw new ObjectDisposedException(nameof(TimerScheduler));
             }
         }
+        /// <summary>按调用方提供的参数名拒绝负数及非有限秒值。</summary>
         internal static void ValidateSeconds(double value, string name)
         {
             if (double.IsNaN(value) || double.IsInfinity(value) || value < 0)
@@ -632,6 +658,7 @@ namespace YLFramework.Timing
                 throw new ArgumentOutOfRangeException(name);
             }
         }
+        /// <summary>校验双时钟样本有限且非负、渲染帧非负；是否回拨由推进入口另行检查。</summary>
         private static void ValidateSample(double scaledTime, double unscaledTime, long renderedFrame)
         {
             ValidateSeconds(scaledTime, nameof(scaledTime));
@@ -641,6 +668,7 @@ namespace YLFramework.Timing
                 throw new ArgumentOutOfRangeException(nameof(renderedFrame));
             }
         }
+        /// <summary>允许 null 表示无限周期，指定有限总次数时要求大于零。</summary>
         internal static void ValidateCount(int? count)
         {
             if (count.HasValue && count.Value <= 0)
@@ -648,6 +676,7 @@ namespace YLFramework.Timing
                 throw new ArgumentOutOfRangeException(nameof(count));
             }
         }
+        /// <summary>限制秒入口仅使用 Scaled 或 Unscaled，拒绝帧域及未定义枚举值。</summary>
         internal static void ValidateSecondClock(TimerClock clock)
         {
             if (clock != TimerClock.Scaled && clock != TimerClock.Unscaled)
@@ -655,6 +684,7 @@ namespace YLFramework.Timing
                 throw new ArgumentOutOfRangeException(nameof(clock));
             }
         }
+        /// <summary>相加有限秒样本与延迟，结果超出可表示范围时抛出溢出异常。</summary>
         private static double AddSeconds(double now, double delay)
         {
             var due = now + delay;
@@ -665,7 +695,9 @@ namespace YLFramework.Timing
 
             return due;
         }
+        /// <summary>仅在首次失败时创建错误列表，保留本轮所有待报告异常。</summary>
         private static void AddError(ref List<Exception> errors, Exception error) => (errors ??= new List<Exception>()).Add(error);
+        /// <summary>自动内核逐项记录异常；手动内核保留单个异常的原始栈，多异常以 AggregateException 抛出。</summary>
         private void ThrowErrors(List<Exception> errors)
         {
             if (errors == null)

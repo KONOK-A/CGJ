@@ -10,10 +10,18 @@ using YLFramework.Excel;
 
 namespace YLFramework.Integrations.Excel.Editor
 {
+    /// <summary>提供可选 Editor .xlsx 导出与一次性导入预览，不提供 Runtime 工作簿 IO。</summary>
+    /// <remarks>工作表前三行为字段名、列型和描述，数据从第四行开始；表头是独立于 C# 字段改名的协议。</remarks>
     public static partial class ExcelAuthoring
     {
+        /// <summary>记录 ScriptableObject 具体 CLR 类型全名的保留列名。</summary>
         public const string DataTypeColumn = "DATA_TYPE_FULL_CLASS_NAME";
 
+        /// <summary>按声明行类型的字段导出工作簿，替换目标文件原有的全部工作表和格式。</summary>
+        /// <typeparam name="T">用于确定导出字段的声明行类型。</typeparam>
+        /// <param name="values">非空行集合，不允许包含 null 行。</param>
+        /// <param name="path">父目录已存在的 .xlsx 输出路径。</param>
+        /// <param name="sheetName">生成的工作表名。</param>
         public static void ListToExcel<T>(IEnumerable<T> values, string path, string sheetName = "Sheet1")
         {
             if (values == null)
@@ -24,6 +32,16 @@ namespace YLFramework.Integrations.Excel.Editor
             Export(values.Cast<object>().ToList(), typeof(T), path, sheetName, false);
         }
 
+        /// <summary>将工作表转换为新行对象并生成整表替换预览，预览不修改原列表。</summary>
+        /// <typeparam name="T">可通过公开无参构造创建的引用类型。</typeparam>
+        /// <param name="path">待读取的 .xlsx 工作簿路径。</param>
+        /// <param name="values">确认时被新行对象替换内容的目标列表，不在原行对象上合并字段。</param>
+        /// <param name="sheetName">工作表名；null 使用后端默认的首张工作表。</param>
+        /// <returns>包含错误和差异的一次性计划，调用方须确认、取消或释放。</returns>
+        /// <remarks>
+        /// 有 ID 字段时使用其文本键，否则使用行位置键；重复键拒绝提交。
+        /// 提交前复核源文件、原列表及暂存字段状态，不为自定义转换的外部副作用提供回滚。
+        /// </remarks>
         public static ExcelImportPlan PreviewList<T>(string path, List<T> values, string sheetName = null) where T : class, new()
         {
             var plan = new ExcelImportPlan();
@@ -92,6 +110,16 @@ namespace YLFramework.Integrations.Excel.Editor
             return plan;
         }
 
+        /// <summary>按列型生成 JSON 数组预览，确认后通过临时文件替换目标 JSON。</summary>
+        /// <param name="path">待读取的 .xlsx 工作簿路径。</param>
+        /// <param name="jsonPath">与输入路径不同、父目录已存在的 .json 输出路径。</param>
+        /// <param name="excludePrefix">忽略以此前缀开头的列，按大小写精确匹配；空值不排除列。</param>
+        /// <param name="sheetName">工作表名；null 使用后端默认的首张工作表。</param>
+        /// <returns>以输出路径为差异键的一次性计划，预检异常记录在计划中。</returns>
+        /// <remarks>
+        /// 枚举保留文本，资产引用仅校验 GUID[:localFileID] 格式而不解析资产。
+        /// 提交前比较输入与目标文件哈希；这不是持续文件锁或跨文件事务。
+        /// </remarks>
         public static ExcelImportPlan PreviewJson(string path, string jsonPath, string excludePrefix = "", string sheetName = null)
         {
             var plan = new ExcelImportPlan();
@@ -147,6 +175,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return plan;
         }
 
+        // 将已识别的列写入暂存行，并收集单元格转换、非空未知列和缺少 ID 列的错误。
         private static void ImportRow(ExcelTable table, KeyValuePair<int, IDictionary<string, object>> row, object target, ExcelImportPlan plan)
         {
             var fields = ExcelValues.Fields(target.GetType()).ToDictionary(ExcelValues.ColumnName);
@@ -182,6 +211,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 以唯一行键记录具体类型及原字段状态，拒绝重复目标身份。
         private static Dictionary<string, string> Snapshots(IEnumerable<object> values, bool requireId = false)
         {
             var snapshot = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -198,6 +228,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
             return snapshot;
         }
+        // 合并声明类型与所需具体类型的列定义，拒绝同名异型列后按协议导出各行。
         private static void Export(IReadOnlyList<object> values, Type baseType, string path, string sheetName, bool includeType)
         {
             if (values.Any(value => value == null))

@@ -13,16 +13,21 @@ using YLFramework.Editor.Utilities;
 namespace YLFramework.Editor.Buff
 {
 #if UNITY_6000_2_OR_NEWER
+    /// <summary>把效果定义及所属类型分组关联到一行树节点。</summary>
     public class EffectTreeViewItem : TreeViewItem<int>
 #else
+    /// <summary>把效果定义及所属类型分组关联到一行树节点。</summary>
     public class EffectTreeViewItem : TreeViewItem
 #endif
 
     {
+        /// <summary>本行展示的效果定义资产。</summary>
         public EffectData EffectData;
 
+        /// <summary>本行所在的 C# 类型分组，不是业务分类。</summary>
         public GroupEffectData GroupEffectData;
 
+        /// <summary>以效果 ID、显示名和给定深度构造数据行。</summary>
         public EffectTreeViewItem(GroupEffectData groupEffectData, EffectData data, int depth) : base(data.id, depth, data.effectName)
         {
             this.EffectData = data;
@@ -31,8 +36,10 @@ namespace YLFramework.Editor.Buff
     }
 
 #if UNITY_6000_2_OR_NEWER
+    /// <summary>按 C# 类型分组展示效果定义，支持组内排序、拖拽及资产编辑菜单。</summary>
     public class EffectListTree : TreeView<int>
 #else
+    /// <summary>按 C# 类型分组展示效果定义，支持组内排序、拖拽及资产编辑菜单。</summary>
     public class EffectListTree : TreeView
 #endif
 
@@ -56,8 +63,10 @@ namespace YLFramework.Editor.Buff
         private float _lastRefreshTime;
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>用给定状态和多列表头建立效果树，并订阅列头排序变化。</summary>
         public EffectListTree(TreeViewState<int> state , MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
 #else
+        /// <summary>用给定状态和多列表头建立效果树，并订阅列头排序变化。</summary>
         public EffectListTree(TreeViewState state, MultiColumnHeaderState multiColumnHeaderState) : base(state, new MultiColumnHeader(multiColumnHeaderState))
 #endif
 
@@ -70,6 +79,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>按列头状态对各分组的列表排序，然后保存项目设置并重建树。</summary>
         private void SortChanged(MultiColumnHeader multiColumnHeader)
         {
             bool asc = false;
@@ -114,8 +124,10 @@ namespace YLFramework.Editor.Buff
             Reload();
         }
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>从当前效果分组构造根节点和数据行。</summary>
         protected override TreeViewItem<int> BuildRoot()
 #else
+        /// <summary>从当前效果分组构造根节点和数据行。</summary>
         protected override TreeViewItem BuildRoot()
 #endif
 
@@ -124,12 +136,14 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>创建效果列表的默认多列表头状态。</summary>
         internal static MultiColumnHeaderState CreateDefaultMultiColumnHeaderState()
         {
             MultiColumnHeaderState state = new MultiColumnHeaderState(GetColumns());
 
             return state;
         }
+        /// <summary>配置名称、ID、业务类型与描述列的宽度和排序能力。</summary>
         private static MultiColumnHeaderState.Column[] GetColumns()
         {
             var retVal = new MultiColumnHeaderState.Column[] {
@@ -177,8 +191,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>按分组顺序建立树；跨分组遇到重复效果 ID 时只展示首项。</summary>
         public TreeViewItem<int> CreateView()
 #else
+        /// <summary>按分组顺序建立树；跨分组遇到重复效果 ID 时只展示首项。</summary>
         public TreeViewItem CreateView()
 #endif
 
@@ -234,6 +250,7 @@ namespace YLFramework.Editor.Buff
             return root;
         }
 
+        /// <summary>移除登记列表中的空项，并返回当前最大效果 ID 加一。</summary>
         private int GenerateId()
         {
             int id = 0;
@@ -260,8 +277,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>允许多选效果行，以执行批量复制、删除或同组拖拽。</summary>
         protected override bool CanMultiSelect(TreeViewItem<int> item)
 #else
+        /// <summary>允许多选效果行，以执行批量复制、删除或同组拖拽。</summary>
         protected override bool CanMultiSelect(TreeViewItem item)
 #endif
 
@@ -269,6 +288,7 @@ namespace YLFramework.Editor.Buff
             return true;
         }
 
+        /// <summary>为空白区展示创建菜单，避免与本次条目右键菜单重复弹出。</summary>
         protected override void ContextClicked()
         {
             base.ContextClicked();
@@ -283,6 +303,7 @@ namespace YLFramework.Editor.Buff
             ShowCreateEffectMenu(menu);
         }
 
+        /// <summary>按右键节点提供创建入口，效果数据行还提供批量删除和复制。</summary>
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
@@ -342,8 +363,10 @@ namespace YLFramework.Editor.Buff
         }
 
 #if UNITY_6000_2_OR_NEWER
+        /// <summary>沿用 TreeView 的行构建与搜索流程。</summary>
         protected override IList<TreeViewItem<int>> BuildRows(TreeViewItem<int> root)
 #else
+        /// <summary>沿用 TreeView 的行构建与搜索流程。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
 #endif
 
@@ -351,6 +374,7 @@ namespace YLFramework.Editor.Buff
             return base.BuildRows(root);
         }
 
+        /// <summary>创建指定效果数据类型，再交给实例入口登记为效果资产。</summary>
         private int CreateEffect(Type type)
         {
 
@@ -359,6 +383,7 @@ namespace YLFramework.Editor.Buff
             return CreateEffect(effect);
         }
 
+        /// <summary>创建并登记效果资产后赋予显示名与新 ID，由菜单调用方保存最终字段。</summary>
         private int CreateEffect(EffectData effect, string preName = null)
         {
             string path = "Assets/YLFrameworkData/Buff/Effects";
@@ -371,12 +396,14 @@ namespace YLFramework.Editor.Buff
             return effect.id;
         }
 
+        /// <summary>复制效果定义，并通过创建入口分配新名称与 ID。</summary>
         private int CopyEffect(EffectData effect)
         {
             EffectData data = GameObject.Instantiate(effect);
             return CreateEffect(data, data.effectName);
         }
 
+        /// <summary>为基础效果与派生类型建立创建菜单，完成创建后保存并定位新行。</summary>
         private void ShowCreateEffectMenu(GenericMenu menu)
         {
             menu.AddItem(new GUIContent("创建Effect/基础效果"), false, () =>
@@ -439,6 +466,7 @@ namespace YLFramework.Editor.Buff
             menu.ShowAsContext();
         }
 
+        /// <summary>先从项目设置撤销效果引用，再请求删除对应资产文件。</summary>
         private void DeleteEffect(int id)
         {
             EffectData data = BuffSystemSettings.Instance.GetEffectDataById(id);
@@ -453,6 +481,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>扫描 EffectData 的派生脚本类型，不包含基础类型，也不过滤抽象类型。</summary>
         public static List<Type> GetAllBuffTypes()
         {
             List<Type> states = new List<Type>();
@@ -486,6 +515,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>按当前可见列逐格绘制效果行或分组行。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             for (int i = 0; i < args.GetNumVisibleColumns(); ++i)
@@ -496,8 +526,10 @@ namespace YLFramework.Editor.Buff
 
 #if UNITY_6000_2_OR_NEWER
 
+        /// <summary>绘制效果字段与业务分类菜单；分组节点只在首列显示分组名称。</summary>
         private void CellGui(Rect cellRect, TreeViewItem<int> item, int column, ref RowGUIArgs args)
 #else
+        /// <summary>绘制效果字段与业务分类菜单；分组节点只在首列显示分组名称。</summary>
         private void CellGui(Rect cellRect, TreeViewItem item, int column, ref RowGUIArgs args)
 #endif
 
@@ -630,11 +662,13 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>打开指定的项目设置页。</summary>
         internal static void OpenProjectSettings(string path)
         {
             SettingsService.OpenProjectSettings(path);
         }
 
+        /// <summary>记录点击效果的分组与父节点，并处理可能存在的 ID 列表拖拽载荷。</summary>
         protected override void SingleClickedItem(int id)
         {
             base.SingleClickedItem(id);
@@ -650,11 +684,7 @@ namespace YLFramework.Editor.Buff
 
             _dragItemParent = treeViewItem.parent;
 
-            // 先触发开始拖拽 再触发点击 在这里判断一下要拖拽的东西是否都在同一个节点
-            // 如果有的节点 跟当前点击的节点不是同一个父节点的情况下 ， 就需要把他移除
-            // 因为只能拖拽同一个节点下面的数据
-            // 如果没拖拽的情况下这里的逻辑没有任何影响，因为 DragAndDrop.GetGenericData(EFFECT_DRAGGED_DATA_KEY) 这个数据
-            // 只会在拖拽中和拖拽结束的时候用到
+            // 若载荷是 ID 列表，则剔除不同父节点的项；当前 SetupDragAndDrop 使用 EffectDrag，不进入此分支。
             IList<int> draggedItemIDs = DragAndDrop.GetGenericData(EffectDraggedDataKey) as IList<int>;
 
             if (draggedItemIDs != null)
@@ -674,12 +704,14 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>绘制树后限频检查失效的效果登记。</summary>
         public override void OnGUI(Rect rect)
         {
             base.OnGUI(rect);
             RefreshList();
         }
 
+        /// <summary>限频清除登记列表的空引用，实际移除后清缓存、保存设置并重建树。</summary>
         private void RefreshList()
         {
             if (Time.realtimeSinceStartup - _lastRefreshTime < 1)
@@ -713,6 +745,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>按当前树节点 ID 返回效果定义；分组或不存在的节点返回 null。</summary>
         public EffectData GetEffectData(int id)
         {
             EffectTreeViewItem item = FindItem(id, rootItem) as EffectTreeViewItem;
@@ -735,6 +768,7 @@ namespace YLFramework.Editor.Buff
         private TreeViewItem _dragItemParent; // 拖拽的parent
 #endif
         private GroupEffectData _currentDragGroup;
+        /// <summary>保留拖拽起点树、类型分组、槽位与快照，以校验同组重排的目标。</summary>
         private sealed class EffectDrag
         {
             internal EffectListTree Owner;
@@ -743,6 +777,7 @@ namespace YLFramework.Editor.Buff
             internal EffectData[] Snapshot;
         }
 
+        /// <summary>只允许拖拽已选中的效果数据行，且所有拖拽项必须属于同一分组。</summary>
         protected override bool CanStartDrag(CanStartDragArgs args)
         {
             if (!(args.draggedItem is EffectTreeViewItem first) || !GetSelection().Contains(first.id))
@@ -753,6 +788,7 @@ namespace YLFramework.Editor.Buff
             return args.draggedItemIDs != null && args.draggedItemIDs.All(id => FindItem(id, rootItem) is EffectTreeViewItem item && ReferenceEquals(item.GroupEffectData, first.GroupEffectData));
         }
 
+        /// <summary>核对起点树、分组与快照后执行组内移动，并记录 Undo、保存设置。</summary>
         protected override DragAndDropVisualMode HandleDragAndDrop(DragAndDropArgs args)
         {
             var drag = DragAndDrop.GetGenericData(EffectDraggedDataKey) as EffectDrag;
@@ -779,6 +815,7 @@ namespace YLFramework.Editor.Buff
             if (!list.SequenceEqual(drag.Snapshot))
             {
                 Undo.RecordObject(BuffSystemSettings.Instance, "Reorder Buff effects");
+                // 只替换总表中属于本组的槽位；否则后续按类型重建分组时会丢失这次拖拽顺序。
                 var all = BuffSystemSettings.Instance.AllEffectDatas;
                 var next = 0;
                 for (var i = 0; i < all.Count; i++)
@@ -798,6 +835,7 @@ namespace YLFramework.Editor.Buff
             return DragAndDropVisualMode.Move;
         }
 
+        /// <summary>把同组所选行转换为升序槽位快照，并建立本树拥有的拖拽载荷。</summary>
         protected override void SetupDragAndDrop(SetupDragAndDropArgs args)
         {
             var items = args.draggedItemIDs.Select(id => FindItem(id, rootItem) as EffectTreeViewItem).ToArray();
@@ -824,6 +862,7 @@ namespace YLFramework.Editor.Buff
             DragAndDrop.StartDrag("Reorder Buff effects");
         }
 
+        /// <summary>仅清除本树拥有的拖拽载荷，不清除其他树的拖拽，也不删除效果资产。</summary>
         public void Dispose()
         {
             if (DragAndDrop.GetGenericData(EffectDraggedDataKey) is EffectDrag drag && ReferenceEquals(drag.Owner, this))
@@ -833,6 +872,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>在当前拖拽父节点中查询行索引，未找到时返回 -1。</summary>
         private int GetItemIndex(int id)
         {
 #if UNITY_6000_2_OR_NEWER

@@ -6,7 +6,8 @@ using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
-    // 门禁只写自有组件，不保存或恢复业务的 interactable/enabled/raycastTarget。
+    /// <summary>一个精确 Panel 会话的输入门禁、捕获撤销与选择恢复状态。</summary>
+    /// <remarks>门禁只写自有组件，不保存或恢复业务的 interactable/enabled/raycastTarget。</remarks>
     internal sealed class PanelInputState
     {
         private readonly Panel _panel;
@@ -24,6 +25,7 @@ namespace YLFramework.Core
         internal GameObject Selection;
         internal EventSystem SelectionSystem;
 
+        /// <summary>固定输入状态所属的会话，防止同一面板组件复用后接收旧状态。</summary>
         internal PanelInputState(Panel panel)
         {
             this._panel = panel;
@@ -33,6 +35,7 @@ namespace YLFramework.Core
             _panel.Module != null && _panel.Module.State != ModuleState.Closing;
         internal bool IsCurrent => HasCurrentSession;
 
+        /// <summary>拒绝跨 Panel 的 Selectable 祖先链，避免独立子面板继承另一会话的控件门禁。</summary>
         internal static void ValidateHierarchy(Panel owner)
         {
             foreach (var selectable in owner.GetComponentsInChildren<Selectable>(true))
@@ -52,6 +55,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>更新阻挡意图并安装门禁；首次转为阻挡时先撤销手势及输入框激活，再关闭交互。</summary>
         internal void Apply(bool blocked)
         {
             bool changed = blocked != IsBlocked;
@@ -162,6 +166,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>等待 EventSystem 选择锁释放后清除原选择，不清掉后来替换的系统或选择。</summary>
         private void FinishPendingSelection()
         {
             var system = _pendingSelectionSystem;
@@ -185,6 +190,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>为最近归属本 Panel 的 Canvas、控件和拖动目标补齐门禁，纳入运行时新增层级。</summary>
         private void EnsureGates()
         {
             ValidateHierarchy(_panel);
@@ -267,6 +273,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>释放本会话绑定；会话结束时还撤销捕获、选择等待和射线绑定，保留可复用物理组件。</summary>
         internal void Restore(bool endSession = false)
         {
             if (endSession && _panel)
@@ -307,6 +314,7 @@ namespace YLFramework.Core
             _gates.Clear();
         }
 
+        /// <summary>在新归属应用门禁前释放已移出本 Panel 的组件绑定，不追随业务对象到新父级。</summary>
         internal void RestoreDeparted()
         {
             if (_isApplying)
@@ -343,6 +351,7 @@ namespace YLFramework.Core
 
         internal bool Owns(GameObject target) => _panel && target && target.GetComponentInParent<Panel>(true) == _panel;
 
+        /// <summary>按组件枚举顺序寻找本面板内启用且可交互的首个控件，不选择独立子 Panel 的控件。</summary>
         internal GameObject FirstSelection()
         {
             if (!_panel || IsBlocked)

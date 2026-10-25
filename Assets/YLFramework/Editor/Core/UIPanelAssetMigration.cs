@@ -17,12 +17,18 @@ using YLFramework.Editor.Foundation;
 namespace YLFramework.Editor.Core
 {
     /// <summary>集成后显式执行的 UI Panel 资产迁移。不会自动运行、保存场景或改写非 UI 内容。</summary>
+    /// <remarks>逐资产直接保存，不建立 Undo 或整批回滚；后续失败不会撤销此前已保存的资产。</remarks>
     public static class UIPanelAssetMigration
     {
+        /// <summary>基础 UI 根的既有 Prefab 路径，迁移时保留该资产身份。</summary>
         public const string BaseRootPath = "Assets/YLFramework/Runtime/Core/Resources/YLFramework/Core/Canvas.prefab";
+        /// <summary>包含唯一框架宿主和实际 UI 根的完整模板路径。</summary>
         public const string TemplatePath = "Assets/YLFramework/Prefabs/YLFramework.prefab";
+        /// <summary>作为提示默认配置来源的原始 UITips Prefab 路径。</summary>
         public const string TipsPath = "Assets/YLFramework/Prefabs/UITips.prefab";
+        /// <summary>完整模板使用的提示 Variant 路径；缺失时从原始提示创建独立资产身份。</summary>
         public const string TipsVariantPath = "Assets/YLFramework/Prefabs/UITipsOverlay.prefab";
+        /// <summary>需要显式写入 Panel 默认配置的取色窗口 Prefab 路径。</summary>
         public const string ColorPath = "Assets/YLFramework/Prefabs/ColorSelector.prefab";
         private static readonly string[] _fixturePanelPaths =
         {
@@ -30,6 +36,7 @@ namespace YLFramework.Editor.Core
             "Assets/YLFramework/Tests/Fixtures/Core/YLCoreResourceModule/YLCoreSmokePanel.prefab"
         };
 
+        /// <summary>从菜单执行只读资产预检并输出结果，不启动迁移。</summary>
         [MenuItem("YLFramework/Core/UI Panel/核验资产迁移")]
         private static void ValidateMenu() => Debug.Log(ValidateAssets());
 
@@ -111,7 +118,7 @@ namespace YLFramework.Editor.Core
                 "。此结果不是 PlayMode、输入或 Player 验收。";
         }
 
-        /// <summary>显式、可重复执行；先完整预检，再依次保存基础根、独立 Tips Variant 和完整模板。</summary>
+        /// <summary>显式、可重复执行；先预检，再依次保存基础根、提示源与 Variant、取色窗口和完整模板。</summary>
         [MenuItem("YLFramework/Core/UI Panel/执行资产迁移")]
         public static void MigrateAssets()
         {
@@ -145,6 +152,7 @@ namespace YLFramework.Editor.Core
 
             Debug.Log("测试 Panel 七字段已显式保存，仍需重载/实例化和运行测试验证。");
         }
+        /// <summary>拒绝在运行、编译、导入或 Prefab Stage 编辑期间执行，不替用户关闭或保存编辑状态。</summary>
         private static void EnsureCanMigrate()
         {
             if (Application.isPlaying || EditorApplication.isCompiling || EditorApplication.isUpdating || PrefabStageUtility.GetCurrentPrefabStage() != null)
@@ -153,9 +161,11 @@ namespace YLFramework.Editor.Core
             }
         }
 
+        /// <summary>取得指定既有 Prefab，缺失即失败，不创建占位资产替代原身份。</summary>
         private static GameObject Required(string path) => AssetDatabase.LoadAssetAtPath<GameObject>(path) ??
             throw new InvalidOperationException("缺少现有资产，不创建替代身份：" + path);
 
+        /// <summary>在已加载的迁移内容中绑定同对象原生组件；这里只改内存数据，不保存资产。</summary>
         private static void BindRoot(UIRootContext context)
         {
             var serialized = new SerializedObject(context);
@@ -163,6 +173,7 @@ namespace YLFramework.Editor.Core
             serialized.FindProperty("graphicRaycaster").objectReferenceValue = context.GetComponent<GraphicRaycaster>();
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
+        /// <summary>校验既有层容器及必需遮罩的子树归属，不推断缺失绑定或扩充层映射。</summary>
         private static void ValidateLayers(UIRootContext context, bool allowEmpty)
         {
             var layers = new SerializedObject(context).FindProperty("uiLayers");
@@ -187,6 +198,7 @@ namespace YLFramework.Editor.Core
                 }
             }
         }
+        /// <summary>独立加载基础根，必要时补根组件和唯一 Layer0，核验保存后始终卸载迁移内容。</summary>
         private static void MigrateBase()
         {
             var identity = CaptureIdentity(BaseRootPath);
@@ -227,6 +239,7 @@ namespace YLFramework.Editor.Core
                 PrefabUtility.UnloadPrefabContents(contents);
             }
         }
+        /// <summary>为本次新建的层容器设置铺满父级的锚点、零边距和单位缩放。</summary>
         private static void Stretch(RectTransform transform)
         {
             transform.anchorMin = Vector2.zero;
@@ -234,6 +247,7 @@ namespace YLFramework.Editor.Core
             transform.offsetMin = transform.offsetMax = Vector2.zero;
             transform.localScale = Vector3.one;
         }
+        /// <summary>先保存提示源默认配置，再更新既有直接 Variant 或在预览场景中创建它，不改变其他来源。</summary>
         private static void MigrateTips()
         {
             var sourceIdentity = CaptureIdentity(TipsPath);
@@ -284,6 +298,7 @@ namespace YLFramework.Editor.Core
                 EditorSceneManager.ClosePreviewScene(preview);
             }
         }
+        /// <summary>向指定既有 Panel Prefab 显式写入框架默认值，保存时核对其旧身份与缩放配置。</summary>
         private static void MigratePanel(string path)
         {
             var identity = CaptureIdentity(path);
@@ -298,6 +313,7 @@ namespace YLFramework.Editor.Core
                 PrefabUtility.UnloadPrefabContents(contents);
             }
         }
+        /// <summary>将七字段值写入已加载的 Panel 序列化数据，不依赖结构体零值或隐式字段默认。</summary>
         private static void WriteSettings(Panel panel, PanelConfig value)
         {
             var serialized = new SerializedObject(panel);
@@ -312,11 +328,13 @@ namespace YLFramework.Editor.Core
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        /// <summary>只迁移传入 Prefab 内容中 Panel 目标的覆盖路径，不在此保存资产。</summary>
         // FormerlySerializedAs 能恢复值，但旧 Variant 路径不一定被视作新字段的有效 override。
         internal static bool MigratePanelConfigOverridePaths(GameObject prefab)
         {
             return SerializedFieldMigration.MigratePrefabOverrides(prefab, target => target is Panel);
         }
+        /// <summary>提示源设为非 Top 的 Multiple；覆盖版仅保留 Layer4 配置，并关闭提示 Graphic 的射线目标。</summary>
         private static void ConfigureTips(UITipsItem tip, bool overlay)
         {
             if (!tip)
@@ -349,6 +367,7 @@ namespace YLFramework.Editor.Core
                 graphic.raycastTarget = false;
             }
         }
+        /// <summary>把完整模板中的实际根关联到基础 Prefab，保留匹配配置与额外层级，再绑定宿主和提示 Variant。</summary>
         private static void MigrateTemplate()
         {
             var identity = CaptureIdentity(TemplatePath);
@@ -403,6 +422,7 @@ namespace YLFramework.Editor.Core
             }
         }
 
+        /// <summary>保存前捕获的资产 GUID、对象 fileID、层级键与缩放配置，供写入后核验使用。</summary>
         private sealed class Identity
         {
             internal string Guid;
@@ -411,6 +431,7 @@ namespace YLFramework.Editor.Core
             internal float[] Scaler;
             internal float[] Adaptation;
         }
+        /// <summary>枚举包含 inactive 节点的全部对象与组件，遇到 Missing Script 立即拒绝继续迁移。</summary>
         private static IEnumerable<Object> Objects(GameObject root)
         {
             foreach (var transform in root.GetComponentsInChildren<Transform>(true))
@@ -426,6 +447,7 @@ namespace YLFramework.Editor.Core
                 }
             }
         }
+        /// <summary>记录能取得本地身份的对象及类型，供保存后检查旧 fileID 是否仍对应原类型。</summary>
         private static Dictionary<long, string> FileIds(GameObject root)
         {
             var ids = new Dictionary<long, string>();
@@ -439,6 +461,7 @@ namespace YLFramework.Editor.Core
 
             return ids;
         }
+        /// <summary>从既有资产捕获对象身份及第一组缩放配置，后续保存不得静默替换这些数据。</summary>
         private static Identity CaptureIdentity(string path)
         {
             var prefab = Required(path);
@@ -453,6 +476,7 @@ namespace YLFramework.Editor.Core
                 Adaptation = adaptation ? AdaptationValues(adaptation) : null
             };
         }
+        /// <summary>用相对层级路径、对象类型和同类型组件序号生成匹配键，不依赖保存后可能变化的 fileID。</summary>
         private static IEnumerable<KeyValuePair<string, Object>> KeyedObjects(GameObject root)
         {
             foreach (var obj in Objects(root))
@@ -464,6 +488,7 @@ namespace YLFramework.Editor.Core
                     "|" + obj.GetType().FullName + "|" + index, obj);
             }
         }
+        /// <summary>要求对象具有非零本地 fileID，无法证明身份时不继续生成映射。</summary>
         private static long LocalId(Object obj)
         {
             if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(obj, out string guid, out long id) || id == 0)
@@ -473,6 +498,7 @@ namespace YLFramework.Editor.Core
 
             return id;
         }
+        /// <summary>直接读取适配组件的序列化配置，避免属性访问承接旧值而改变待保存证据。</summary>
         private static float[] AdaptationValues(AutomaticAdaptationCanvasScaler adaptation)
         {
             var serialized = new SerializedObject(adaptation);
@@ -480,9 +506,11 @@ namespace YLFramework.Editor.Core
             return new[] { resolution.x, resolution.y, serialized.FindProperty("automaticMatch").boolValue ? 1f : 0f,
                 serialized.FindProperty("manualMatch").floatValue };
         }
+        /// <summary>按固定字段顺序记录原生 CanvasScaler 配置，供迁移后精确恢复和比较。</summary>
         private static float[] ScaleValues(CanvasScaler scaler) => new[] { (float)scaler.uiScaleMode, scaler.referencePixelsPerUnit,
             scaler.scaleFactor, scaler.referenceResolution.x, scaler.referenceResolution.y, (float)scaler.screenMatchMode,
             scaler.matchWidthOrHeight, (float)scaler.physicalUnit, scaler.fallbackScreenDPI, scaler.defaultSpriteDPI, scaler.dynamicPixelsPerUnit };
+        /// <summary>恢复旧缩放配置后保存，按需保留本地身份并复检 GUID/fileID；复检发生在落盘之后，不提供回滚。</summary>
         private static void SaveChecked(GameObject contents, string path, Identity before)
         {
             var scaler = contents.GetComponentInChildren<CanvasScaler>(true);
@@ -537,6 +565,7 @@ namespace YLFramework.Editor.Core
             }
         }
 
+        /// <summary>按旧层级键恢复嵌套对象的本地身份，必要时改写文本 Prefab 并同步重导入，不改带 GUID 的来源引用。</summary>
         private static void PreserveLocalIds(string path, Identity before)
         {
             var objects = KeyedObjects(Required(path)).ToDictionary(pair => pair.Key, pair => pair.Value);

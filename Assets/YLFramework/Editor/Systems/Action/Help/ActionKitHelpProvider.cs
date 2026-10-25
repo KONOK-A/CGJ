@@ -9,17 +9,23 @@ using YLFramework.Editor.Help;
 
 namespace YLFramework.Editor.Actions
 {
+    /// <summary>显式注册 ActionKit 帮助入口，并组合指南、公开 API 索引和 XML 文档路径。</summary>
     [InitializeOnLoad]
     internal static class ActionKitHelpProvider
     {
+        /// <summary>帮助注册表和窗口定位 ActionKit 时使用的稳定标识。</summary>
         internal const string ModuleId = "actionkit";
+        /// <summary>打开 ActionKit 帮助的编辑器菜单路径。</summary>
         internal const string MenuPath = "YLFramework/Action/帮助";
 
+        /// <summary>在 Editor 程序集初始化时登记内容工厂，不提前创建帮助内容。</summary>
         static ActionKitHelpProvider() => HelpRegistry.Register(ModuleId, "ActionKit", CreateModule);
 
+        /// <summary>打开帮助窗口并选中 ActionKit 模块。</summary>
         [MenuItem(MenuPath)]
         private static void Open() => HelpWindow.Open(ModuleId);
 
+        /// <summary>从当前已加载的核心及可选包装程序集建立帮助定义，不执行示例或运行时属性。</summary>
         internal static HelpModule CreateModule()
         {
             var assemblies = ActionKitApiHelpContent.ApiAssemblies().ToArray();
@@ -43,6 +49,9 @@ namespace YLFramework.Editor.Actions
             };
         }
 
+        /// <summary>将主题内容和关联类型组成指南页，为未加载的可选程序集添加接入提示。</summary>
+        /// <param name="topic">指南主题及其示例、说明和类型关联。</param>
+        /// <param name="types">本次模块索引纳入的公开类型。</param>
         private static HelpPage CreateGuide(ActionKitApiHelpContent.Topic topic, Type[] types)
         {
             var blocks = new List<HelpBlock>();
@@ -80,6 +89,7 @@ namespace YLFramework.Editor.Actions
             };
         }
 
+        /// <summary>建立模块来源、当前程序集版本和只读帮助边界的说明页。</summary>
         private static HelpPage[] CreateAbout() => new[]
         {
             new HelpPage("usage", "使用与版本", "关于", "",

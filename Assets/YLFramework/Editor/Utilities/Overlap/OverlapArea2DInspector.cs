@@ -10,6 +10,7 @@ using YLFramework.Overlap;
 namespace YLFramework.Editor.Overlap
 {
 
+    /// <summary>编辑由相邻端点定义的二维矩形检测区域，支持局部坐标点或 Transform 模式，并展示已有结果。</summary>
     [CustomEditor(typeof(OverlapArea2D))]
     public class OverlapArea2DInspector : UnityEditor.Editor
     {
@@ -31,6 +32,7 @@ namespace YLFramework.Editor.Overlap
 
         private bool _showResults;
 
+        /// <summary>缓存当前检测器及其属性，为局部端点列表创建绘制、选择和添加回调。</summary>
         private void OnEnable()
         {
             _overlapArea2D = serializedObject.targetObject as OverlapArea2D;
@@ -49,6 +51,7 @@ namespace YLFramework.Editor.Overlap
             _reorderableList.onAddCallback += OnAddCallback;
         }
 
+        /// <summary>按区域模式筛选端点属性，应用配置修改并借读组件的检测结果。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -88,6 +91,7 @@ namespace YLFramework.Editor.Overlap
             OverlapBase2DInspector.DrawResult(ref _showResults, _overlapArea2D.results);
         }
 
+        /// <summary>绘制指定局部端点的坐标字段，并提交序列化缓冲。</summary>
         private void OnDrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
             SerializedProperty property = _positions.GetArrayElementAtIndex(index);
@@ -96,6 +100,7 @@ namespace YLFramework.Editor.Overlap
             property.serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>列表选择变化时请求 Scene 重绘，更新端点操作柄的选中颜色。</summary>
         private void OnSelectCallback(ReorderableList list)
         {
             if (SceneView.lastActiveSceneView)
@@ -104,6 +109,7 @@ namespace YLFramework.Editor.Overlap
             }
         }
 
+        /// <summary>新增端点，有既有端点时沿末段外推；修改留给外层 Inspector 应用。</summary>
         private void OnAddCallback(ReorderableList list)
         {
 
@@ -134,6 +140,7 @@ namespace YLFramework.Editor.Overlap
         }
 
 
+        /// <summary>为坐标模式的各局部端点绘制世界操作柄，写回并应用属性，拖动时同步列表选择。</summary>
         private void OnSceneGUI()
         {
 
@@ -151,6 +158,7 @@ namespace YLFramework.Editor.Overlap
 
                 EditorGUI.BeginChangeCheck();
 
+                // 区域端点按局部坐标保存；只在操作柄交互时转为世界坐标，写回时必须逆变换。
                 Vector3 world = _transform.localToWorldMatrix.MultiplyPoint(property.vector3Value);
 
                 world = Handles.FreeMoveHandle(world, size, Vector3.one * 0.1f, Handles.CubeHandleCap);

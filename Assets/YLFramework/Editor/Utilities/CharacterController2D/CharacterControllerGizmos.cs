@@ -4,8 +4,10 @@ using YLFramework.Character2D;
 
 namespace YLFramework.Editor.Character2D
 {
+    /// <summary>在 Scene 中可视化角色运行时已经求得的接触信息，不参与物理检测。</summary>
     internal static class CharacterControllerGizmos
     {
+        /// <summary>仅在运行且启用调试显示时绘制已有接触的角度与法线，结束后恢复 Handles 颜色。</summary>
         [DrawGizmo(GizmoType.Selected | GizmoType.NonSelected)]
         private static void Draw(CharacterController2D motor, GizmoType gizmoType)
         {
@@ -38,6 +40,7 @@ namespace YLFramework.Editor.Character2D
             }
         }
 
+        /// <summary>在命中点标注法线相对参考方向的夹角，并绘制短法线。</summary>
         private static void DrawHit(RaycastHit2D hit, Vector2 direction, Color color, string label)
         {
             Handles.color = color;

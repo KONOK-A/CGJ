@@ -22,10 +22,10 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 设置 Image 的填充比例，返回原对象以支持链式调用。
+        /// 设置 Image.fillAmount，返回原对象以支持链式调用；填充显示仅适用于 Filled 类型的 Image。
         /// </summary>
         /// <param name="selfImage">目标 Image。</param>
-        /// <param name="fillAmount">填充比例，直接写入不做范围限制。</param>
+        /// <param name="fillAmount">传给 Image.fillAmount 的填充比例，本扩展不额外校验。</param>
         public static Image FillAmount(this Image selfImage, float fillAmount)
         {
             selfImage.fillAmount = fillAmount;

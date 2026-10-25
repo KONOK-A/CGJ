@@ -16,6 +16,9 @@ namespace YLFramework.Resource
         private static bool _isPruningInstances;
 
         /// <summary>默认按目标场景缓存。返回独立实例责任，Dispose/Return回桶，Discard销毁。</summary>
+        /// <param name="address">资源目录中的 Prefab 地址。</param>
+        /// <param name="parent">借出实例的父节点；为 null 时放入当前活动场景。</param>
+        /// <returns>由调用方负责结束借出的实例租约。</returns>
         public InstanceLease Instantiate(ResourceAddress address, Transform parent = null)
         {
             using var prefab = Acquire<GameObject>(address);
@@ -23,9 +26,13 @@ namespace YLFramework.Resource
         }
 
         /// <summary>不消费输入 Lease；实例缓存取得自己的 Prefab pin。裸 Prefab/Attach 不由此入口纳管。</summary>
+        /// <param name="prefab">来自本资源系统的 Prefab 资产租约，调用方仍负责其原有责任。</param>
+        /// <param name="parent">借出实例的父节点；为 null 时放入当前活动场景。</param>
+        /// <returns>拥有独立借出身份的实例租约。</returns>
         public InstanceLease Instantiate(AssetLease<GameObject> prefab, Transform parent = null)
             => Instantiate(prefab, parent, SceneManager.GetActiveScene());
 
+        /// <summary>解析明确目标场景，从对应场景桶借出实例并确认交付。</summary>
         internal InstanceLease Instantiate(AssetLease<GameObject> prefab, Transform parent, Scene targetScene)
         {
             CheckThread();
@@ -36,6 +43,11 @@ namespace YLFramework.Resource
             return lease;
         }
 
+        /// <summary>异步取得 Prefab 后在主线程创建或复用实例，并通过请求交付借出责任。</summary>
+        /// <param name="address">资源目录中的 Prefab 地址。</param>
+        /// <param name="parent">借出实例的父节点；无父节点时捕获调用时的活动场景。</param>
+        /// <returns>成功后可单次领取实例租约的请求；未领取结果由请求归还。</returns>
+        /// <remarks>取消解除本请求的等待；若实例创建回调重入取消，尚未交付的实例会被丢弃。</remarks>
         public ResourceRequest<InstanceLease> InstantiateAsync(ResourceAddress address, Transform parent = null)
         {
             CheckThread();
@@ -104,12 +116,21 @@ namespace YLFramework.Resource
         }
 
         /// <summary>取得本 authority 的正式缓存。SceneScoped 默认绑定当前活动场景，Persistent仅缓存跨场景，不自动DDOL借出对象。</summary>
+        /// <param name="address">资源目录中的 Prefab 地址。</param>
+        /// <param name="policy">缓存桶的场景寿命策略。</param>
+        /// <param name="scene">SceneScoped 绑定的场景；默认值使用当前活动场景，Persistent 不使用此值分桶。</param>
+        /// <returns>可能与其他调用方共享的正式缓存；关闭它会退休整个桶。</returns>
         public InstanceCache GetInstanceCache(ResourceAddress address, InstanceCachePolicy policy = InstanceCachePolicy.SceneScoped, Scene scene = default)
         {
             using var prefab = Acquire<GameObject>(address);
             return GetInstanceCache(prefab, policy, scene);
         }
 
+        /// <summary>用本系统 Prefab 租约取得共享缓存，不消费输入租约；缓存另持独立 pin。</summary>
+        /// <param name="prefab">来自本资源系统的 Prefab 资产租约。</param>
+        /// <param name="policy">缓存桶的场景寿命策略。</param>
+        /// <param name="scene">SceneScoped 绑定的场景；默认值使用当前活动场景，Persistent 不使用此值分桶。</param>
+        /// <returns>按资产记录、策略和绑定场景复用的正式缓存。</returns>
         public InstanceCache GetInstanceCache(AssetLease<GameObject> prefab, InstanceCachePolicy policy = InstanceCachePolicy.SceneScoped, Scene scene = default)
         {
             var cache = GetInstanceCacheCore(prefab, policy, scene);
@@ -117,6 +138,7 @@ namespace YLFramework.Resource
             return cache;
         }
 
+        /// <summary>校验 Prefab 与目标策略，复用开放桶或建立持有独立 pin 的新桶。</summary>
         private InstanceCache GetInstanceCacheCore(AssetLease<GameObject> prefab, InstanceCachePolicy policy, Scene scene)
         {
             CheckThread();
@@ -202,6 +224,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>退休绑定到已卸载场景的开放缓存，不处理 Persistent 桶。</summary>
         private void OnInstanceSceneUnloaded(Scene scene)
         {
             foreach (var cache in new List<InstanceCache>(_openInstanceCaches.Values))
@@ -213,6 +236,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>从开放桶索引移除指定旧缓存，保留其尚未销毁实例的清理责任。</summary>
         internal void RetireInstanceCache(InstanceCache cache)
         {
             var key = (cache.AssetRecord, cache.Policy, cache.Policy == InstanceCachePolicy.Persistent ? 0 : cache.ScopeScene.handle);
@@ -222,6 +246,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>移除已排空缓存，最后一桶结束时解除场景订阅并销毁共享缓存根。</summary>
         internal void ReleaseInstanceCache(InstanceCache cache)
         {
             _instanceCaches.Remove(cache);
@@ -241,6 +266,7 @@ namespace YLFramework.Resource
         }
 
         // 无协程/MonoBehaviour宿主，退出不新建对象；每帧最多8个桶、每桶8项fake-null检查。
+        /// <summary>按帧推进远端、内容、场景与实例清理。</summary>
         private static void TickInstanceCleanup()
         {
             if (_isPruningInstances)
@@ -277,6 +303,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>幂等安装 PlayerLoop 清理回调，不创建 MonoBehaviour 或协程宿主。</summary>
         private static void InstallInstanceCleanup()
         {
             var loop = PlayerLoop.GetCurrentPlayerLoop();

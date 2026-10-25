@@ -9,6 +9,7 @@ using YLFramework.Events;
 
 namespace YLFramework.Audio
 {
+    /// <summary>唯一 Audio 播放宿主，管理缺省槽、命名通道、Sound 接纳与音源池，并驱动请求及缓存收尾。</summary>
     internal sealed class AudioManager : MonoSingletonHost<AudioManager>
     {
         private ObjectPool<AudioVoice> _pool;
@@ -39,8 +40,10 @@ namespace YLFramework.Audio
         }
         internal int SoundCount => _sounds.Count;
         internal int CachedSoundCount => _pool?.CurStoreCount ?? 0;
+        /// <summary>读取指定 Clip 实例当前计入 Sound 预算的请求数。</summary>
         internal int GetSoundCount(int clipId) => _clipCounts.TryGetValue(clipId, out var count) ? count : 0;
         private bool IsCurrentSoundSession => _soundSession == AudioKit.SoundSession;
+        /// <summary>播放模式下将宿主放在框架 Audio 根节点，非播放模式不指定父节点。</summary>
         protected override Transform HostParent => Application.isPlaying ? YLFrameworkRoot.Instance.GetModuleRoot("Audio") : null;
 
         internal new static AudioManager Instance
@@ -72,6 +75,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>建立 Sound 池与缺省音乐/语音槽，并订阅分类设置；不主动创建 AudioListener。</summary>
         public override void OnSingletonInit()
         {
             _soundSession = AudioKit.SoundSession;
@@ -112,6 +116,7 @@ namespace YLFramework.Audio
             CheckListener();
 #endif
         }
+        /// <summary>拒绝名称和显式持久化身份冲突后，登记属于本宿主的独立控制通道。</summary>
         internal AudioChannel RegisterChannel(string name, AudioCategory category, AudioChannelMode mode, string persistenceId)
         {
             if (_namedChannels.ContainsKey(name))
@@ -134,6 +139,7 @@ namespace YLFramework.Audio
             _namedChannels.Add(name, result);
             return result;
         }
+        /// <summary>按分类及独占拓扑登记等待请求，取消旧等待者后复核重入版本。</summary>
         internal void AddPending(AudioPlayRequest request)
         {
             if (request.Category == AudioCategory.Sound && !AudioKit.Settings.IsSoundOn.Value)
@@ -154,9 +160,13 @@ namespace YLFramework.Audio
             }
             _pending.Add(request);
         }
+        /// <summary>撤销原请求的等待登记，不改变其他请求。</summary>
         internal void RemovePending(AudioPlayRequest request) => _pending.Remove(request);
+        /// <summary>读取缺省分类或指定通道的等待控制版本。</summary>
         internal ulong PendingVersion(AudioCategory category, AudioChannel channel) => channel?.PendingVersion ?? _pendingVersions[(int)category];
+        /// <summary>提升对应等待控制版本，使重入前的外层提交失去当前资格。</summary>
         internal ulong AdvancePendingVersion(AudioCategory category, AudioChannel channel) => channel != null ? ++channel.PendingVersion : ++_pendingVersions[(int)category];
+        /// <summary>取得分类与通道范围内的等待者快照，避免清理期间的重入影响遍历范围。</summary>
         internal AudioPlayRequest[] PendingSnapshot(AudioCategory category, AudioChannel channel, bool allChannels = false)
         {
             if (_pending.Count == 0)
@@ -175,6 +185,7 @@ namespace YLFramework.Audio
 
             return result.ToArray();
         }
+        /// <summary>逐项终结原等待者快照，尝试完成全部清理后统一抛出收集的异常。</summary>
         internal static void EndPending(AudioPlayRequest[] snapshot, AudioPlayEnd reason)
         {
             List<Exception> failures = null;
@@ -195,6 +206,7 @@ namespace YLFramework.Audio
                 throw new AggregateException("Audio pending cleanup failed.", failures);
             }
         }
+        /// <summary>按范围终结等待者，并按调用方要求使旧等待控制版本失效。</summary>
         internal void CancelPending(AudioCategory category, AudioChannel channel, AudioPlayEnd reason, bool allChannels = false, bool incrementVersion = true)
         {
             if (incrementVersion)
@@ -209,6 +221,7 @@ namespace YLFramework.Audio
 
             EndPending(PendingSnapshot(category, channel, allChannels), reason);
         }
+        /// <summary>先固定 Sound 等待范围，再停止活跃快照与原等待者，不影响清理重入的新播放。</summary>
         internal void StopSoundsAndPending()
         {
             AdvancePendingVersion(AudioCategory.Sound, null);
@@ -222,6 +235,7 @@ namespace YLFramework.Audio
                 EndPending(pending, AudioPlayEnd.Stopped);
             }
         }
+        /// <summary>仅撤销仍指向原通道实例的登记，不删除同名新通道。</summary>
         internal void UnregisterChannel(AudioChannel channel)
         {
             if (_namedChannels.TryGetValue(channel.Name, out var registered) && ReferenceEquals(channel, registered))
@@ -229,8 +243,11 @@ namespace YLFramework.Audio
                 _namedChannels.Remove(channel.Name);
             }
         }
+        /// <summary>登记自有音源，防止被外部借源入口重复接管。</summary>
         internal void RegisterOwnedSource(AudioSource source) => _ownedSources.Add(source);
+        /// <summary>撤销自有音源登记，供原对象释放时使用。</summary>
         internal void UnregisterOwnedSource(AudioSource source) => _ownedSources.Remove(source);
+        /// <summary>借用前要求音源有效、启用、停止，且未被框架拥有或其他请求借用。</summary>
         internal void ValidateBorrowedSource(AudioSource source)
         {
             if (!source)
@@ -248,11 +265,13 @@ namespace YLFramework.Audio
                 throw new InvalidOperationException("Source is owned, already borrowed or still playing. Explicitly stop and relinquish it first.");
             }
         }
+        /// <summary>再次校验后登记音源到原 Voice 的独占借用关系。</summary>
         internal void BorrowSource(AudioSource source, AudioVoice voice)
         {
             ValidateBorrowedSource(source);
             _borrowedSources.Add(source, voice);
         }
+        /// <summary>仅由当前登记的 Voice 撤销借用，保护重入中新取得音源的所有者。</summary>
         internal void ReturnBorrowedSource(AudioSource source, AudioVoice voice)
         {
             if (_borrowedSources.TryGetValue(source, out var current) && ReferenceEquals(current, voice))
@@ -260,6 +279,7 @@ namespace YLFramework.Audio
                 _borrowedSources.Remove(source);
             }
         }
+        /// <summary>在独立通道拓扑中创建播放；Sound 仍共用全局接纳预算，Music/Voice 不占缺省槽。</summary>
         internal AudioHandle PlayChannel(AudioChannel channel, AudioClip clip, in AudioPlaybackOptions options,
             AudioKit.PlaySoundModes mode, Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             AudioResourceLease resource, AudioSource source)
@@ -285,6 +305,7 @@ namespace YLFramework.Audio
             return voice.Begin(clip, in options, GetEnabled(voice.Category), GetCategoryVolume(voice.Category) * channel.Volume,
                 GetCategoryMuted(voice.Category) || channel.IsMuted, started, finished, resource: resource, channel: channel, borrowedSource: source);
         }
+        /// <summary>撤销命名 Music/Voice 声部登记并释放其自有音源，借入音源仅归还。</summary>
         internal void ReleaseChannelVoice(AudioVoice voice)
         {
             _channelVoices.Remove(voice);
@@ -297,6 +318,7 @@ namespace YLFramework.Audio
                 voice.DestroySource();
             }
         }
+        /// <summary>提交缺省 Music 或 Voice 请求，替换释放重入后复核原槽是否仍可接纳。</summary>
         internal AudioHandle PlaySlot(bool music, AudioClip clip, in AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished,
             bool spatial = false, Vector3 position = default, Transform target = null, AudioResourceLease resource = null)
@@ -317,6 +339,7 @@ namespace YLFramework.Audio
             return slot.Begin(clip, in options, settings.IsVoiceOn.Value, settings.VoiceVolume.Value,
                 settings.IsVoiceMuted.Value, started, finished, spatial, position, target, resource: resource);
         }
+        /// <summary>按 Clip、全局容量和优先级接纳 Sound，提交计数与去重后启动原代次。</summary>
         internal AudioHandle PlaySound(AudioClip clip, in AudioPlaybackOptions options, AudioKit.PlaySoundModes mode,
             Action<AudioClip, AudioHandle> finished, Action<AudioClip, AudioHandle> started, bool spatial, Vector3 position, Transform target,
             AudioResourceLease resource = null, AudioChannel channel = null, AudioSource borrowedSource = null)
@@ -343,7 +366,7 @@ namespace YLFramework.Audio
 
                     return default;
                 }
-                // A full Clip budget restricts the victim set even when global capacity is also full.
+                // Clip 预算已满时只能替换同 Clip 请求，即使全局预算也满，仍不能误停无关声音。
                 var victim = FindSoundVictim(capacity.OverflowPolicy, clipFull ? (int?)clipId : null);
                 if (capacity.OverflowPolicy == SoundOverflowPolicy.StopLowestPriority && options.Priority < victim.Priority)
                 {
@@ -357,7 +380,7 @@ namespace YLFramework.Audio
                 {
                     return default;
                 }
-                // Stop can synchronously change other counts; discard the cached budget lookup.
+                // Stop 的释放回调可同步改变计数，不能继续使用抢占前缓存的预算查询结果。
                 clipCount = -1;
                 AudioKit.SoundCounters.StolenCount++;
             }
@@ -434,6 +457,7 @@ namespace YLFramework.Audio
                 throw;
             }
         }
+        /// <summary>在全局或指定 Clip 范围内按保留策略选出应被停止的请求。</summary>
         private AudioVoice FindSoundVictim(SoundOverflowPolicy policy, int? clipId = null)
         {
             AudioVoice candidate = null;
@@ -454,13 +478,14 @@ namespace YLFramework.Audio
             }
             return candidate;
         }
+        /// <summary>先协调各 Clip 上限，再协调全局容量，避免重复裁剪无关请求。</summary>
         internal void TrimSounds(AudioSoundConcurrency capacity)
         {
             if (!IsAvailable)
             {
                 return;
             }
-            // Reconcile local budgets first so a global trim never stops an unrelated extra request.
+            // 先消除 Clip 局部超额，避免全局裁剪额外停止本不超额的其他 Clip 请求。
             _clipChecks.Clear();
             foreach (var id in _clipCounts.Keys)
             {
@@ -475,6 +500,7 @@ namespace YLFramework.Audio
             _clipChecks.Clear();
             TrimGlobalBudget(capacity);
         }
+        /// <summary>实例规则变化后先裁剪对应 Clip，再复核全局上限。</summary>
         internal void TrimClipSounds(int clipId)
         {
             if (!IsAvailable)
@@ -486,6 +512,7 @@ namespace YLFramework.Audio
             TrimClipBudget(clipId, capacity.OverflowPolicy);
             TrimGlobalBudget(capacity);
         }
+        /// <summary>按当前实例有效上限和策略停止该 Clip 的超额请求。</summary>
         private void TrimClipBudget(int clipId, SoundOverflowPolicy policy)
         {
             var candidate = FindSoundVictim(policy, clipId);
@@ -506,6 +533,7 @@ namespace YLFramework.Audio
                 AudioKit.SoundCounters.TrimmedCount++;
             }
         }
+        /// <summary>按全局上限和保留策略停止超额 Sound 请求，零上限表示不限。</summary>
         private void TrimGlobalBudget(AudioSoundConcurrency capacity)
         {
             if (capacity.Limit == 0)
@@ -519,6 +547,7 @@ namespace YLFramework.Audio
                 AudioKit.SoundCounters.TrimmedCount++;
             }
         }
+        /// <summary>先撤销活跃 Sound 及 Clip 计数，再按其归属回收或释放声部。</summary>
         internal void Recycle(AudioVoice voice)
         {
             if (!_sounds.Remove(voice))
@@ -538,6 +567,7 @@ namespace YLFramework.Audio
 
             ReturnIdle(voice);
         }
+        /// <summary>非池化声部直接释放；池化 Sound 仅在宿主和缓存预算允许时保留闲置音源。</summary>
         private void ReturnIdle(AudioVoice voice)
         {
             if (!voice.PooledSound)
@@ -565,9 +595,10 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>调整闲置 Sound 池容量并及时释放超额缓存，不停止活跃请求。</summary>
         internal void ResizeSoundCache(int capacity)
         {
-            // A scene host may be adopted by Awake before its lazy playback initialization.
+            // 场景宿主可能已被 Awake 接管，但尚未完成延迟的播放初始化，此时还没有池。
             if (!IsAvailable || _pool == null)
             {
                 return;
@@ -580,6 +611,7 @@ namespace YLFramework.Audio
             // 公共池的非正容量表示不限；Audio 的 0 由 Clear/Discard 明确禁缓存。
             _pool.MaxPoolSize = Math.Max(1, capacity);
         }
+        /// <summary>准备指定目标数量的独立闲置音源，返回本次实际增加的缓存数。</summary>
         internal int PrewarmSounds(int count)
         {
             var original = _pool.CurStoreCount;
@@ -587,7 +619,7 @@ namespace YLFramework.Audio
             var voices = new List<AudioVoice>(count);
             try
             {
-                // Hold all allocations until initialization finishes so LIFO cannot return the same voice repeatedly.
+                // 初始化完成前持有全部分配，避免 LIFO 池反复交付同一个声部，造成虚假的预热数量。
                 for (var i = 0; i < count; i++)
                 {
                     var voice = _pool.Allocate();
@@ -604,6 +636,7 @@ namespace YLFramework.Audio
             }
             return Math.Max(0, _pool.CurStoreCount - original);
         }
+        /// <summary>在预热前扩展 Sound 计数和帧检查集合容量，避免后续接纳重复扩容。</summary>
         private void PrepareSoundCapacity(int count)
         {
             _sounds.EnsureCapacity(count);
@@ -618,6 +651,7 @@ namespace YLFramework.Audio
                 _checks.Capacity = checked(count + 3);
             }
         }
+        /// <summary>只向原 Sound 会话累计一次真实自有音源创建。</summary>
         internal void SoundSourceCreated()
         {
             if (!IsCurrentSoundSession)
@@ -628,6 +662,7 @@ namespace YLFramework.Audio
             AudioKit.SoundCounters.OwnedSourceCount++;
             AudioKit.SoundCounters.SourceCreatedCount++;
         }
+        /// <summary>只在原 Sound 会话扣减音源所有量并累计释放请求。</summary>
         internal void SoundSourceReleased()
         {
             if (!IsCurrentSoundSession)
@@ -638,6 +673,7 @@ namespace YLFramework.Audio
             AudioKit.SoundCounters.OwnedSourceCount--;
             AudioKit.SoundCounters.SourceReleasedCount++;
         }
+        /// <summary>把分类音量与各命名通道音量相乘后更新全部有效 Sound。</summary>
         private void SetSoundVolume(float value)
         {
             foreach (var voice in _sounds)
@@ -645,6 +681,7 @@ namespace YLFramework.Audio
                 voice.SetVolume(value * (voice.Channel?.Volume ?? 1f));
             }
         }
+        /// <summary>将 Sound 分类静音与各局部通道静音取 OR 后更新音源。</summary>
         private void SetSoundMute(bool value)
         {
             foreach (var voice in _sounds)
@@ -652,26 +689,32 @@ namespace YLFramework.Audio
                 voice.SetMute(value || (voice.Channel?.IsMuted ?? false));
             }
         }
+        /// <summary>取得请求当前的分类与局部通道音量乘积，不包含请求倍率或包络。</summary>
         internal float GetSharedVolume(AudioVoice voice)
         {
             return GetCategoryVolume(voice.Category) * (voice.Channel?.Volume ?? 1f);
         }
+        /// <summary>合并请求当前的分类和局部通道静音原因。</summary>
         internal bool GetMuted(AudioVoice voice) => GetCategoryMuted(voice.Category) || (voice.Channel?.IsMuted ?? false);
+        /// <summary>按内核分类读取当前分类音量倍率。</summary>
         private float GetCategoryVolume(AudioVoice.Kind category)
         {
             var settings = AudioKit.Settings;
             return category == AudioVoice.Kind.Sound ? settings.SoundVolume.Value : category == AudioVoice.Kind.Music ? settings.MusicVolume.Value : settings.VoiceVolume.Value;
         }
+        /// <summary>按内核分类读取当前分类静音状态。</summary>
         private bool GetCategoryMuted(AudioVoice.Kind category)
         {
             var settings = AudioKit.Settings;
             return category == AudioVoice.Kind.Sound ? settings.IsSoundMuted.Value : category == AudioVoice.Kind.Music ? settings.IsMusicMuted.Value : settings.IsVoiceMuted.Value;
         }
+        /// <summary>读取所属分类的启用开关，不混同于静音或暂停。</summary>
         private bool GetEnabled(AudioVoice.Kind category)
         {
             var settings = AudioKit.Settings;
             return category == AudioVoice.Kind.Music ? settings.IsMusicOn.Value : category == AudioVoice.Kind.Voice ? settings.IsVoiceOn.Value : settings.IsSoundOn.Value;
         }
+        /// <summary>按原句柄快照刷新缺省和命名 Music/Voice 的分类启用状态，并汇总刷新异常。</summary>
         private void RefreshEnabled(AudioCategory category)
         {
             if (!IsAvailable)
@@ -724,6 +767,7 @@ namespace YLFramework.Audio
                 throw new AggregateException("Audio category enabled refresh failed.", failures);
             }
         }
+        /// <summary>刷新指定分类的命名 Music/Voice 请求，保留各通道独立音量。</summary>
         private void RefreshChannelVolume(AudioCategory category)
         {
             if (!IsAvailable)
@@ -739,6 +783,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>刷新指定分类命名请求的综合静音状态。</summary>
         private void RefreshChannelMute(AudioCategory category)
         {
             if (!IsAvailable)
@@ -754,8 +799,11 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>响应 Music 开关通知，并以当前设置刷新原有效请求。</summary>
         private void RefreshMusicEnabled(bool _) => RefreshEnabled(AudioCategory.Music);
+        /// <summary>响应 Voice 开关通知，并以当前设置刷新原有效请求。</summary>
         private void RefreshVoiceEnabled(bool _) => RefreshEnabled(AudioCategory.Voice);
+        /// <summary>以当前 Music 音量更新双声部及同分类命名通道。</summary>
         private void RefreshMusicVolume(float _)
         {
             if (IsAvailable)
@@ -764,6 +812,7 @@ namespace YLFramework.Audio
                 RefreshChannelVolume(AudioCategory.Music);
             }
         }
+        /// <summary>以当前 Music 静音状态更新双声部及同分类命名通道。</summary>
         private void RefreshMusicMute(bool _)
         {
             if (IsAvailable)
@@ -772,7 +821,8 @@ namespace YLFramework.Audio
                 RefreshChannelMute(AudioCategory.Music);
             }
         }
-        // A listener can synchronously change the property again or release this host before our turn.
+        // 较早的监听器可同步改写属性或释放宿主，因此轮到本监听器时须读取当前设置而非旧通知值。
+        /// <summary>刷新 Music 双声部和命名通道中继承分类路由的请求。</summary>
         private void RefreshMusicOutputGroup(AudioMixerGroup _)
         {
             if (IsAvailable)
@@ -782,6 +832,7 @@ namespace YLFramework.Audio
 
             RefreshChannelOutput(AudioCategory.Music);
         }
+        /// <summary>刷新缺省 Voice 槽和命名通道中继承分类路由的请求。</summary>
         private void RefreshVoiceOutputGroup(AudioMixerGroup _)
         {
             if (IsAvailable)
@@ -791,6 +842,7 @@ namespace YLFramework.Audio
 
             RefreshChannelOutput(AudioCategory.Voice);
         }
+        /// <summary>将当前分类默认组变化传递给对应的命名 Music/Voice 请求。</summary>
         private void RefreshChannelOutput(AudioCategory category)
         {
             if (!IsAvailable)
@@ -806,6 +858,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>按最新 Sound 默认组刷新全部继承路由的音效请求。</summary>
         private void RefreshSoundOutputGroup(AudioMixerGroup _)
         {
             if (!IsAvailable)
@@ -819,12 +872,14 @@ namespace YLFramework.Audio
                 voice.SetInheritedOutputGroup(group);
             }
         }
+        /// <summary>按 Voice 分类取得当前默认输出组，不解析请求自己的路由覆盖。</summary>
         internal AudioMixerGroup GetOutputGroup(AudioVoice voice)
         {
             var settings = AudioKit.Settings;
             return voice.IsSound ? settings.SoundOutputGroup.Value :
                 voice.Category == AudioVoice.Kind.Music ? settings.MusicOutputGroup.Value : settings.VoiceOutputGroup.Value;
         }
+        /// <summary>向目标列表追加当前 Sound 原句柄，供外部读取或内部快照清理。</summary>
         internal void CopySounds(List<AudioHandle> destination)
         {
             foreach (var voice in _sounds)
@@ -832,6 +887,7 @@ namespace YLFramework.Audio
                 destination.Add(voice.Handle);
             }
         }
+        /// <summary>按进入时句柄快照停止 Sound，完成全部尝试后汇总清理异常。</summary>
         internal void StopAllSound(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
             if (_sounds.Count == 0)
@@ -862,6 +918,7 @@ namespace YLFramework.Audio
                 throw new AggregateException("AudioKit sound cleanup failed.", failures);
             }
         }
+        /// <summary>逐帧推进等待请求、Clip 淘汰、播放检查、自动暂停和淡变，再清理过期去重记录。</summary>
         private void Update()
         {
             if (Music == null || !IsAvailable)
@@ -951,7 +1008,9 @@ namespace YLFramework.Audio
             }
         }
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>开发环境加载场景后检查是否存在有效监听器，不自动补建。</summary>
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode) => CheckListener();
+        /// <summary>播放模式缺少启用的 AudioListener 时输出配置警告。</summary>
         private void CheckListener()
         {
             if (!Application.isPlaying)
@@ -970,9 +1029,11 @@ namespace YLFramework.Audio
             Debug.LogWarning("AudioKit: no active scene AudioListener. Configure a listener on the camera or player; AudioKit does not create one.", this);
         }
 #endif
+        /// <summary>释放缓存宿主及场景中的 Audio 宿主，最后重置宿主引用并汇总异常。</summary>
         internal static void Shutdown()
         {
             List<Exception> failures = null;
+            // 单个宿主失败不阻断其余宿主的释放尝试。
             void Release(AudioManager host)
             {
                 try
@@ -1000,6 +1061,7 @@ namespace YLFramework.Audio
                 throw new AggregateException("AudioKit host cleanup failed.", failures);
             }
         }
+        /// <summary>撤销订阅，以 Shutdown 结束原等待和播放，归还 Clip 缓存及自有音源；清理异常最后汇总。</summary>
         protected override void OnHostRelease()
         {
             if (_isDisposing)
@@ -1009,6 +1071,7 @@ namespace YLFramework.Audio
 
             _isDisposing = true;
             List<Exception> failures = null;
+            // 每项清理分别记录失败，让其余拥有的责任仍有机会归还。
             void Cleanup(Action operation)
             {
                 try
@@ -1058,12 +1121,13 @@ namespace YLFramework.Audio
             }
 
             Cleanup(ClipCache.Dispose);
-            // A callback may release this host while Update is iterating its snapshot.
+            // Update 遍历快照时也可能被回调释放宿主，快照由原 Update 自己清空，避免破坏其索引。
             if (failures != null)
             {
                 throw new AggregateException("AudioKit source cleanup failed.", failures);
             }
         }
+        /// <summary>仅由当前未释放宿主启动 Audio 退出流程，防止旧宿主的迟到消息关闭新会话。</summary>
         protected override void OnApplicationQuit()
         {
             // 已释放或旧会话宿主的迟到消息不能关闭新会话，亦不能重置公共宿主 gate。

@@ -7,6 +7,7 @@ using YLFramework.StateMachine;
 namespace YLFramework.Editor.StateMachine
 {
 
+    /// <summary>编辑过渡的自动切换与 OR 条件组，将可重排列表绑定到所属配置的序列化属性。</summary>
     [CustomEditor(typeof(FsmTransitionInspectorHelper))]
     public class FsmTransitionInspector : UnityEditor.Editor
     {
@@ -29,6 +30,7 @@ namespace YLFramework.Editor.StateMachine
 
         private bool _autoSwitch;
 
+        /// <summary>去重注册 Undo 刷新回调，并为当前选择建立序列化列表绑定。</summary>
         private void OnEnable()
         {
             Undo.undoRedoPerformed -= RebindAfterUndo;
@@ -36,6 +38,7 @@ namespace YLFramework.Editor.StateMachine
             BindLists();
         }
 
+        /// <summary>移除 Undo 回调并释放当前持有的 SerializedObject。</summary>
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= RebindAfterUndo;
@@ -43,6 +46,7 @@ namespace YLFramework.Editor.StateMachine
             _controllerObject = null;
         }
 
+        /// <summary>按端点名称重新取得反序列化后的过渡对象，再重建列表，避免沿用旧对象和属性句柄。</summary>
         private void RebindAfterUndo()
         {
             var helper = target as FsmTransitionInspectorHelper;
@@ -55,12 +59,14 @@ namespace YLFramework.Editor.StateMachine
             Repaint();
         }
 
+        /// <summary>按过渡在所属配置中的当前下标取得序列化属性，过渡已移除时返回 null。</summary>
         private SerializedProperty TransitionProperty(FsmTransitionInspectorHelper helper)
         {
             int index = helper.controller.transitions.IndexOf(helper.transition);
             return index < 0 ? null : _controllerObject.FindProperty("transitions").GetArrayElementAtIndex(index);
         }
 
+        /// <summary>以所属配置作为序列化及 Undo 目标，重建基础条件列表并清空附加组列表缓存。</summary>
         private void BindLists()
         {
             FsmTransitionInspectorHelper helper = target as FsmTransitionInspectorHelper;
@@ -94,6 +100,7 @@ namespace YLFramework.Editor.StateMachine
             _autoSwitch = helper.transition.autoSwitch;
         }
 
+        /// <summary>提交序列化重排并标脏，再重取过渡和列表绑定以匹配新的对象身份。</summary>
         private void ApplyReorder(ReorderableList list)
         {
             _controllerObject.ApplyModifiedProperties();
@@ -102,6 +109,7 @@ namespace YLFramework.Editor.StateMachine
             RebindAfterUndo();
         }
 
+        /// <summary>刷新当前属性路径并绘制自动切换和各条件组，运行期禁用编辑，过渡已删除时仅显示提示。</summary>
         public override void OnInspectorGUI()
         {
             FsmTransitionInspectorHelper helper = target as FsmTransitionInspectorHelper;
@@ -213,6 +221,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>显示过渡来源和目标名称，不修改端点。</summary>
         protected override void OnHeaderGUI()
         {
             //base.OnHeaderGUI();
@@ -228,7 +237,6 @@ namespace YLFramework.Editor.StateMachine
             GUILayout.Label(string.Format("{0} -> {1}", helper.transition.fromStateName, helper.transition.toStateName));
             GUILayout.EndHorizontal();
 
-            // 画一条 分隔的线
             var rect = EditorGUILayout.BeginHorizontal();
 
             Handles.color = Color.black;
@@ -240,6 +248,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>按参数类型延迟建立共享绘制策略，Trigger 使用不绘制额外值控件的基类策略。</summary>
         private static void InitConditionInspectors()
         {
 
@@ -253,6 +262,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>向基础组追加默认条件，并重新取得可能因数组变化而失效的属性句柄。</summary>
         private void OnAddCallback(ReorderableList list)
         {
 
@@ -267,6 +277,7 @@ namespace YLFramework.Editor.StateMachine
             list.serializedProperty = TransitionProperty(helper).FindPropertyRelative("conditions");
         }
 
+        /// <summary>移除基础组选中条件，再刷新所属序列化对象和列表属性。</summary>
         private void OnRemoveCallback(ReorderableList list)
         {
 
@@ -281,6 +292,7 @@ namespace YLFramework.Editor.StateMachine
             list.serializedProperty = TransitionProperty(helper).FindPropertyRelative("conditions");
         }
 
+        /// <summary>将基础组指定行委托给通用条件绘制流程。</summary>
         private void DrawItem(Rect rect, int index, bool isActive, bool isFocused)
         {
 
@@ -295,6 +307,7 @@ namespace YLFramework.Editor.StateMachine
             DrawItemExcute(rect, conditon);
         }
 
+        /// <summary>绘制参数选择和对应类型的比较输入；引用缺失时显示诊断而不删除条件。</summary>
         private void DrawItemExcute(Rect rect, FsmConditionData condition)
         {
             FsmTransitionInspectorHelper helper = target as FsmTransitionInspectorHelper;
@@ -311,7 +324,6 @@ namespace YLFramework.Editor.StateMachine
                 //tempContent.text = conditon.parameterName;
                 if (EditorGUI.DropdownButton(_conditionLeftRect, new GUIContent(condition.parameterName), FocusType.Keyboard))
                 {
-                    // 弹出选择参数的弹框 TODO
                     PopupWindow.Show(rect, new FsmSelectParamWindow(rect.width / 2, condition, helper.controller));
 
 
@@ -329,10 +341,8 @@ namespace YLFramework.Editor.StateMachine
             else
             {
 
-                // 根据不同的参数类型绘制不同的内容
                 if (_conditionInspector.ContainsKey(parameter.parameterType))
                 {
-                    // 进行绘制
                     if (_conditionInspector[parameter.parameterType] != null)
                     {
                         _conditionInspector[parameter.parameterType].OnGUI(_conditionRightRect, condition, helper.controller);
@@ -346,11 +356,15 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>绘制基础条件组的列表标题。</summary>
         private void OnDrawHeaderCallback(Rect rect)
         {
             GUI.Label(rect, "Conditions");
         }
 
+        /// <summary>取得或建立附加组的序列化列表，并在每次读取时刷新数组路径。</summary>
+        /// <param name="condition">当前过渡中的附加条件组。</param>
+        /// <returns>可重排列表；组、所属配置或过渡已失效时为 null。</returns>
         public ReorderableList GetReorderableList(GroupCondition condition)
         {
             if (condition == null)
@@ -416,6 +430,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>显示附加组删除菜单，删除后清空列表缓存并刷新序列化数据。</summary>
         private void ShowConditionMenu(GroupCondition condition)
         {
             FsmTransitionInspectorHelper helper = target as FsmTransitionInspectorHelper;
@@ -428,7 +443,6 @@ namespace YLFramework.Editor.StateMachine
 
             genricMenu.AddItem(new GUIContent("Remove"), false, () =>
             {
-                // 移除一组条件
                 FsmConditionFactory.RemoveGroup(helper.controller, helper.transition, condition);
                 _reorderables.Clear();
                 _controllerObject.Update();

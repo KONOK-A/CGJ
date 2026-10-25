@@ -10,15 +10,18 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Resource
 {
-    /// <summary>有界固定 Schema codec。v1 已可读写；最终冻结仍须 8.2c 生成消费门禁，不提供旧格式回退。</summary>
+    /// <summary>固定 Schema v1 的有界编解码器；验证目录结构与身份关系，不提供旧格式回退或文件内容加载。</summary>
+    /// <remarks>集合和对象字段按约定排序后生成规范 UTF-8；BuildId 标识不含自身的有效载荷，CatalogDigest 标识最终字节。</remarks>
     public static class ResourceCatalogCodec
     {
+        /// <summary>输入 JSON 与规范输出各自允许的最大字节数。</summary>
         public const int MaximumBytes = 16 * 1024 * 1024;
         private const int Limit = 16384;
         private static readonly UTF8Encoding _utf8 = new(false, true);
         private const string Header = "SchemaVersion,ProjectId,Platform,UnityCompatibility,AppContentCompatibilityId,BuildSettingsFingerprint,ManifestFile,Bundles,Assets,Groups,SupportFiles";
 
-        /// <summary>验证无 BuildId 的固定 payload，排序并计算身份，再写入最终规范字节。</summary>
+        /// <summary>验证无 BuildId 的固定有效载荷，排序并计算身份，再写入最终规范字节。</summary>
+        /// <remarks>只验证描述间的约束，不读取 Bundle、重算文件摘要或验证发布签名。</remarks>
         public static byte[] Seal(byte[] payload)
         {
             var data = ParseObject(payload);
@@ -42,6 +45,7 @@ namespace YLFramework.Resource
 
             SortCollections(data);
             var buildId = (string)data["BuildId"];
+            // BuildId 的输入排除自身；重新加入后再比对整份字节，拒绝空白、字段顺序等非规范表示。
             data.Remove("BuildId");
             if (Digest(CanonicalBytes(data)) != buildId)
             {
@@ -58,9 +62,11 @@ namespace YLFramework.Resource
             return new ResourceCatalogDocument(data, canonical);
         }
 
+        /// <summary>复制已读取文档保存的规范字节，不重新解释类型或重排数据。</summary>
         public static byte[] Write(ResourceCatalogDocument document) =>
             (document ?? throw new ArgumentNullException(nameof(document))).CopyBytes();
 
+        /// <summary>计算给定字节的 SHA-256 小写十六进制摘要；不证明来源可信或签名有效。</summary>
         public static string Digest(byte[] bytes)
         {
             using var sha = SHA256.Create();
@@ -68,6 +74,7 @@ namespace YLFramework.Resource
         }
 
         // 不做 CLR 类型反序列化：所有字段逐项读取，$type 等未知键被拒绝，等价于 TypeNameHandling.None。
+        /// <summary>在字节数与 JSON 深度限制内读取单个对象，拒绝重复字段、非法 UTF-8 和额外内容。</summary>
         internal static JObject ParseObject(byte[] bytes)
         {
             if (bytes == null || bytes.Length == 0 || bytes.Length > MaximumBytes)
@@ -97,8 +104,10 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>递归按精确字段名排序对象，保留数组当前顺序，并输出固定转义和数值文化的紧凑 UTF-8。</summary>
         internal static byte[] CanonicalBytes(JToken data)
         {
+            // 数组顺序由各 Schema 的集合排序负责；这里只统一对象字段，不改变一般数组的语义。
             JToken Ordered(JToken token) => token switch
             {
                 JObject obj => new JObject(obj.Properties().OrderBy(x => x.Name, StringComparer.Ordinal).Select(x => new JProperty(x.Name, Ordered(x.Value)))),
@@ -125,6 +134,7 @@ namespace YLFramework.Resource
             return bytes;
         }
 
+        /// <summary>要求对象字段集合与固定 Schema 完全一致，不接受缺项或扩展键。</summary>
         internal static void Fields(JObject data, string names)
         {
             if (data == null || !data.Properties().Select(x => x.Name).OrderBy(x => x, StringComparer.Ordinal)
@@ -133,6 +143,7 @@ namespace YLFramework.Resource
                 throw new InvalidDataException("Missing or unknown JSON fields.");
             }
         }
+        /// <summary>读取有长度、空白和控制字符约束的精确字符串；只有显式允许时接纳 JSON null。</summary>
         internal static string Text(JObject data, string key, bool nullable = false)
         {
             var token = data[key];
@@ -154,6 +165,7 @@ namespace YLFramework.Resource
 
             return value;
         }
+        /// <summary>严格读取可表示为 Int64 的 JSON 整数，不把浮点或数字字符串隐式转换。</summary>
         internal static long Integer(JObject data, string key)
         {
             try
@@ -170,6 +182,7 @@ namespace YLFramework.Resource
                 throw new InvalidDataException("Invalid integer: " + key, error);
             }
         }
+        /// <summary>严格读取 JSON 布尔值，不接纳字符串或数字替代。</summary>
         internal static bool Boolean(JObject data, string key)
         {
             if (data[key]?.Type != JTokenType.Boolean)
@@ -179,6 +192,7 @@ namespace YLFramework.Resource
 
             return (bool)data[key];
         }
+        /// <summary>读取数量有界的数组，并按字段契约决定是否允许空集合。</summary>
         private static JArray Items(JObject data, string key, bool nonempty = false)
         {
             if (data[key] is not JArray array || array.Count > Limit || nonempty && array.Count == 0)
@@ -188,7 +202,9 @@ namespace YLFramework.Resource
 
             return array;
         }
+        /// <summary>要求集合成员为 JSON 对象，供逐项 Schema 校验使用。</summary>
         private static JObject Object(JToken token) => token as JObject ?? throw new InvalidDataException("Expected object entry.");
+        /// <summary>验证固定长度的小写十六进制文本，不校验其对应内容。</summary>
         internal static void Hex(string value, int length)
         {
             if (value == null || value.Length != length || value.Any(x => !(x >= '0' && x <= '9' || x >= 'a' && x <= 'f')))
@@ -196,6 +212,7 @@ namespace YLFramework.Resource
                 throw new InvalidDataException("Expected canonical lowercase hex identity.");
             }
         }
+        /// <summary>检查有长度上限的稳定 ASCII 标识，并统一报告为目录数据错误。</summary>
         internal static void Id(string value)
         {
             if (value?.Length > 128)
@@ -212,6 +229,7 @@ namespace YLFramework.Resource
                 throw new InvalidDataException("Invalid stable identifier.", error);
             }
         }
+        /// <summary>复用逻辑路径校验，拒绝非精确路径而不是规范化输入。</summary>
         private static void PathValue(string value)
         {
             try
@@ -223,6 +241,7 @@ namespace YLFramework.Resource
                 throw new InvalidDataException("Invalid catalog address/path.", error);
             }
         }
+        /// <summary>要求原生 Bundle 身份位于项目摘要前缀内且只使用约定字符。</summary>
         private static void Native(string value, string prefix)
         {
             if (!value.StartsWith(prefix, StringComparison.Ordinal) || value.Length <= prefix.Length ||
@@ -232,6 +251,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>校验固定字段、兼容描述、闭合文件集及 Bundle、资产、子资产和组之间的引用约束。</summary>
         private static void Validate(JObject data, bool sealedCatalog)
         {
             Fields(data, Header + (sealedCatalog ? ",BuildId" : ""));
@@ -412,6 +432,7 @@ namespace YLFramework.Resource
             }
             foreach (var asset in assets.Values.Where(x => (string)x["Kind"] == "SubAsset"))
             {
+                // localId 区分逻辑子资产，但原生加载仍依赖主文件和名称；两套描述必须绑定到同一主资产。
                 if (!mainFiles.TryGetValue((string)asset["LoadName"], out var main) || (string)main["Guid"] != (string)asset["Guid"] ||
                     (string)main["Address"] != (string)asset["Address"] || (string)main["BundleId"] != (string)asset["BundleId"] ||
                     !((JArray)main["Aliases"]).Select(x => (string)x).OrderBy(x => x, StringComparer.Ordinal)
@@ -448,6 +469,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>校验单层文件名、跨文件唯一性、正长度和摘要格式，不访问文件系统。</summary>
         private static void FileRecord(JObject data, HashSet<string> files)
         {
             var name = Text(data, "RelativeFile");
@@ -464,6 +486,7 @@ namespace YLFramework.Resource
             Hex(Text(data, "Sha256"), 64);
         }
 
+        /// <summary>按 Schema 身份键排序各集合，使相同有效载荷不因输入枚举顺序改变字节身份。</summary>
         private static void SortCollections(JObject data)
         {
             void Sort(JObject owner, string key, string field) => owner[key] = new JArray(((JArray)owner[key]).OrderBy(x => (string)x[field], StringComparer.Ordinal));

@@ -11,6 +11,8 @@ using UpdateManager = YLFramework.Update.UpdateManager;
 namespace YLFramework.Core
 {
 
+    /// <summary>协调 View 的取得、显式挂载、会话索引及退出；实例租约与 Model 借用分别管理。</summary>
+    /// <remarks>场景卸载和销毁扫描只清理已纳管的失效会话，不自动接管场景中的其他对象。</remarks>
     internal partial class ViewManager
     {
         private static readonly HashSet<Module> _sceneOwners = new HashSet<Module>();
@@ -20,8 +22,10 @@ namespace YLFramework.Core
         // 同步初始化调用栈的当前事务身份，仅用于区分 UI 自身准备失败与其他窗口观察异常。
         internal static KeyValuePair<View, object> InitializingView;
 
+        /// <summary>注册执行会话重置入口，使禁用 Domain Reload 时也能撤销旧场景跟踪。</summary>
         static ViewManager() => SingletonSessionState.RegisterSessionReset(ResetSession);
 
+        /// <summary>结束旧扫描订阅并清空跟踪状态，不替代各模块的正常关闭流程。</summary>
         private static void ResetSession()
         {
             EndPruneRound();
@@ -30,6 +34,7 @@ namespace YLFramework.Core
             InitializingView = default;
         }
 
+        /// <summary>记录场景位置并按需开启共享的卸载监听与销毁扫描，不改变模块归属。</summary>
         private static void TrackScene(Module module, View view)
         {
             view.SceneHandle = view.gameObject.scene.handle;
@@ -48,6 +53,7 @@ namespace YLFramework.Core
             _sceneOwners.Add(module);
         }
 
+        /// <summary>场景卸载后复查所有受管会话，保留迁移后仍存活的对象并清理已销毁对象。</summary>
         private static void OnSceneUnloaded(Scene scene)
         {
             var errors = new List<Exception>();

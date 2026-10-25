@@ -11,13 +11,16 @@ namespace YLFramework.Editor.Buff
 {
 
 
+    /// <summary>延迟编辑 Buff ID，查询全项目配表占用并同步条目资产命名。</summary>
     public class CustomBuffConfigDataIdGui : CustomPropertyGui
     {
 
 
+        /// <summary>启用字段变化后重载配表树的通知。</summary>
         public CustomBuffConfigDataIdGui() : base(true) { }
 
 
+        /// <summary>确认 ID 未被配表查询命中后应用修改、重命名条目并清除所属表缓存。</summary>
         public override void OnPropertyGui(SerializedProperty serializedProperty)
         {
             EditorGUILayout.LabelField(string.Empty, "Buff id(唯一标识,不可重复)", "BoldLabel");
@@ -62,6 +65,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>扫描并返回项目内可加载的全部 Buff 配表，用于 ID 占用查询。</summary>
         public static List<BuffsConfig> GetAllConfigs()
         {
             List<BuffsConfig> allConfigs = new List<BuffsConfig>();

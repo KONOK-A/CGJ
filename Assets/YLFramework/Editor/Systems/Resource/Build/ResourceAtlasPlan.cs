@@ -11,41 +11,53 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>已验证归属下的图集计划状态，不将外部修改误判为可覆盖更新。</summary>
     public enum ResourceAtlasChangeKind
     {
+        /// <summary>规则需要新输出，且目标文件与 meta 尚未占用。</summary>
         Create,
+        /// <summary>既有输出仍匹配登记字节，但规则或输入摘要已变化。</summary>
         Update,
+        /// <summary>既有输出及其输入摘要均与登记记录一致。</summary>
         Current,
+        /// <summary>既有输出不再由当前规则产生，保留文件但不进入构建。</summary>
         Obsolete
     }
 
     /// <summary>脱离生成记录的只读预览。冲突、缺失或外部修改会明确抛错，不被伪装为可覆盖的 Update。</summary>
     public sealed class ResourceAtlasChange
     {
+        /// <summary>本次预览相对于受管记录的状态。</summary>
         public ResourceAtlasChangeKind Kind
         {
             get; internal set;
         }
+        /// <summary>规则 Id 与可选来源文件夹 GUID 组成的稳定输出键。</summary>
         public string Key
         {
             get; internal set;
         }
+        /// <summary>该输出在已登记专属目录内的资产路径。</summary>
         public string Path
         {
             get; internal set;
         }
+        /// <summary>登记的图集 GUID；新建计划在生成前为 null。</summary>
         public string Guid
         {
             get; internal set;
         }
+        /// <summary>有效输出将加入的目标 Group；失效项没有当前目标。</summary>
         public string GroupId
         {
             get; internal set;
         }
+        /// <summary>有效输出的完整逻辑地址；失效项没有当前地址。</summary>
         public string Address
         {
             get; internal set;
         }
+        /// <summary>按序收集的 Sprite 纹理源路径，不包含图集内生成的 Sprite 克隆。</summary>
         public IReadOnlyList<string> Sources
         {
             get; internal set;
@@ -57,18 +69,23 @@ namespace YLFramework.Editor.Resource
     /// <summary>只读规则展开及归属检查；不导入、保存、生成或准备图集。</summary>
     public sealed class ResourceAtlasPlan
     {
+        /// <summary>已经过归属检查的专属图集输出目录。</summary>
         public string DirectoryPath
         {
             get;
         }
+        /// <summary>当前规则展开的输出及保留的失效项，不授予之后直接覆盖的权限。</summary>
         public IReadOnlyList<ResourceAtlasChange> Changes
         {
             get;
         }
+        /// <summary>是否存在待创建或更新输出；仅有失效项不要求生成。</summary>
         public bool NeedsGeneration => Changes.Any(x => x.Kind == ResourceAtlasChangeKind.Create || x.Kind == ResourceAtlasChangeKind.Update);
+        /// <summary>展示已解析输出的位置、状态和目标分组，不触发生成。</summary>
         public override string ToString() => DirectoryPath + "\n" + string.Join("\n", Changes.Select(x =>
             x.Kind + " " + x.Path + (x.Kind == ResourceAtlasChangeKind.Obsolete ? " (保留，未进入构建)" : " -> " + x.GroupId + " / " + x.Address)));
 
+        /// <summary>验证归属并展开当前规则与来源，按持久身份及输入摘要计算计划。</summary>
         internal ResourceAtlasPlan(ResourceProject project)
         {
             var configuration = project.automaticAtlases;
@@ -200,6 +217,7 @@ namespace YLFramework.Editor.Resource
             Changes = changes.AsReadOnly();
         }
 
+        /// <summary>从候选纹理筛选已按 Sprite 导入的来源，显式选中的非 Sprite 纹理则拒绝。</summary>
         private static string[] CollectSources(ResourceAtlasRule rule, ResourceProjectPaths directories, string output)
         {
             var candidates = SourceCandidates(rule, directories, output);
@@ -214,6 +232,7 @@ namespace YLFramework.Editor.Resource
             return candidates.Where(path => AssetImporter.GetAtPath(path) is TextureImporter importer && importer.textureType == TextureImporterType.Sprite).ToArray();
         }
 
+        /// <summary>展开有限来源并拒绝生成范围重叠及未保存资产或 Importer，尚不按 Sprite 类型过滤。</summary>
         internal static string[] SourceCandidates(ResourceAtlasRule rule, ResourceProjectPaths directories, string output)
         {
             if (rule.sources == null || rule.sources.Length == 0 || rule.sources.Length > 16384)
@@ -269,6 +288,7 @@ namespace YLFramework.Editor.Resource
             return paths.OrderBy(x => x, StringComparer.Ordinal).ToArray();
         }
 
+        /// <summary>解析显式登记的生成父目录，只验证定位边界，不从来源目录推导所有权。</summary>
         internal static string ResolveGenerationParent(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -309,6 +329,7 @@ namespace YLFramework.Editor.Resource
             return path;
         }
 
+        /// <summary>核对配置及目录归属与 meta，逐输出验证 GUID 和受管字节，拒绝缺失、脏输出及未知内容。</summary>
         internal static string ValidateOwnership(ResourceProject project)
         {
             ResourceEditorOperations.RequireEditableProject(project);
@@ -386,7 +407,9 @@ namespace YLFramework.Editor.Resource
             return directory;
         }
 
+        /// <summary>按精确大小写判断严格子路径，不包含目录自身。</summary>
         internal static bool Within(string root, string path) => !string.IsNullOrEmpty(root) && path != null && path.StartsWith(root + "/", StringComparison.Ordinal);
+        /// <summary>拒绝链接后计算文件全部字节的 SHA-256。</summary>
         internal static string HashFile(string path)
         {
             ResourceBuildOperation.RejectLinks(path);
@@ -394,6 +417,7 @@ namespace YLFramework.Editor.Resource
             using var stream = File.OpenRead(path);
             return BitConverter.ToString(hash.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
         }
+        /// <summary>计算规则及来源描述的 UTF-8 SHA-256。</summary>
         private static string HashText(string text)
         {
             using var hash = SHA256.Create();

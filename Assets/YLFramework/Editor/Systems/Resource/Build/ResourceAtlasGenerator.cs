@@ -192,9 +192,13 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>只读检查当前归属并展开规则，不导入来源、不生成或准备图集。</summary>
         public static ResourceAtlasPlan Preview(ResourceProject project) => new(project);
 
-        /// <summary>执行当前已保存规则并准备自有图集。返回实际计划；普通异常/取消回滚本次写入，旧有效输出不被当作成功。</summary>
+        /// <summary>
+        /// 执行当前已保存规则并准备自有图集，返回实际计划；未配置时返回 null。
+        /// 异常或取消时仅尝试恢复仍匹配最后受控写入点的资产对；未知改动保留，回滚失败另行报错，不保证无条件回滚。
+        /// </summary>
         public static ResourceAtlasPlan Generate(ResourceProject project, CancellationToken cancellation = default)
         {
             ResourceBundleBuilder.ValidateEditor(EditorUserBuildSettings.activeBuildTarget);
@@ -378,6 +382,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>临写前再次验证新路径未被占用，或旧输出仍匹配登记身份与字节。</summary>
         private static void RequireExpectedOutput(ResourceAtlasChange change, ResourceAtlasConfiguration.Output record)
         {
             if (record == null)
@@ -397,6 +402,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>保存图集创作资产及其专属 Importer 设置，在受控写入点记录状态并核对身份。</summary>
         private static void WriteAtlas(ResourceAtlasChange change, Action checkpoint)
         {
             // 写 authoring 资产而不是只修改导入后的 SpriteAtlas；保存不删除或重建存续 .meta。
@@ -452,6 +458,7 @@ namespace YLFramework.Editor.Resource
             checkpoint();
         }
 
+        /// <summary>直接核对 meta 中唯一 GUID 行，避免只信任 AssetDatabase 的缓存身份。</summary>
         private static bool HasExpectedGuid(string path, string guid)
         {
             ResourceBuildOperation.RejectLinks(path + ".meta");
@@ -464,13 +471,14 @@ namespace YLFramework.Editor.Resource
             return identities.Length == 1 && identities[0] == "guid: " + guid;
         }
 
-        // 只记录实际开始写入的资产对；回滚前再次核对最后一个受控写入点，不覆盖后来的未知内容。
+        /// <summary>只记录实际开始写入的资产对；回滚前再次核对最后一个受控写入点，不覆盖后来的未知内容。</summary>
         private sealed class AtlasWrites
         {
             private readonly Dictionary<string, byte[]> _originals = new(StringComparer.Ordinal);
             private readonly Dictionary<string, byte[]> _expected = new(StringComparer.Ordinal);
             private readonly List<string> _paths = new();
 
+            /// <summary>登记开始写入的资产及 meta 原字节，并建立初始检查点。</summary>
             internal void Begin(string path)
             {
                 _paths.Add(path);
@@ -482,12 +490,14 @@ namespace YLFramework.Editor.Resource
                 Checkpoint(path);
             }
 
+            /// <summary>记录本次受控写入后资产及 meta 的预期字节。</summary>
             internal void Checkpoint(string path)
             {
                 _expected[path] = Read(path);
                 _expected[path + ".meta"] = Read(path + ".meta");
             }
 
+            /// <summary>要求资产对仍等于最后检查点，拒绝覆盖后来出现的未知内容。</summary>
             internal void RequireCurrent(string path)
             {
                 foreach (var file in new[] { path, path + ".meta" })
@@ -500,6 +510,7 @@ namespace YLFramework.Editor.Resource
                 }
             }
 
+            /// <summary>逆序恢复通过检查点复验的资产对，重导入成功恢复项并汇总不能安全恢复的错误。</summary>
             internal void Restore()
             {
                 var restored = new List<string>();
@@ -541,6 +552,7 @@ namespace YLFramework.Editor.Resource
                 }
             }
 
+            /// <summary>拒绝链接或目录占位，读取现有文件字节，缺失时返回 null。</summary>
             private static byte[] Read(string path)
             {
                 ResourceBuildOperation.RejectLinks(path);
@@ -637,9 +649,11 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>枚举 Assets 与只读 Packages 的非目录资产，用于定向检查失效图集引用。</summary>
         private static IEnumerable<string> ReferenceCandidates() => AssetDatabase.GetAllAssetPaths().Where(path =>
             (path.StartsWith("Assets/", StringComparison.Ordinal) || path.StartsWith("Packages/", StringComparison.Ordinal)) && !AssetDatabase.IsValidFolder(path));
 
+        /// <summary>仅返回已有效生成的当前输出；待创建或更新时拒绝继续依赖分析，失效项不进入构建。</summary>
         internal static IReadOnlyList<ResourceAtlasChange> CurrentOutputs(ResourceProject project)
         {
             if (!IsConfigured(project))
@@ -656,6 +670,7 @@ namespace YLFramework.Editor.Resource
             return plan.Changes.Where(x => x.Kind == ResourceAtlasChangeKind.Current).ToList().AsReadOnly();
         }
 
+        /// <summary>检查可见配置与隐藏登记 GUID 是否一致，已登记但断开时明确失败而非视为未配置。</summary>
         internal static bool IsConfigured(ResourceProject project)
         {
             if (!project)

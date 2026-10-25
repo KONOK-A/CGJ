@@ -16,6 +16,7 @@ namespace YLFramework.Pooling
         private static readonly ObjectPool<List<T>> _pool = new(
             Create, reset: list => list.Clear(), cacheOrder: PoolCacheOrder.Lifo);
 
+        /// <summary>登记会话清理，进入新运行会话时丢弃旧的空闲列表缓存。</summary>
         static ListPool()
         {
             SingletonSessionState.RegisterSessionReset(Clear);
@@ -97,6 +98,7 @@ namespace YLFramework.Pooling
             _pool.Clear();
         }
 
+        /// <summary>按当前租用请求的容量冷创建列表，供固定工厂复用。</summary>
         private static List<T> Create() => new(_createCapacity);
     }
 
@@ -108,6 +110,7 @@ namespace YLFramework.Pooling
         /// <summary>
         /// 将列表回收进 ListPool。
         /// </summary>
+        /// <param name="self">从同类型 ListPool 借出的列表；归还后不得继续使用，null 会被忽略。</param>
         public static void RecycleToPool<T>(this List<T> self)
         {
             ListPool<T>.Recycle(self);

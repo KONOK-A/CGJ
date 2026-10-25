@@ -9,18 +9,20 @@ using YLFramework.Buff;
 
 namespace YLFramework.Editor.Buff
 {
+    /// <summary>扫描 Buff 脚本映射，并在显式刷新时维护定义中的脚本绑定。</summary>
     public class ScriptBindController
     {
 
-        // key:guid value:class_full_name
+        // 脚本 GUID 到类型全名的映射。
         private static Dictionary<string, string> _guidClassFullName = new Dictionary<string, string>();
 
-        // key:class_full_name value:guid
+        // 类型全名到脚本 GUID 的反向映射。
         private static Dictionary<string, string> _classFullNameGuid = new Dictionary<string, string>();
 
-        // 保存所有的继承自 SkillConfigData 的类型
+        // 保存扫描得到的 BuffConfigData 及其派生类型。
         private static List<Type> _skillConfigDataTypes = null;
 
+        /// <summary>从菜单重建脚本映射，刷新全部 Buff 配表的类型绑定并保存资产。</summary>
         [MenuItem("Tools/YLFramework/Buff/Refresh Script Bindings")]
         static void RefreshAllSkillScripts()
         {
@@ -35,6 +37,7 @@ namespace YLFramework.Editor.Buff
             AssetDatabase.SaveAssets();
         }
 
+        /// <summary>遍历配表，按已有 GUID 或类型全名尝试更新脚本绑定并标脏。</summary>
         private static void RefreshScriptClassFullName(BuffsConfig skillsConfig)
         {
             foreach (BuffConfigData buffConfigData in skillsConfig.buffs)
@@ -50,7 +53,7 @@ namespace YLFramework.Editor.Buff
                     string classFullName = GetClassFullNameByGuid(buffConfigData.buffClassGuid);
                     if (string.IsNullOrEmpty(classFullName))
                     {
-                        // 尝试通过类名获取 guid (这种是为了通过excel导入/导出,导致的guid不存在,尝试根据class_full_name 来找到guid )
+                        // 未命中时再次查询 GUID 映射；反向映射仅在下面 GUID 为空的分支使用。
                         string guid = GetClassFullNameByGuid(buffConfigData.buffClassFullName);
                         if (!string.IsNullOrEmpty(guid) && buffConfigData.buffClassGuid != guid)
                         {
@@ -84,6 +87,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>从项目脚本重建 BuffBase 派生类的 GUID 与类型全名双向映射。</summary>
         private static void RefreshScript()
         {
             if (_guidClassFullName == null)
@@ -134,6 +138,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>从反向映射查找类型对应的脚本 GUID，未找到时返回空字符串。</summary>
         private static string GetGuidByClassFullName(string fullName)
         {
             if (_classFullNameGuid.ContainsKey(fullName))
@@ -144,6 +149,7 @@ namespace YLFramework.Editor.Buff
             return string.Empty;
         }
 
+        /// <summary>从 GUID 映射查找脚本类型全名，未找到时返回空字符串。</summary>
         private static string GetClassFullNameByGuid(string guid)
         {
             if (_guidClassFullName.ContainsKey(guid))
@@ -154,6 +160,7 @@ namespace YLFramework.Editor.Buff
             return string.Empty;
         }
 
+        /// <summary>扫描 BuffConfigData 及其派生类型并返回共用列表，不过滤抽象类型。</summary>
         public static List<Type> GetAllSkillConfigDataTypes()
         {
             if (_skillConfigDataTypes == null)

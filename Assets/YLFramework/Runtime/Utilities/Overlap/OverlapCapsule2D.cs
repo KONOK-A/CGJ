@@ -4,9 +4,7 @@ using UnityEngine;
 
 namespace YLFramework.Overlap
 {
-    /// <summary>
-    /// 重叠检测胶囊2D
-    /// </summary>
+    /// <summary>复用矩形的局部偏移与尺寸配置，检测带指定轴向的二维胶囊重叠。</summary>
     public class OverlapCapsule2D : OverlapBox2D
     {
 
@@ -18,9 +16,7 @@ namespace YLFramework.Overlap
 
         #region 属性
 
-        /// <summary>
-        /// 方向
-        /// </summary>
+        /// <summary>胶囊在应用世界 Z 轴旋转前的水平或竖直轴向，不是投射方向。</summary>
         public CapsuleDirection2D Direction
         {
             get
@@ -36,6 +32,7 @@ namespace YLFramework.Overlap
         #endregion
 
 
+        /// <summary>按缩放后的绝对尺寸、轴向和世界旋转检测当前位置的胶囊重叠。</summary>
         public override void CheckOverlap()
         {
             if (!TryBeginCheck())

@@ -12,46 +12,60 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>资源预检到达的检查范围；静态通过和需要图集准备均不代表完整预检完成。</summary>
     public enum ResourcePreflightState
     {
+        /// <summary>低成本配置检查受阻，尚未执行完整资源检查。</summary>
         StaticBlocked,
+        /// <summary>基础配置通过，依赖、密钥和输出仍待检查。</summary>
         StaticReady,
+        /// <summary>图集需要写入或更新，本次只读预检在最终依赖与工作目录检查前返回。</summary>
         AtlasPreparationRequired,
+        /// <summary>本次完整预检通过；执行时仍须按当前输入重新验证。</summary>
         Complete,
+        /// <summary>完整预检发生异常，原因保存在结果中。</summary>
         Failed
     }
 
     /// <summary>同一正式预检流的只读结论；StaticReady不是完整输入、密钥或制品验证。</summary>
     public sealed class ResourcePreflightResult
     {
+        /// <summary>本次实际到达的预检状态。</summary>
         public ResourcePreflightState State
         {
             get;
         }
+        /// <summary>检查结论及尚未覆盖范围的说明。</summary>
         public string Summary
         {
             get;
         }
+        /// <summary>导致预检受阻的异常；需要图集准备时可为空。</summary>
         public Exception Error
         {
             get;
         }
+        /// <summary>检查时项目配置资产的 GUID；没有有效资产时为空。</summary>
         public string ProjectGuid
         {
             get;
         }
+        /// <summary>检查时定义中的资源项目标识。</summary>
         public string ProjectId
         {
             get;
         }
+        /// <summary>本次检查使用的目标平台名称。</summary>
         public string Platform
         {
             get;
         }
+        /// <summary>本次检查使用的应用资源兼容标识。</summary>
         public string AppContentCompatibilityId
         {
             get;
         }
+        /// <summary>记录预检结论及当时的项目身份，不执行额外检查。</summary>
         internal ResourcePreflightResult(ResourcePreflightState state, string summary, Exception error,
             ResourceProject project, BuildTarget target, string app)
         {
@@ -68,84 +82,106 @@ namespace YLFramework.Editor.Resource
     /// <summary>构建、发布和生成的独立结果；失败首因不会被后续生成或 UI 操作覆盖。</summary>
     public sealed class ResourceEditorBuildReport
     {
+        /// <summary>本次操作所属配置资产的 GUID。</summary>
         public string ProjectGuid
         {
             get; internal set;
         }
+        /// <summary>本次操作使用的资源项目标识。</summary>
         public string ProjectId
         {
             get; internal set;
         }
+        /// <summary>本次操作使用的目标平台名称。</summary>
         public string Platform
         {
             get; internal set;
         }
+        /// <summary>本次操作使用的应用资源兼容标识。</summary>
         public string AppContentCompatibilityId
         {
             get; internal set;
         }
+        /// <summary>操作来源或执行动作的标识，供报告展示。</summary>
         public string Operation
         {
             get; internal set;
         }
+        /// <summary>是否请求强制重建；不表示跳过安全验证。</summary>
         public bool ForceRebuild
         {
             get; internal set;
         }
+        /// <summary>请求生成地址常量时指定的源码目录。</summary>
         public string ReferenceDirectory
         {
             get; internal set;
         }
+        /// <summary>从配方解析并冻结的非秘密执行选项；非配方入口可为空。</summary>
         public ResourceBuildInvocation Invocation
         {
             get; internal set;
         }
+        /// <summary>已成功取得的构建结果；构建未完成时为空。</summary>
         public ResourceBuildResult Build
         {
             get; internal set;
         }
+        /// <summary>已确认成功的本地发布版本；为空不证明磁盘上的发布索引未变化。</summary>
         public ResourceRelease Release
         {
             get; internal set;
         }
+        /// <summary>构建或其前置解析、预检失败的原因。</summary>
         public Exception BuildError
         {
             get; internal set;
         }
+        /// <summary>发布阶段的异常；提交点后的故障需要显式恢复确认。</summary>
         public Exception PublicationError
         {
             get; internal set;
         }
+        /// <summary>发布后生成常量的异常，不撤销已成功的资源发布。</summary>
         public Exception GenerationError
         {
             get; internal set;
         }
+        /// <summary>本次是否请求在发布成功后生成地址常量。</summary>
         public bool IsGenerationRequested
         {
             get; internal set;
         }
+        /// <summary>常量生成是否改变源码，不代表 Unity 编译通过。</summary>
         public bool HasGenerationChanged
         {
             get; internal set;
         }
+        /// <summary>报告对象创建时记录的 UTC 时间。</summary>
         public DateTime StartedAtUtc { get; } = DateTime.UtcNow;
+        /// <summary>编排记录的阶段总耗时，单位为毫秒；内部细分计时可能重叠。</summary>
         public double ElapsedMilliseconds
         {
             get; internal set;
         }
+        /// <summary>已执行预检的耗时毫秒数；未测量时为空。</summary>
         public double? PreflightMilliseconds
         {
             get; internal set;
         }
+        /// <summary>发布阶段耗时毫秒数；未执行时为空。</summary>
         public double? PublicationMilliseconds
         {
             get; internal set;
         }
+        /// <summary>常量生成阶段耗时毫秒数；未执行时为空。</summary>
         public double? GenerationMilliseconds
         {
             get; internal set;
         }
+        /// <summary>生成阶段收集到的已发布项目集合，生成本身仍可能失败。</summary>
         public IReadOnlyList<string> GeneratedProjects { get; internal set; } = Array.Empty<string>();
+        /// <summary>按构建、发布和生成分别描述结果，不将后续失败解释为前序回滚。</summary>
         public string Summary => (Invocation == null ? "" : Invocation + "\n") + (Build == null ? "构建未完成：" + BuildError?.Message : "构建成功：" + Build.WorkspacePath) + "\n" +
             (Release != null ? "发布成功：" + Release.DirectoryPath + "\nCatalogDigest=" + Release.Catalog.CatalogDigest :
                 PublicationError != null ? "发布未确认：" + PublicationError.Message + "；如涉及提交点后的 IO，请显式恢复确认。" : "发布未执行。") + "\n" +
@@ -231,6 +267,7 @@ namespace YLFramework.Editor.Resource
             return Finish(report);
         }
 
+        /// <summary>解析配方并要求其已显式保存，避免将未落盘选项当作执行依据。</summary>
         private static ResourceBuildInvocation ResolveSavedRecipe(ResourceBuildRecipe recipe)
         {
             var input = ResolveRecipe(recipe);
@@ -242,6 +279,7 @@ namespace YLFramework.Editor.Resource
             return input;
         }
 
+        /// <summary>确认配方是 Assets 下可编辑且路径不经过链接的配置资产。</summary>
         internal static void RequireRecipe(ResourceBuildRecipe recipe)
         {
             var path = recipe ? AssetDatabase.GetAssetPath(recipe) : "";
@@ -340,6 +378,7 @@ namespace YLFramework.Editor.Resource
         public static string Preflight(ResourceProject project, string appContentCompatibilityId, IResourceContentKeyProvider provider = null)
             => PreflightForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, provider);
 
+        /// <summary>执行目标平台完整预检，将结果中的异常按原异常信息重新抛出。</summary>
         private static string PreflightForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId, IResourceContentKeyProvider provider)
         {
             var result = InspectPreflightForTarget(project, target, appContentCompatibilityId, provider, true);
@@ -351,6 +390,7 @@ namespace YLFramework.Editor.Resource
             return result.Summary;
         }
 
+        /// <summary>取得当前平台的完整只读预检结论；需要准备图集时提前返回，不写入图集。</summary>
         public static ResourcePreflightResult InspectPreflight(ResourceProject project, string appContentCompatibilityId, IResourceContentKeyProvider provider = null) =>
             InspectPreflightForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, provider, true);
 
@@ -358,6 +398,7 @@ namespace YLFramework.Editor.Resource
         public static ResourcePreflightResult CheckReadiness(ResourceProject project, string appContentCompatibilityId) =>
             InspectPreflightForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, null, false);
 
+        /// <summary>检查已保存配方的实际项目与平台；默认只做静态检查，异常作为结果返回。</summary>
         public static ResourcePreflightResult InspectRecipePreflight(ResourceBuildRecipe recipe, bool full = false, IResourceContentKeyProvider provider = null)
         {
             try
@@ -373,6 +414,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将指定检查范围的异常转换为对应阻塞状态，供无窗口入口和 UI 共用。</summary>
         private static ResourcePreflightResult InspectPreflightForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
             IResourceContentKeyProvider provider, bool full)
         {
@@ -387,6 +429,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>分层检查编辑器、已保存定义和输出归属；完整检查仍可能因图集待准备而提前结束。</summary>
         private static ResourcePreflightResult PreflightCore(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
             IResourceContentKeyProvider provider, bool full)
         {
@@ -410,6 +453,7 @@ namespace YLFramework.Editor.Resource
             {
                 var copy = ResourceBundleBuilder.CopyContentKey(ContentProvider(project.contentEncryption, project.projectId, project.contentKeyId, provider), project.projectId, project.contentKeyId);
                 Array.Clear(copy, 0, copy.Length);
+                // 密钥提供者可能回调修改定义；这里只拒绝继续，不撤销回调已经保存的配置。
                 if (ResourceProjectPaths.SemanticIdentity(project) != directoryIdentity)
                 {
                     throw new InvalidOperationException("资源目录或生成配置在密钥检查期间发生变化。本次操作已停止，请检查并重新执行；已保存的配置修改未被撤销。");
@@ -473,6 +517,7 @@ namespace YLFramework.Editor.Resource
             bool forceRebuild = false, CancellationToken cancellation = default, IResourceContentKeyProvider provider = null)
             => Finish(BuildOnlyForTarget(project, EditorUserBuildSettings.activeBuildTarget, appContentCompatibilityId, forceRebuild, cancellation, provider));
 
+        /// <summary>同步预检并调用正式 Builder，将构建异常与测量写入独立报告。</summary>
         private static ResourceEditorBuildReport BuildOnlyForTarget(ResourceProject project, BuildTarget target, string appContentCompatibilityId,
             bool forceRebuild, CancellationToken cancellation, IResourceContentKeyProvider provider, ResourceBuildInvocation invocation = null)
         {
@@ -515,6 +560,7 @@ namespace YLFramework.Editor.Resource
                     throw new InvalidOperationException("Project effective policy changed after recipe resolution; explicitly resolve and execute again.");
                 }
 
+                // 预检允许返回“图集待准备”；Builder 先写入并准备图集，再冻结和复核真正的构建输入。
                 var build = ResourceBundleBuilder.BuildWithContentKey(project, target,
                     ContentProvider(project.contentEncryption, project.projectId, project.contentKeyId, provider), forceRebuild, cancellation);
                 if (invocation != null && (build.Map.ProjectGuid != invocation.ProjectGuid || build.Map.ProjectId != invocation.ProjectId ||
@@ -560,6 +606,7 @@ namespace YLFramework.Editor.Resource
             return Finish(report);
         }
 
+        /// <summary>先确认发布，再按需生成全项目常量；两阶段各自记录异常，生成失败不回滚发布。</summary>
         private static void PublishReport(ResourceEditorBuildReport report, string app, bool generate, string directory, CancellationToken cancellation, IResourceContentKeyProvider provider)
         {
             var elapsed = Stopwatch.StartNew();
@@ -610,14 +657,17 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>通知观察者本次尝试已结束并返回报告，不把结束通知视为成功结论。</summary>
         private static ResourceEditorBuildReport Finish(ResourceEditorBuildReport report)
         {
             ResourceBuildProgress.Notify(ResourceBuildPhase.AttemptFinished, report.ProjectGuid, report.ProjectId, report.Platform);
             return report;
         }
 
+        /// <summary>未显式提供密钥来源时使用的进程环境变量名，不是密钥内容。</summary>
         public const string ContentKeyEnvironmentVariable = "YL_RESOURCE_CONTENT_KEY";
 
+        /// <summary>不加密时不取密钥；加密时优先使用调用方来源，否则绑定明确的环境变量。</summary>
         private static IResourceContentKeyProvider ContentProvider(ResourceContentEncryption mode, string projectId, string keyId, IResourceContentKeyProvider provider) =>
             mode == ResourceContentEncryption.None ? null : provider ?? ContentKeyFromEnvironment(projectId, keyId, ContentKeyEnvironmentVariable);
 
@@ -636,11 +686,13 @@ namespace YLFramework.Editor.Resource
             return new EnvironmentContentKeyProvider(projectId, keyId, secretEnvironmentVariable);
         }
 
+        /// <summary>只为绑定的项目和 KeyId 从指定进程变量复制内容密钥，不持有密钥缓存。</summary>
         private sealed class EnvironmentContentKeyProvider : IResourceContentKeyProvider
         {
             private readonly string _projectId;
             private readonly string _keyId;
             private readonly string _variable;
+            /// <summary>记录密钥来源的身份和变量名，构造时不读取秘密。</summary>
             internal EnvironmentContentKeyProvider(string projectId, string keyId, string variable)
             {
                 this._projectId = projectId;
@@ -648,6 +700,7 @@ namespace YLFramework.Editor.Resource
                 this._variable = variable;
             }
 
+            /// <summary>匹配身份后将规范 Base64 密钥复制到 32 字节目标；临时解码缓冲在退出时清零。</summary>
             public bool TryCopyKey(string project, string requestedKey, byte[] destination)
             {
                 if (project != _projectId || requestedKey != _keyId)
@@ -850,6 +903,7 @@ namespace YLFramework.Editor.Resource
             serialized.ApplyModifiedProperties();
         }
 
+        /// <summary>可撤销地移除指定分组定义，不删除源资产、构建输出或历史发布，也不自动保存。</summary>
         public static void RemoveGroup(ResourceProject project, int groupIndex)
         {
             RequireEditableProject(project);
@@ -899,6 +953,7 @@ namespace YLFramework.Editor.Resource
             serialized.ApplyModifiedProperties();
         }
 
+        /// <summary>先校验整批索引再可撤销地移除选择定义；不删除源文件，不自动保存。</summary>
         public static void RemoveSelections(ResourceProject project, int groupIndex, int[] indices)
         {
             RequireEditableProject(project);
@@ -914,6 +969,7 @@ namespace YLFramework.Editor.Resource
             serialized.ApplyModifiedProperties();
         }
 
+        /// <summary>拒绝空、重复或越界选择，并按倒序返回以避免删除时的索引位移。</summary>
         private static int[] SelectionIndices(ResourceProject project, int group, int[] indices)
         {
             RequireGroup(project, group);
@@ -926,6 +982,7 @@ namespace YLFramework.Editor.Resource
             return indices.OrderByDescending(x => x).ToArray();
         }
 
+        /// <summary>确认分组索引属于当前定义，防止操作失效的 UI 选择。</summary>
         private static void RequireGroup(ResourceProject project, int groupIndex)
         {
             if (groupIndex < 0 || groupIndex >= project.groups.Count)
@@ -934,6 +991,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>校验技术标识并排除其他分组的同名或大小写冲突。</summary>
         private static void ValidateGroupId(ResourceProject project, int index, string id)
         {
             ResourceAddress.ValidateId(id, nameof(id));
@@ -943,6 +1001,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将字符串集合复制到序列化数组，供批量移动完整保留条目设置。</summary>
         private static void SetStrings(SerializedProperty property, string[] values)
         {
             property.arraySize = values?.Length ?? 0;
@@ -952,6 +1011,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>为接下来的序列化修改划分独立 Undo 组，不执行资产保存。</summary>
         private static void BeginEdit(string label)
         {
             // API/快捷键可在同一帧连续调用，不能让下一次批量操作吞并前一次编辑的 Undo。
@@ -959,6 +1019,7 @@ namespace YLFramework.Editor.Resource
             Undo.SetCurrentGroupName(label);
         }
 
+        /// <summary>确认项目定义位于可编辑的 Assets 路径，并拒绝配置或元数据的链接路径。</summary>
         internal static void RequireEditableProject(ResourceProject project)
         {
             if (!project || !AssetDatabase.GetAssetPath(project).StartsWith("Assets/", StringComparison.Ordinal) || !AssetDatabase.IsOpenForEdit(project))

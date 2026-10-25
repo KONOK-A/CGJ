@@ -7,7 +7,9 @@ namespace YLFramework.Editor.Resource
     /// <summary>正式构建、发布与生成共用的窄路径/链接校验，不提供另一个构建入口。</summary>
     internal static class ResourceBuildOperation
     {
+        /// <summary>取得去掉末尾分隔符的绝对路径，供边界比较使用。</summary>
         private static string FullPath(string path) => Path.GetFullPath(path).TrimEnd('\\', '/');
+        /// <summary>要求目标严格位于 Assets 根目录内，并拒绝路径或目录树中的链接。</summary>
         internal static void ValidateAssetPath(string path)
         {
             if (!FullPath(path).StartsWith(FullPath(Application.dataPath) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
@@ -17,6 +19,7 @@ namespace YLFramework.Editor.Resource
 
             RejectLinks(path);
         }
+        /// <summary>检查目标文件、现有祖先及目录后代，拒绝符号链接和 junction。</summary>
         internal static void RejectLinks(string path)
         {
             if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)

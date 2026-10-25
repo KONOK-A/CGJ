@@ -6,13 +6,14 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Resource
 {
-    // 只适配自有部署外壳；payload 的闭合文件集与完整性仍由原 Snapshot 验证。
+    /// <summary>只适配自有部署外壳；有效载荷的闭合文件集与完整性仍由原快照验证。</summary>
     internal static class ResourceBuiltInLayout
     {
         internal const string PayloadFolder = "payload~";
         internal const string ReceiptFile = "ylr-deployment.json~";
         internal const string OwnerFile = "ylr-owner.json~";
 
+        /// <summary>拒绝链接并有界读取控制记录，只接受与规范序列化完全一致的 JSON 字节。</summary>
         internal static JObject ReadObject(string path)
         {
             ResourceLocalSnapshot.RejectLinks(path);
@@ -34,6 +35,7 @@ namespace YLFramework.Resource
             return data;
         }
 
+        /// <summary>生成将部署方 GUID 与明确目录摘要绑定的规范回执字节，不写入文件。</summary>
         internal static byte[] Receipt(ResourceCatalogDocument catalog, string projectGuid) => ResourceCatalogCodec.CanonicalBytes(new JObject
         {
             ["Version"] = 1,
@@ -43,8 +45,10 @@ namespace YLFramework.Resource
             ["CatalogDigest"] = catalog.CatalogDigest
         });
 
+        /// <summary>定位部署外壳内约定的有效载荷目录，不创建或探测目录。</summary>
         internal static string Payload(string wrapper) => Path.Combine(wrapper, PayloadFolder);
 
+        /// <summary>严格检查外壳内容与回执身份，再打开有效载荷并确认完成标记和回执属于同一部署方。</summary>
         internal static ResourceLocalSnapshot Open(string wrapper, string projectId, string digest, string platform, string app,
             string unityCompatibility = null, CancellationToken cancellation = default)
         {

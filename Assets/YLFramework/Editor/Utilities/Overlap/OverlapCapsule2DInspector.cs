@@ -6,11 +6,13 @@ using YLFramework.Overlap;
 
 namespace YLFramework.Editor.Overlap
 {
+    /// <summary>在矩形编辑基础上提供胶囊主轴尺寸约束。</summary>
     [CustomEditor(typeof(OverlapCapsule2D))]
     public class OverlapCapsule2DInspector : OverlapBox2DInspector
     {
         private OverlapCapsule2D _overlapCapsule;
 
+        /// <summary>初始化矩形编辑属性后缓存胶囊检测器，以便读取其主轴方向。</summary>
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -18,6 +20,7 @@ namespace YLFramework.Editor.Overlap
         }
 
 
+        /// <summary>完成基类绘制与尺寸校正后，按胶囊方向补长主轴并应用修改。</summary>
         public override void OnInspectorGUI()
         {
             base.OnInspectorGUI();

@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>协调构建选项、确认和窗口内报告；构建、发布及生成 IO 委托正式服务执行。</summary>
     internal sealed class ResourceBuildView
     {
         private ResourceBuildMap _preview;
@@ -31,6 +32,7 @@ namespace YLFramework.Editor.Resource
         private readonly ResourceDeliveryView _delivery = new();
         private Vector2 _artifactScroll;
         private int _artifact;
+        // 仅保留本窗口最多 32 次尝试，重载后不从磁盘推造临时报告。
         private readonly List<ResourceEditorBuildReport> _attempts = new();
         private ResourceEditorBuildReport _projectedReport;
         private long _projectedRawBytes;
@@ -47,6 +49,7 @@ namespace YLFramework.Editor.Resource
         internal bool IsHistoricalReport => _report != null && !ReferenceEquals(_report,
             _attempts.LastOrDefault(x => (x.Build?.Map.ProjectGuid ?? x.ProjectGuid) == (_report.Build?.Map.ProjectGuid ?? _report.ProjectGuid)));
         internal bool IsExactReportStale => HasDefinitionChanged || IsHistoricalReport;
+        /// <summary>窗口 App 变化时失效相关检查；配方生效时不让后台窗口值改变配方检查。</summary>
         private void TrackWindowApp(string value)
         {
             if (_lastWindowApp == value)
@@ -67,6 +70,7 @@ namespace YLFramework.Editor.Resource
         private ResourceBuildRecipe _recipe;
         internal bool HasRecipe => !string.IsNullOrEmpty(_recipeGuid);
         internal ResourceBuildRecipe Recipe => _recipe;
+        /// <summary>保留所选配方 GUID 并失效执行检查，丢失配方时不回退到窗口选项。</summary>
         internal void SetRecipe(ResourceBuildRecipe value, string guid)
         {
             if (ReferenceEquals(_recipe, value) && _recipeGuid == guid)
@@ -81,6 +85,7 @@ namespace YLFramework.Editor.Resource
             _preflight = null;
             HasDefinitionChanged = true;
         }
+        /// <summary>仅保存当前仍存在的明确配方，并安排重新计算静态检查。</summary>
         internal void SaveRecipe()
         {
             if (!HasRecipe || !_recipe)
@@ -92,6 +97,7 @@ namespace YLFramework.Editor.Resource
             _isReadinessDirty = true;
         }
 
+        /// <summary>清除当前项目的报告展示、分析和交付上下文，保留窗口内尝试历史供按项目查询。</summary>
         internal void Reset()
         {
             InvalidatePreview();
@@ -101,6 +107,7 @@ namespace YLFramework.Editor.Resource
             _analysis.Reset();
             HasDefinitionChanged = false;
         }
+        /// <summary>接收成功计算的当前定义预估并清除分析错误，不将其当作构建结果。</summary>
         internal void SetPreview(ResourceBuildMap value, ResourceProject project)
         {
             _preview = value;
@@ -108,6 +115,7 @@ namespace YLFramework.Editor.Resource
             _analysis.Error = null;
             _analysis.AtlasPending = null;
         }
+        /// <summary>失效预检、预估及交付状态，保留旧结果以明确标记过期。</summary>
         internal void InvalidatePreview()
         {
             _preflight = null;
@@ -118,8 +126,10 @@ namespace YLFramework.Editor.Resource
             _delivery.Invalidate();
         }
 
+        /// <summary>向分析页传递预估和实际报告，并分别保留两者的过期状态。</summary>
         internal void DrawPreview(ResourceProject project, float width, Action refresh, Action<ResourceBuildSource> locate) =>
             _analysis.Draw(project, _preview, _report, IsExactReportStale, _isPreviewStale, width, refresh, locate);
+        /// <summary>记录预估失败或图集待准备原因，不覆盖已有成功报告。</summary>
         internal void SetPreviewError(Exception error, ResourceAtlasPlan pending = null)
         {
             _isPreviewStale = true;
@@ -127,6 +137,7 @@ namespace YLFramework.Editor.Resource
             _analysis.AtlasPending = pending;
         }
 
+        /// <summary>绘制有效执行选项与结果，把耗时检查及执行交给外层队列，并在执行前请求确认。</summary>
         internal void Draw(ResourceProject project, ref string app, ref bool generate, ref bool force, ref string directory, float width,
             Action<Func<string>> queue, Action<Func<string>> run, Action<ResourceBuildResult> rebind,
             Action<ResourceBuildRecipe> selectRecipe, Action<ResourceProject> switchProject, Action showAnalysis)
@@ -284,6 +295,7 @@ namespace YLFramework.Editor.Resource
                     GUILayout.Label("地址常量面向当前平台所有已登记的发布项目，要求它们的 Unity 与 App 兼容标识一致。", ResourceWorkbenchGui.Secondary);
                 }
 
+                // 重绘只重算低成本静态门禁；密钥、依赖和输出的完整检查由显式操作触发。
                 if (_isReadinessDirty)
                 {
                     _effective = null;
@@ -512,9 +524,11 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>格式化项目标识、路径和 GUID，供配方归属冲突时核对真实目标。</summary>
         private static string Identity(ResourceProject project) => project ? project.projectId + " / " + AssetDatabase.GetAssetPath(project) + " / GUID=" +
             AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)) : "[项目不可用]";
 
+        /// <summary>重取排队时选择的配方并核对当前项目，拒绝选择变化或资产丢失后的旧请求。</summary>
         private ResourceBuildRecipe RequireMatchingRecipe(ResourceProject project, string guid)
         {
             if (string.IsNullOrEmpty(guid) || _recipeGuid != guid)
@@ -531,6 +545,7 @@ namespace YLFramework.Editor.Resource
             return current;
         }
 
+        /// <summary>显式执行完整范围的只读预检并保留结论；图集待准备可返回，最终执行仍须复验。</summary>
         private ResourcePreflightResult ValidateInput(ResourceProject project, string app, string chosenRecipe)
         {
             _preflight = string.IsNullOrEmpty(chosenRecipe) ? ResourceEditorOperations.InspectPreflight(project, app) :
@@ -543,9 +558,11 @@ namespace YLFramework.Editor.Resource
             return _preflight;
         }
 
+        /// <summary>将交付页绘制委托给独立的版本选择和快照上下文。</summary>
         internal void DrawDelivery(ResourceProject project, ref string app, float width, Action<Func<string>> queue, Action<Func<string>> run) =>
             _delivery.Draw(project, ref app, width, queue, run);
 
+        /// <summary>按项目列出窗口内尝试并允许查看旧报告，返回是否选中了记录。</summary>
         internal bool DrawAttempts(ResourceProject project = null)
         {
             var selected = false;
@@ -573,9 +590,11 @@ namespace YLFramework.Editor.Resource
             return selected;
         }
 
+        /// <summary>按构建结果或失败报告的项目 GUID 筛选原始尝试，不重新读取发布状态。</summary>
         internal IReadOnlyList<ResourceEditorBuildReport> GetAttempts(string projectGuid) =>
             _attempts.Where(x => (x.Build?.Map.ProjectGuid ?? x.ProjectGuid) == projectGuid).ToArray();
 
+        /// <summary>重绑项目并登记真实报告；发布结果交给交付页，源码确有变化时才请求 Unity 刷新。</summary>
         private string RecordReport(ResourceEditorBuildReport completed, Action<ResourceBuildResult> rebind)
         {
             rebind(completed.Build);
@@ -601,6 +620,7 @@ namespace YLFramework.Editor.Resource
             return completed.Summary;
         }
 
+        /// <summary>分别呈现构建、发布和常量结果及原始测量，未知数据不冒充零或编译成功。</summary>
         private void DrawReport()
         {
             if (_report == null)
@@ -754,15 +774,18 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.SelectableLabel(text, EditorStyles.wordWrappedMiniLabel, GUILayout.MinHeight(110));
         }
 
+        /// <summary>为明确的空 App 错误提供字段提示，其他情况沿用正式预检结论。</summary>
         internal static string ReadinessSummary(ResourcePreflightResult value) => value != null && value.State == ResourcePreflightState.StaticBlocked &&
             string.IsNullOrWhiteSpace(value.AppContentCompatibilityId) && value.Error is ArgumentException error && error.ParamName == "projectId"
             ? "资源兼容标识（App）尚未填写。请先输入应用约定的稳定标识；它不是游戏版本号。原始检查信息可在执行说明中查看。"
             : value?.Error != null ? ResourceEditorText.Preflight(value) : value?.Summary ?? "";
 
+        /// <summary>按各阶段已确认结果给出短结论，不将发布未确认解释为未写入。</summary>
         internal static string Outcome(ResourceEditorBuildReport value) => value.Build == null ? "构建未完成。" :
             value.PublicationError != null ? "构建完成，发布提交未确认。" : value.Release == null ? "构建完成，尚未发布。" :
             value.GenerationError != null ? "资源已发布，地址常量生成失败。" : "资源已构建并本地发布。";
 
+        /// <summary>按报告引用缓存展示字典与汇总，避免每次重绘重复遍历构建制品。</summary>
         private void ProjectReport()
         {
             if (ReferenceEquals(_projectedReport, _report))

@@ -7,6 +7,8 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Distribution
 {
+    /// <summary>按固定产品根导出框架源码、资源及随附许可，不遍历整个宿主工程。</summary>
+    /// <remarks>根外依赖和可选集成须另行配置；导出不重建或核验随附 DLL 与源码的一致性。</remarks>
     public static class ExportUnityPackage
     {
         private const string FrameworkRoot = "Assets/YLFramework";
@@ -26,9 +28,18 @@ namespace YLFramework.Editor.Distribution
             "Assets/YLFramework/AGENTS.md",
         };
 
-        /// <summary>向明确的现有本地父目录导出同一框架闭包；不保存资产、创建目录或自动覆盖已有交付。</summary>
-        /// <param name="packagePath">绝对 .unitypackage 文件路径。</param>
+        /// <summary>向明确的现有本地父目录导出固定框架根；不保存资产、创建目录或自动覆盖已有交付。</summary>
+        /// <param name="packagePath">父目录已存在的本地绝对 .unitypackage 文件路径。</param>
         /// <param name="overwrite">仅在调用方已确认目标归属及覆盖时显式启用。</param>
+        /// <remarks>
+        /// 要求 Editor 不在运行、切换运行、编译或导入中，且目标及现存祖先不是链接。
+        /// 成功返回仅确认包文件存在且非空，不替代包内容、依赖闭合、导入或运行验证。
+        /// </remarks>
+        /// <exception cref="ArgumentException">目标不是绝对本地 .unitypackage 路径，或为网络、设备路径。</exception>
+        /// <exception cref="DirectoryNotFoundException">目标父目录不存在。</exception>
+        /// <exception cref="IOException">路径经过链接、目标为目录、已有文件未授权覆盖，或未生成非空包文件。</exception>
+        /// <exception cref="InvalidOperationException">Editor 尚未处于空闲状态。</exception>
+        /// <exception cref="FileNotFoundException">固定导出根缺失。</exception>
         public static void Export(string packagePath, bool overwrite = false)
         {
             if (string.IsNullOrWhiteSpace(packagePath) || !Path.IsPathFullyQualified(packagePath) ||
@@ -74,6 +85,7 @@ namespace YLFramework.Editor.Distribution
                 }
             }
 
+            // 不启用 IncludeDependencies，避免引用把未授权分发的宿主内容带入包。
             AssetDatabase.ExportPackage(_exportRoots, full, ExportPackageOptions.Recurse);
             if (!File.Exists(full) || new FileInfo(full).Length == 0)
             {
@@ -81,7 +93,8 @@ namespace YLFramework.Editor.Distribution
             }
         }
 
-        [MenuItem("YLFramework/Toolkit/导出框架包", priority = 1)] //%e 表示快捷键 ctrl + e 
+        /// <summary>保存全部脏资产后尝试向工程根导出版本化包，仅交互模式询问同名覆盖。</summary>
+        [MenuItem("YLFramework/Toolkit/导出框架包", priority = 1)]
         private static void MenuClicked()
         {
             if (!AssetDatabase.IsValidFolder(FrameworkRoot))
@@ -139,11 +152,8 @@ namespace YLFramework.Editor.Distribution
                 return;
             }
 
-            //将包名复制到剪切板
             GUIUtility.systemCopyBuffer = packageName;
-            //提示
             Debug.Log("已导出框架的Unity Package：" + packagePath);
-            //打开包所在目录 复用 MenuItem
             EditorApplication.ExecuteMenuItem("YLFramework/Toolkit/打开目录/Unity Package");
         }
     }

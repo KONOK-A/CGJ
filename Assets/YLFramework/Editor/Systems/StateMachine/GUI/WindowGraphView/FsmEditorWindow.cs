@@ -5,6 +5,7 @@ using UnityEngine.UIElements;
 namespace YLFramework.Editor.StateMachine
 {
 
+    /// <summary>状态机图编辑窗口，组合参数侧栏、层级导航、GraphView 和运行时状态预览。</summary>
     public class FsmEditorWindow : UnityEditor.EditorWindow
     {
 
@@ -44,12 +45,12 @@ namespace YLFramework.Editor.StateMachine
 
         #region 属性
 
+        /// <summary>参数侧栏占窗口宽度的比例，供布局及新版本连线坐标修正使用。</summary>
         public float PercentOfParam => _percentOfParam;
 
         #endregion
 
-        // Fix编码
-
+        /// <summary>设置窗口标题及图标，图标加载异常时保留纯文本标题。</summary>
         private void Awake()
         {
             try
@@ -62,12 +63,14 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>窗口启用时去重注册 Undo/Redo 后的视图刷新。</summary>
         private void OnEnable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
             Undo.undoRedoPerformed += OnUndoRedo;
         }
 
+        /// <summary>撤销或重做后清理配置查询缓存并重建节点，避免图继续持有旧数据。</summary>
         private void OnUndoRedo()
         {
             var controller = Context.Instance.RuntimeFsmController;
@@ -81,6 +84,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>重建左右布局、IMGUI 容器和图视图，并注册分栏拖动输入。</summary>
         private void InitGui()
         {
             rootVisualElement.Clear();
@@ -145,9 +149,9 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>仅当活动选择是本模块的节点或过渡代理时清空 Inspector，不取消其他对象选择。</summary>
         private void ClearInspetor()
         {
-            // 清空当前的Inspector
             if (Selection.activeObject == null)
             {
                 return;
@@ -161,6 +165,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>定期请求窗口重绘，并让图同步配置切换与视口状态。</summary>
         private void Update()
         {
             _lastRepaintCount++;
@@ -176,6 +181,7 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>更新分栏布局、绘制背景与配置诊断，首次绘制时建立界面。</summary>
         private void OnGUI()
         {
             wantsMouseEnterLeaveWindow = true;
@@ -227,7 +233,6 @@ namespace YLFramework.Editor.StateMachine
 
 
 
-            // 取消拖拽
             if (Event.current.type == EventType.MouseLeaveWindow && Event.current.button == 0)
             {
                 _isResizingParamArea = false;
@@ -238,6 +243,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>绘制分栏调整指示，并在拖动时限制侧栏比例与最小宽度。</summary>
         private void ParamAreaResize()
         {
             _paramResizeArea.Set(this.position.width * _percentOfParam - ResizeWidth / 2, 0, ResizeWidth, position.height);
@@ -263,6 +269,7 @@ namespace YLFramework.Editor.StateMachine
 
         }
 
+        /// <summary>绘制浏览层级面包屑；路径父层变化后重建图节点，不改变执行层级。</summary>
         private void DoGraphToolbar(Rect toolbarRect)
         {
             Handles.color = new Color(0, 0, 0, 0.4f);
@@ -299,6 +306,7 @@ namespace YLFramework.Editor.StateMachine
             GUILayout.EndArea();
         }
 
+        /// <summary>根据面包屑文字与图标计算布局宽度，测量后恢复原内容图标。</summary>
         private static Rect GetBreadcrumbLayoutRect(GUIContent content, GUIStyle style)
         {
             Texture image = content.image;
@@ -313,6 +321,7 @@ namespace YLFramework.Editor.StateMachine
             return GUILayoutUtility.GetRect(content, style, GUILayout.MaxWidth(vector.x));
         }
 
+        /// <summary>绘制一个层级导航项，并以切换控件向外层传递点击变化。</summary>
         private void BreadCrumb(int index, int maxCount, string name)
         {
             GUIStyle style = StateStyles.Named(index == 0 ? "GUIEditor.BreadcrumbLeft" : "GUIEditor.BreadcrumbMid", EditorStyles.miniButton);
@@ -328,6 +337,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>绘制宿主及配置资产的定位按钮，点击仅在编辑器中高亮对应对象。</summary>
         private void DrawButtom(Rect rect)
         {
             rect.Set(0, 0, rect.width, rect.height);
@@ -352,6 +362,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>左键释放时结束分栏宽度调整。</summary>
         private void OnMouseUpEvent(MouseUpEvent e)
         {
             if (e != null && e.button == 0)
@@ -362,6 +373,7 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>解除 Undo 回调，清除本模块的活动检查代理并撤销窗口通知引用。</summary>
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= OnUndoRedo;
@@ -369,6 +381,8 @@ namespace YLFramework.Editor.StateMachine
             _instance = null;
         }
 
+        /// <summary>在最近一次绘制的图窗口显示短通知，没有窗口引用时不处理。</summary>
+        /// <param name="message">要显示的提示文本。</param>
         public static void ShowNotification(string message)
         {
             if (_instance == null)

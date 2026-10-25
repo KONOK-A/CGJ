@@ -1,13 +1,21 @@
 using UnityEngine.Scripting;
 using YLFramework.StateMachine;
 
+/// <summary>由状态机控制器驱动的状态脚本，在进入和退出钩子中管理本状态的行为与责任。</summary>
+/// <remarks>
+/// 这是普通 C# 对象而非 MonoBehaviour，回调由状态机调用，不会自动收到 Unity 的 Start 或 Update 消息。
+/// 同一脚本实例的一次性准备可重写 OnCreate；反复进入状态时需要重新执行的逻辑放在 OnEnter。
+/// Preserve 用于保留反射创建的类型，避免构建时被代码裁剪移除。
+/// </remarks>
 [Preserve]
 public class {0} : FsmState
 {
+    /// <summary>每次进入状态时开始本状态的行为，例如订阅事件或启动可取消任务。</summary>
     public override void OnEnter()
     {
     }
 
+    /// <summary>退出时归还本状态的资源并解绑订阅；收尾时应考虑进入逻辑尚未全部执行的情况。</summary>
     public override void OnExit()
     {
     }

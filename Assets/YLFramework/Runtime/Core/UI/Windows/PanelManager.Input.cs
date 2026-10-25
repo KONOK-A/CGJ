@@ -16,11 +16,13 @@ namespace YLFramework.Core
 {
     public partial class PanelManager
     {
+        /// <summary>对已有协调器执行一次 EventSystem 发现与借用检查。</summary>
         private static void RefreshEventSystem()
         {
             _instance?.RefreshInput(true);
         }
 
+        /// <summary>先放下自有系统引用，再停用并销毁该对象；不释放借用的外部 EventSystem。</summary>
         private void ReleaseOwnedInput()
         {
             var owned = _eventSystem;
@@ -41,6 +43,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>有可用根时优先借用外部 active 系统，否则按需创建自有系统；无需求时只撤销自有系统。</summary>
         private void RefreshInput(bool discover = false)
         {
             if (_isReleased || !ApplicationTool.IsPlaying)
@@ -158,6 +161,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>同步各会话的物理门禁与选择状态，选择回调后仅继续处理仍有效的候选。</summary>
         private void RefreshPanelInput(List<PanelState> snapshot)
         {
             var system = EventSystem.current;
@@ -175,7 +179,7 @@ namespace YLFramework.Core
                     system.SetSelectedGameObject(null);
                 }
             }
-            // 移出原窗口的组件先交还输入属性，再由新窗口决定覆盖；不能由枚举顺序决定新快照。
+            // 移出原窗口的组件先解除旧门禁绑定，再由新窗口绑定；不能由枚举顺序决定归属。
             foreach (var state in snapshot)
             {
                 if (IsCurrent(state))
@@ -266,6 +270,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>撤销精确 Panel 记录、捕获与选择，并交还来源 pin 列表给 View 的实例收尾流程。</summary>
         internal static void ReleaseView(View view, out List<CorePrefabLease> sources, bool rollback)
         {
             sources = null;
@@ -323,6 +328,7 @@ namespace YLFramework.Core
             _instance._states.TryGetValue(panel, out var state) && _instance.IsActive(state) && state.IsVisible;
         internal static bool IsInputBlocked(Panel panel) => !IsVisible(panel) || _instance._states[panel].IsBlocked;
 
+        /// <summary>只在指定根的有效可见会话中，按模态、焦点或 Top 资格选取排序最高项。</summary>
         private static Panel Query(UIRootContext root, bool modal, bool focus)
         {
             var manager = _instance;
@@ -349,13 +355,14 @@ namespace YLFramework.Core
             return top?.Panel;
         }
 
-        /// <summary>指定实际根的普通窗口 Top，不创建 Manager 或宿主。</summary>
+        /// <summary>指定实际根中参与 Top 的最高有效可见 Panel，可包含模态；不创建 Manager 或宿主。</summary>
         public static Panel GetTopPanel(UIRootContext root) => Query(root, false, false);
         /// <summary>指定根最高的有效可见模态 Panel，包含不参与 Top 的模态。</summary>
         public static Panel GetModalPanel(UIRootContext root) => Query(root, true, false);
         /// <summary>指定根当前的有效焦点候选，不创建根或 Manager。</summary>
         public static Panel GetFocusedPanel(UIRootContext root) => Query(root, false, true);
 
+        /// <summary>取得指定层最高的有效可见模态，供该层遮罩使用，不受 Top 参与资格限制。</summary>
         internal static Panel GetLayerModal(UIRootContext root, int layer)
         {
             if (_instance == null)

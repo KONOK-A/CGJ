@@ -4,8 +4,10 @@ using System.Collections.Generic;
 namespace YLFramework.Editor.Core.Analyzers
 {
     // 该只读源文件也由独立 Analyzer 项目链接编译，不可引用 Unity 或 Roslyn。
+    /// <summary>帮助页、规则设置与独立分析器共用的诊断身份和说明目录，不承载诊断执行逻辑。</summary>
     internal static class AnalyzerRuleCatalog
     {
+        /// <summary>按诊断 ID 排列的只读规则集合；默认严重度由分析器声明，用户覆盖由 ruleset 管理。</summary>
         internal static IReadOnlyList<AnalyzerRuleInfo> Rules
         {
             get;
@@ -34,26 +36,33 @@ namespace YLFramework.Editor.Core.Analyzers
         });
     }
 
+    /// <summary>单项规则的不可变展示元数据，避免 Editor 与独立分析器维护不同的名称和说明。</summary>
     internal sealed class AnalyzerRuleInfo
     {
+        /// <summary>供诊断、配置和文档关联使用的稳定规则标识。</summary>
         internal string Id
         {
             get;
         }
+        /// <summary>诊断描述符和设置页使用的短标题。</summary>
         internal string Title
         {
             get;
         }
+        /// <summary>诊断描述符所属的规则类别。</summary>
         internal string Category
         {
             get;
         }
+        /// <summary>规则边界及建议改正方向，不作为运行时检查依据。</summary>
         internal string Description
         {
             get;
         }
+        /// <summary>本地 Attributes 文档中与规则对应的小写锚点。</summary>
         internal string DocumentationAnchor => Id.ToLowerInvariant();
 
+        /// <summary>保存一项规则的共享元数据，不注册规则或改变严重度。</summary>
         internal AnalyzerRuleInfo(string id, string title, string category, string description)
         {
             Id = id;

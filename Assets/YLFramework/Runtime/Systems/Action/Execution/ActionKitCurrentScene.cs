@@ -9,7 +9,7 @@ namespace YLFramework.Actions
     {
         /// <summary>当前缓存的场景宿主；保留原公开字段，调用方应通过 SceneComponent 取得实例。</summary>
         public static ActionKitCurrentScene CachedSceneComponent = null;
-        // 自建宿主保持在当前场景中，不设 DontDestroyOnLoad，随场景卸载一起销毁并取消其动作。
+        /// <summary>自建宿主不设 DontDestroyOnLoad，随所属场景卸载一起销毁并取消其动作。</summary>
         protected override bool PersistentHost => false;
 
         /// <summary>取得可用场景宿主，不存在时在当前活动场景中创建；关停期间不可获取。</summary>
@@ -31,13 +31,14 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>执行基类宿主登记，并为内部宿主组件设置层级隐藏标记。</summary>
         protected override void Awake()
         {
             base.Awake();
-            // 宿主是内部实现细节，隐藏于层级与 Inspector，避免被当作普通场景对象误删或误改。
             hideFlags = HideFlags.HideInHierarchy;
         }
 
+        /// <summary>执行宿主释放，并仅在场景缓存仍指向自身时清空缓存。</summary>
         protected override void OnDestroy()
         {
             try

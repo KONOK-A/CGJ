@@ -3,12 +3,10 @@ using UnityEngine;
 
 namespace YLFramework.Overlap
 {
-    /// <summary>
-    /// 重叠检测某一个点
-    /// </summary>
+    /// <summary>检测对象当前世界位置在 XY 平面上与哪些二维碰撞体重叠。</summary>
     public class OverlapPoint2D : OverlapBase2D
     {
-        // Fix编码
+        /// <summary>执行当前位置的点重叠查询，过滤触发器后更新进入退出结果。</summary>
         public override void CheckOverlap()
         {
             if (!TryBeginCheck())

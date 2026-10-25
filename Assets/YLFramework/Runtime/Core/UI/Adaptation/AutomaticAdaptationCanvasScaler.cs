@@ -112,6 +112,7 @@ namespace YLFramework.Core
             return true;
         }
 
+        /// <summary>缓存本对象组件；参考分辨率仍为旧资源零值时，承接 CanvasScaler 现有分辨率和匹配值。</summary>
         private void AdoptExistingConfiguration()
         {
             if (!_scaler)
@@ -131,6 +132,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>记录最近一次校验错误并返回失败，相同连续错误不重复写日志。</summary>
         private bool Reject(string error)
         {
             if (_lastError != error)
@@ -142,12 +144,17 @@ namespace YLFramework.Core
             return false;
         }
 
+        /// <summary>排除不可用于分辨率和比例计算的非正、NaN 或无限尺寸。</summary>
         private static bool IsPositiveFinite(Vector2 value) => value.x > 0 && value.y > 0 &&
             !float.IsInfinity(value.x) && !float.IsInfinity(value.y);
 
+        /// <summary>唤醒时承接旧资源配置，不强制切换缩放模式。</summary>
         private void Awake() => AdoptExistingConfiguration();
+        /// <summary>重新启用时立即应用当前适配配置。</summary>
         private void OnEnable() => Refresh();
+        /// <summary>持续响应显示尺寸或 Inspector 配置变化，编辑模式也沿用同一刷新入口。</summary>
         private void Update() => Refresh();
+        /// <summary>组件启用期间在矩形尺寸变化后重新计算宽高匹配。</summary>
         private void OnRectTransformDimensionsChange()
         {
             if (isActiveAndEnabled)

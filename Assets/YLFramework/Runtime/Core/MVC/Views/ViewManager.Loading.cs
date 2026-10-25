@@ -32,6 +32,7 @@ namespace YLFramework.Core
         internal static T LoadViewLegacy<T>(Module module, GameObject prefab, Transform parent, object[] param) where T : View
             => LoadViewSync<T>(module, null, prefab, parent, null, param, false);
 
+        /// <summary>同步取得并初始化实例层级；参数接管后由本调用归还，实例失败时丢弃而非归还缓存。</summary>
         private static T LoadViewSync<T>(Module module, string assetName, GameObject prefab, Transform parent,
             LoadViewArgs args, object[] param, bool named) where T : View
         {
@@ -102,6 +103,7 @@ namespace YLFramework.Core
                 module.ViewTransactions++;
                 transaction = true;
                 var scene = parent ? parent.gameObject.scene : SceneManager.GetActiveScene();
+                // Prefab 租约只负责资源借用；取得的实例租约在初始化时交给根 View，会独立存活到退出。
                 instanceLease = named ? prefabLease.Instantiate(parent, scene) : AcquireDirectInstance(prefab, parent, scene);
                 instance = instanceLease.Instance;
                 if (!instance)
@@ -150,6 +152,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>要求对象根节点具有 View 且可赋给请求类型，不以子节点组件代替根 View。</summary>
         private static T ValidateView<T>(GameObject obj) where T : View
         {
             var view = obj.GetComponent<View>();
@@ -166,6 +169,7 @@ namespace YLFramework.Core
             throw new InvalidCastException($"View {view.GetType().FullName} cannot be loaded as {typeof(T).FullName}.");
         }
 
+        /// <summary>先尝试停用损坏实例，并在停用抛错时仍请求销毁，不把它放回缓存。</summary>
         private static void DiscardInstance(GameObject instance)
         {
             try
@@ -178,6 +182,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>按直接 Prefab 身份复用或创建实例，设置场景并激活，失败时由本次租约丢弃。</summary>
         private static CoreInstanceLease AcquireDirectInstance(GameObject prefab, Transform parent, Scene scene, bool panelCheckout = false)
         {
             var pool = GameObjectPool.Instance;
@@ -227,19 +232,24 @@ namespace YLFramework.Core
 
         internal static bool IsDirectLease(CoreInstanceLease lease) => lease is DirectInstanceLease;
 
+        /// <summary>仅负责本次直接 Prefab 实例的归还或丢弃，不拥有源 Prefab，也不操作其他租约。</summary>
         private sealed class DirectInstanceLease : CoreInstanceLease
         {
             private readonly GameObjectPool _pool;
             private readonly string _key;
             private GameObject _instance;
+            /// <summary>保存本次取得的实例及其缓存归还位置，不在构造时改变实例状态。</summary>
             internal DirectInstanceLease(GameObjectPool pool, string key, GameObject instance)
             {
                 this._pool = pool;
                 this._key = key;
                 this._instance = instance;
             }
+            /// <summary>尚未交还的实例；归还或丢弃后为 null。</summary>
             public override GameObject Instance => _instance;
+            /// <summary>本租约是否仍持有 Unity 中存活的实例。</summary>
             public override bool IsValid => _instance;
+            /// <summary>消费本次租约并归还缓存；池已销毁时改为丢弃实例。</summary>
             public override void Return()
             {
                 var owned = _instance;
@@ -258,6 +268,7 @@ namespace YLFramework.Core
                     DiscardInstance(owned);
                 }
             }
+            /// <summary>消费本次租约并销毁仍存活的实例；重复调用不再处理。</summary>
             public override void Discard()
             {
                 var owned = _instance;
@@ -275,6 +286,7 @@ namespace YLFramework.Core
             return StartAsync<T>(module, assetName, parent, null, param);
         }
 
+        /// <summary>接管参数并建立独立异步请求，入口拒绝时只归还本次成功接管的参数。</summary>
         internal static LoadViewRequest<T> StartAsync<T>(Module module, string assetName, Transform parent, LoadViewArgs args,
             object[] param, GameObject directPrefab = null) where T : View
         {
@@ -329,6 +341,7 @@ namespace YLFramework.Core
             return request;
         }
 
+        /// <summary>在异步等待结束后同步取得及初始化实例，跨业务回调复检请求有效性，失败丢弃本次实例。</summary>
         internal static T CompleteAsync<T>(Module module, GameObject prefab, string assetName, Transform parent, Scene scene,
             LoadViewArgs args, object[] param, Action validate, CorePrefabLease prefabLease = null, PanelManager.PanelOperation panelOperation = null) where T : View
         {
@@ -422,6 +435,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>为单个组件建立会话并执行加载钩子；失败只回滚本次会话，参数读取权限限于回调窗口。</summary>
         private static void InitializeView(Module module, View view, string prefabName, LoadViewArgs args, object[] param,
             View backendRoot = null, bool backend = false, Action validate = null, CoreInstanceLease instanceLease = null, PanelManager.PanelOperation panelOperation = null, Action onFailure = null)
         {
@@ -571,6 +585,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>业务回调返回后复检实例、会话、数据绑定及 Panel 准备结果，拒绝提交已失效的初始化。</summary>
         private static void ValidateInitialization(Module module, View view, object session)
         {
             if (!view || !HasRegistration(module, view, session) || !view.HasValidModelBinding ||
@@ -631,6 +646,7 @@ namespace YLFramework.Core
             return views;
         }
 
+        /// <summary>沿父链寻找同模块的取得实例根；拒绝跨模块归属或嵌入尚未结束的生命周期事务。</summary>
         private static View FindBackendRoot(Module module, Transform target)
         {
             for (var parent = target; parent; parent = parent.parent)
@@ -661,6 +677,7 @@ namespace YLFramework.Core
             return null;
         }
 
+        /// <summary>预检整批层级后只初始化未注册会话；失败逆序撤销本批新增会话，不撤销已有会话。</summary>
         private static void InitializeHierarchy(Module module, List<View> views, View acquiredRoot, string assetName,
             LoadViewArgs args, object[] param, Action validate = null, CoreInstanceLease instanceLease = null, PanelManager.PanelOperation panelOperation = null)
         {

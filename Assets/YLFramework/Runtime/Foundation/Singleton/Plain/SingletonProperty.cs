@@ -10,10 +10,10 @@ namespace YLFramework.Singletons
     /// <typeparam name="T">单例类型。</typeparam>
     public class SingletonProperty<T> where T : class, ISingleton
     {
-        //实际上由于T不同，每个SingletonProperty<T>都是一个不同的类，所以可以存下所有类的实例
         private static T _instance;
         private static readonly object _lock = new();
 
+        /// <summary>为当前封闭类型登记新 Play 会话的缓存重置。</summary>
         static SingletonProperty()
         {
             SingletonSessionState.RegisterSessionReset(ResetSessionState);
@@ -22,6 +22,7 @@ namespace YLFramework.Singletons
         /// <summary>
         /// 单例实例；首次访问时创建，已释放或会话重置后会重新创建。
         /// </summary>
+        /// <remarks>初始化回调返回后才写入缓存；回调中重入本入口可能递归创建。</remarks>
         public static T Instance
         {
             get
@@ -57,6 +58,7 @@ namespace YLFramework.Singletons
             _instance = null;
         }
 
+        /// <summary>进入新 Play 会话时清空缓存引用，不调用旧实例的清理逻辑。</summary>
         private static void ResetSessionState()
         {
             _instance = null;

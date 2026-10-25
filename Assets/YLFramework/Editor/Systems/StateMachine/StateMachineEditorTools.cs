@@ -6,9 +6,11 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>实现运行时数据的编辑器桥接，集中处理标脏、脚本类型筛选与 GUID 绑定刷新。</summary>
     [InitializeOnLoad]
     internal static class StateMachineEditorTools
     {
+        /// <summary>编辑器程序集加载时安装桥接，保存请求仅标脏，克隆通知仅记录源资产 GUID。</summary>
         static StateMachineEditorTools()
         {
             FsmEditorHooks.Save = controller =>
@@ -24,6 +26,8 @@ namespace YLFramework.Editor.StateMachine
             FsmEditorHooks.CloneCreated = (source, clone) => clone.originGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(source));
         }
 
+        /// <summary>从已导入的运行时脚本中筛选可反射创建的具体状态类型。</summary>
+        /// <returns>具有公开无参构造器的具体 FsmState 脚本资产列表。</returns>
         public static List<MonoScript> GetAllStatesType()
         {
             var scripts = new List<MonoScript>();
@@ -38,8 +42,10 @@ namespace YLFramework.Editor.StateMachine
             return scripts;
         }
 
+        /// <summary>判断类型是否为非抽象、非开放泛型且具有公开无参构造器的 FsmState。</summary>
         private static bool IsStateType(Type type) => type != null && !type.IsAbstract && !type.ContainsGenericParameters && typeof(FsmState).IsAssignableFrom(type) && type.GetConstructor(Type.EmptyTypes) != null;
 
+        /// <summary>校验已导入的状态脚本并按 GUID 去重后追加绑定，Undo 与保存交由作者入口处理。</summary>
         private static void AddScript(FsmStateNodeData node, UnityEngine.Object value)
         {
             var script = value as MonoScript;
@@ -62,6 +68,7 @@ namespace YLFramework.Editor.StateMachine
             node.stateScripts.Add(new FsmStateScriptInfo { className = script.GetClass().FullName, guid = guid });
         }
 
+        /// <summary>按资产 GUID 移除节点中的全部匹配绑定，不删除脚本资产。</summary>
         private static void RemoveScript(FsmStateNodeData node, UnityEngine.Object value)
         {
             if (!value)
@@ -73,6 +80,7 @@ namespace YLFramework.Editor.StateMachine
             node.stateScripts.RemoveAll(info => info.guid == guid);
         }
 
+        /// <summary>仅用既有 GUID 解析脚本，类型名变化时记录配置 Undo 并标脏，不扫描迁移无 GUID 的旧记录。</summary>
         private static void RefreshNode(FsmStateNodeData node, RuntimeFsmController controller)
         {
             foreach (var info in node.stateScripts)

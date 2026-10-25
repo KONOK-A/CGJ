@@ -7,10 +7,12 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Buff
 {
+    /// <summary>显式迁移旧 Buff 项目设置，保留字节备份并校对重载结果，不自动回滚失败操作。</summary>
     internal static class BuffSettingsMigration
     {
         internal const string MenuPath = "YLFramework/Buff/Migrate Legacy Project Settings";
 
+        /// <summary>检查旧文件与目标占用后备份、移动并重载；无旧文件时返回 null，否则返回备份路径。</summary>
         internal static string Migrate()
         {
             string previousPath = BuffSystemSettings.PreviousFilePath;
@@ -35,7 +37,7 @@ namespace YLFramework.Editor.Buff
                     throw new IOException("Refusing incompatible legacy Buff settings: " + previousPath);
                 }
 
-                // Serialize fields only: Buff's collection getters can synchronize assets and save settings.
+                // 只序列化字段；Buff 集合 getter 可能同步资产并保存设置，验证时不触发它们。
                 string snapshot = EditorJsonUtility.ToJson(objects[0]);
                 if (!File.ReadAllBytes(previousPath).SequenceEqual(original))
                 {
@@ -56,7 +58,7 @@ namespace YLFramework.Editor.Buff
                         throw new IOException("Buff settings backup failed byte verification: " + backupPath);
                     }
 
-                    // Recheck the exact paths after Unity deserialization and before the non-overwriting move.
+                    // Unity 反序列化后重新核对实际路径，再以不覆盖目标的方式移动文件。
                     previousPath = BuffSystemSettings.PreviousFilePath;
                     currentPath = BuffSystemSettings.CurrentFilePath;
                     if (!File.ReadAllBytes(previousPath).SequenceEqual(original))
@@ -100,6 +102,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>从菜单执行迁移，并展示备份位置或需人工检查的失败信息。</summary>
         [MenuItem(MenuPath)]
         private static void MigrateFromMenu()
         {

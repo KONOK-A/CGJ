@@ -8,9 +8,11 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>读取现有资源会话和磁盘查询快照；采样不初始化服务，显式历史设置按钮才改变历史容量。</summary>
     internal sealed class ResourceDiagnosticsView : IDisposable
     {
         private ResourceDiagnosticsReport _report;
+        // 只识别上次采样的实例，不因窗口保留诊断而延长业务服务的存活期。
         private WeakReference<ResourceSystem> _sampledSystem;
         private bool _automatic;
         private bool _isVisible;
@@ -39,6 +41,7 @@ namespace YLFramework.Editor.Resource
         private bool _isRowDark;
         private static readonly string[] _sections = { "项目", "资源", "Bundle", "实例缓存", "场景", "更新与恢复", "请求历史", "数据预算", "会话计数" };
 
+        /// <summary>分发运行诊断、磁盘查询和入门导航，切换来源时停止后台诊断工作。</summary>
         internal void Draw(float width = 1100, ResourceEditorBuildReport build = null, Action showBuild = null, Action<int> navigate = null)
         {
             var next = ResourceWorkbenchGui.Navigation(_panel, new[] { "运行诊断", "磁盘缓存查询（只读）", "开始使用" });
@@ -61,12 +64,14 @@ namespace YLFramework.Editor.Resource
                 _guide.Draw(build, showBuild, navigate);
             }
         }
+        /// <summary>停止自动采样和磁盘查询后切到入门导航，保留已有结果。</summary>
         internal void ShowGuide()
         {
             _automatic = false;
             _store.Stop("打开开始使用");
             _panel = 2;
         }
+        /// <summary>更新页面可见性，隐藏时停止自动采样及查询，再显示时不自动重开。</summary>
         internal void SetVisible(bool value)
         {
             if (!value)
@@ -76,6 +81,7 @@ namespace YLFramework.Editor.Resource
             }
             _isVisible = value;
         }
+        /// <summary>工作台项目切换时暂停诊断工作；已取得的运行报告仍是全会话而非单项目数据。</summary>
         internal void SetContext(string value)
         {
             if (_context == value)
@@ -87,13 +93,16 @@ namespace YLFramework.Editor.Resource
             _store.Stop("工作台所选资源项目变化");
             _context = value;
         }
+        /// <summary>以弱引用和引用身份确认当前服务仍是上次采样对象，不用项目标识猜测会话连续性。</summary>
         private bool SameSubject(ResourceSystem value) => _sampledSystem != null && _sampledSystem.TryGetTarget(out var sampled) && ReferenceEquals(value, sampled);
 
+        /// <summary>按当前宽度选择运行诊断的双栏或紧凑布局。</summary>
         private void DrawRuntime(float width)
         {
             DrawRuntimeContent(width, width < 950);
         }
 
+        /// <summary>展示同次会话采样，提供显式采样和历史容量设置；历史开关会清空原缓冲而非补录请求。</summary>
         private void DrawRuntimeContent(float width, bool compact)
         {
             var system = ResourceSystem.Current;
@@ -262,11 +271,15 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>区分历史未启用与本次报告没有匹配项，避免将缺失历史解释为没有请求。</summary>
         private string EmptyMessage() => _section == 6 && _report.HistoryCapacity == 0 ? "请求历史未启用；可在采样与历史设置中开启。" : "本次快照没有匹配记录。";
 
+        /// <summary>将诊断字段转换为指标文本，缺失值明确保留为未知。</summary>
         private static void Metric(string label, object value, string help) => ResourceWorkbenchGui.Metric(label, value?.ToString() ?? "未知", help);
+        /// <summary>为报告中的确定布尔值提供统一显示，不推断缺失字段。</summary>
         private static string YesNo(bool value) => value ? "是" : "否";
 
+        /// <summary>从当前可用服务读取一次报告并记录采样对象，失败时保留旧报告，不主动初始化服务。</summary>
         private void Capture()
         {
             var system = ResourceSystem.Current;
@@ -296,6 +309,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>展示采样失败提示及可选原始异常，不覆盖原快照中的业务状态。</summary>
         private void DrawError()
         {
             if (string.IsNullOrEmpty(_error))
@@ -316,6 +330,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>仅在可见时推进磁盘查询或每五秒采样；服务实例变化后关闭自动采样。</summary>
         internal bool Tick()
         {
             if (!_isVisible)
@@ -348,10 +363,12 @@ namespace YLFramework.Editor.Resource
             return true;
         }
 
+        /// <summary>从同一报告投影并筛选分类行和详情，分开呈现逻辑字节、预算、声明量与进程计数。</summary>
         private void BuildRows()
         {
             var result = new List<(string, string)>();
             var details = new List<Action>();
+            // 标题、技术字段和结构化详情保持同次报告来源，过滤只决定可见行。
             void Add(string title, string detail, Action draw = null)
             {
                 if (_filter.Length == 0 || title.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0 || detail.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0)
@@ -572,6 +589,7 @@ namespace YLFramework.Editor.Resource
             _areRowsDirty = false;
         }
 
+        /// <summary>显示报告记录的服务状态，未知枚举值不当作可用状态。</summary>
         private static string RuntimeState(ResourceSystemState value) => value switch
         {
             ResourceSystemState.Initializing => "初始化中",
@@ -583,6 +601,7 @@ namespace YLFramework.Editor.Resource
             _ => "未知状态（" + value + "）"
         };
 
+        /// <summary>解释资源、场景和更新记录的阶段名称，未识别阶段保留原值。</summary>
         private static string StateName(string value) => value switch
         {
             "Waiting" => "等待依赖",
@@ -606,6 +625,7 @@ namespace YLFramework.Editor.Resource
             _ => "未知状态（" + value + "）"
         };
 
+        /// <summary>将正式来源身份映射为可读名称，不改写加载来源。</summary>
         private static string SourceName(ResourceSourceId value) => value.Value switch
         {
             "resources" => "Unity Resources",
@@ -616,6 +636,7 @@ namespace YLFramework.Editor.Resource
             _ => "其他来源（" + value + "）"
         };
 
+        /// <summary>解释报告实际记录的保留原因，不根据计数推造未标记持有者。</summary>
         private static string RetentionName(string value) => value switch
         {
             "Asset" => "资源租约与实例",
@@ -632,6 +653,7 @@ namespace YLFramework.Editor.Resource
             _ => "其他原因（" + value + "）"
         };
 
+        /// <summary>展示请求历史事件种类，未知事件仍保留原始标识。</summary>
         private static string EventName(string value) => value switch
         {
             "RequestCompleted" => "请求结束",
@@ -640,6 +662,7 @@ namespace YLFramework.Editor.Resource
             _ => "其他事件（" + value + "）"
         };
 
+        /// <summary>停止本视图诊断并清除快照引用，不关闭业务服务、取消业务请求或改变历史容量。</summary>
         public void Dispose()
         {
             SetVisible(false);

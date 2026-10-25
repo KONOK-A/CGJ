@@ -5,7 +5,7 @@ using UnityEngine.Audio;
 
 namespace YLFramework.Audio
 {
-    // Two fixed leases and an epoch keep callback reentry from controlling a later transition.
+    /// <summary>以两个固定音乐声部管理缺省播放和交叉淡变，通过过渡代次避免回调重入控制后续过渡。</summary>
     internal sealed class AudioMusicPlayback
     {
         private readonly AudioManager _owner;
@@ -31,6 +31,7 @@ namespace YLFramework.Audio
         }
         internal AudioCrossfadeCurve CurrentCurve => _curve;
 
+        /// <summary>建立两个固定声部并选择初始当前槽，不在此处创建 AudioSource。</summary>
         internal AudioMusicPlayback(AudioManager owner)
         {
             _owner = owner;
@@ -39,6 +40,7 @@ namespace YLFramework.Audio
             Current = _first;
         }
 
+        /// <summary>替换当前轨及尾轨；释放回调改变了过渡代次时放弃外层提交。</summary>
         internal AudioHandle Play(AudioClip clip, in AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, AudioResourceLease resource = null)
         {
@@ -54,6 +56,7 @@ namespace YLFramework.Audio
                 settings.IsMusicMuted.Value, started, finished, resource: resource);
         }
 
+        /// <summary>将原当前轨转为尾轨并在另一槽接纳新曲；重复过渡先清除更旧尾轨。</summary>
         internal AudioHandle CrossFade(AudioClip clip, float duration, in AudioPlaybackOptions options,
             Action<AudioClip, AudioHandle> started, Action<AudioClip, AudioHandle> finished, bool ignoreTimeScale,
             AudioCrossfadeCurve curve, AudioResourceLease resource = null)
@@ -126,6 +129,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>所有有效参与轨均可推进时更新公共过渡时钟，完成后替换尾轨。</summary>
         internal void Tick(float deltaTime, float unscaledDeltaTime)
         {
             if (!_owner.IsAvailable || !_isTransitioning)
@@ -177,6 +181,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>先清除过渡身份并提升代次，再结束原尾轨；不直接停止当前轨。</summary>
         private void CancelTransition(AudioRequestEnd reason = AudioRequestEnd.Replaced)
         {
             Epoch++;
@@ -191,6 +196,7 @@ namespace YLFramework.Audio
                 outgoing.Voice.Stop(reason);
             }
         }
+        /// <summary>停止调用进入时两个槽的原请求，不误停释放回调重入产生的新代次。</summary>
         internal void Stop(AudioRequestEnd reason = AudioRequestEnd.Stopped)
         {
             var first = _first.Handle;
@@ -206,12 +212,14 @@ namespace YLFramework.Audio
                 second.Voice.Stop(reason);
             }
         }
+        /// <summary>给当前轨和尾轨添加手动暂停，公共过渡随参与轨一起冻结。</summary>
         internal void Pause()
         {
             _controlVersion++;
             Current.Handle.Pause();
             _outgoing.Pause();
         }
+        /// <summary>解除当前轨与原尾轨的手动暂停；重入改变控制或过渡代次时不继续恢复尾轨。</summary>
         internal void Resume()
         {
             var control = ++_controlVersion;
@@ -224,6 +232,7 @@ namespace YLFramework.Audio
                 outgoing.Resume();
             }
         }
+        /// <summary>仅在原过渡代次内处理启动回调失败，必要时终结整个当前过渡。</summary>
         internal void StartFailed(AudioHandle failed, ulong epoch)
         {
             if (Epoch != epoch)
@@ -240,6 +249,7 @@ namespace YLFramework.Audio
                 failed.Voice.Stop(AudioRequestEnd.Failed);
             }
         }
+        /// <summary>关闭分类时清除尾轨并保留当前请求供重播，启用时恢复原有效参与轨。</summary>
         internal void SetEnabled(bool enabled)
         {
             if (!enabled)
@@ -273,6 +283,7 @@ namespace YLFramework.Audio
                 outgoing.Voice.SetEnabled(true);
             }
         }
+        /// <summary>将分类音量同步到当前轨和仍有效的尾轨，保留各自包络与过渡增益。</summary>
         internal void SetVolume(float value)
         {
             Current.SetVolume(value);
@@ -281,6 +292,7 @@ namespace YLFramework.Audio
                 _outgoing.Voice.SetVolume(value);
             }
         }
+        /// <summary>同步当前轨与有效尾轨的静音，不改变过渡时钟。</summary>
         internal void SetMute(bool value)
         {
             Current.SetMute(value);
@@ -289,6 +301,7 @@ namespace YLFramework.Audio
                 _outgoing.Voice.SetMute(value);
             }
         }
+        /// <summary>将分类默认组变化应用到当前轨及尾轨中继承路由的请求。</summary>
         internal void SetInheritedOutputGroup(AudioMixerGroup group)
         {
             Current.SetInheritedOutputGroup(group);
@@ -297,6 +310,7 @@ namespace YLFramework.Audio
                 _outgoing.Voice.SetInheritedOutputGroup(group);
             }
         }
+        /// <summary>追加当前轨和有效尾轨的句柄，供宿主按代次快照检查。</summary>
         internal void CopyTo(List<AudioHandle> handles)
         {
             if (Current.IsActive)
@@ -309,6 +323,7 @@ namespace YLFramework.Audio
                 handles.Add(_outgoing);
             }
         }
+        /// <summary>以关闭原因终结播放，并在清理失败时仍尝试销毁两个自有音源。</summary>
         internal void DestroySources()
         {
             try

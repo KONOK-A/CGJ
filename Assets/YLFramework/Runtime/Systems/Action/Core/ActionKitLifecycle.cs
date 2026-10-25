@@ -15,7 +15,7 @@ namespace YLFramework.Actions
         {
             get; private set;
         }
-        // 关停标记：置位后拒绝新的初始化、启动和获取宿主，已推进中的动作也会停止触发后续回调。
+        // 关停标记：置位后拒绝新的初始化、启动和获取宿主，后续 Execute 不再进入动作钩子。
         internal static bool IsShuttingDown
         {
             get; private set;
@@ -103,7 +103,10 @@ namespace YLFramework.Actions
         }
 
         /// <summary>停止模块动作，解除模块订阅并释放自有宿主和资源，之后允许重新初始化。</summary>
-        /// <remarks>执行回调中调用时，先阻止后续回调，待当前执行栈退出后再完成清理。</remarks>
+        /// <remarks>
+        /// 执行器回调中调用时先关闭后续推进，待当前执行栈退出后再完成清理，不中断当前方法内尚未返回的业务代码。
+        /// 未交给执行器的动作不在调度清理范围内；静态动作池、IdGenerator 和 OnRegisterPatch 不随关停重置。
+        /// </remarks>
         /// <exception cref="System.InvalidOperationException">在初始化配置期间（Init 或 OnRegisterPatch 回调内）调用时抛出。</exception>
         /// <exception cref="System.AggregateException">清理步骤失败时会聚合抛出；从回调栈内请求的清理延后执行。</exception>
         public static void Shutdown()
@@ -133,6 +136,7 @@ namespace YLFramework.Actions
             FinishShutdown();
         }
 
+        // 模块级执行作用域归零后，完成此前从回调栈内请求的关停。
         internal static void CompletePendingShutdown()
         {
             if (!_isShutdownPending)
@@ -144,6 +148,7 @@ namespace YLFramework.Actions
             FinishShutdown();
         }
 
+        /// <summary>实际释放模块及各宿主资源，最终复位关停状态，并汇总受保护清理步骤的异常。</summary>
         private static void FinishShutdown()
         {
             // 逐项尽力清理：被 Cleanup 包裹的步骤失败后仍继续后续步骤，最后聚合抛出；finally 保证模块状态复位。
@@ -167,7 +172,7 @@ namespace YLFramework.Actions
 
             try
             {
-                // 顺序：先通知模块清理，再停止并销毁执行器（取消所有在跑任务），随后释放各宿主与延迟回收队列。
+                // 先通知模块清理，再停止并销毁执行器，随后释放各宿主与延迟回收队列；不取消外部 Task。
                 if (Architecture != null)
                 {
                     Cleanup(Architecture.OnDeinit);
@@ -198,6 +203,7 @@ namespace YLFramework.Actions
             }
         }
 
+        // 仅销毁仍存活的模块对象；播放中使用延迟销毁，编辑状态立即销毁。
         internal static void DestroyModuleObject(UnityEngine.Object target)
         {
             if (!target)

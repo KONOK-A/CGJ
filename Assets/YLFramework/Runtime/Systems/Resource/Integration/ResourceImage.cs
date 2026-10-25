@@ -9,10 +9,14 @@ namespace YLFramework.Resource
     [DisallowMultipleComponent]
     public sealed class ResourceImage : MonoBehaviour
     {
+        /// <summary>组件输入的解释方式，明确区分直接图片定位、目录资产与图集克隆。</summary>
         public enum ImageSource
         {
+            /// <summary>完整本地路径或 HTTP(S) URL，由图片来源解码为 Texture2D。</summary>
             Location,
+            /// <summary>项目目录中的 Texture2D 或 Sprite 逻辑地址，可携带显式子资产键。</summary>
             Catalog,
+            /// <summary>先取得主 SpriteAtlas 租约，再按精确名称取得组件自有的 Sprite 克隆。</summary>
             Atlas
         }
 
@@ -40,14 +44,19 @@ namespace YLFramework.Resource
         private int _generation;
         private bool _hasDisplay;
 
+        /// <summary>最近一次加载或显示检查的状态；状态成功不替代后续 Unity 对象存活检查。</summary>
         public ResourceRequestStatus Status { get; private set; } = ResourceRequestStatus.Canceled;
+        /// <summary>最近一次加载或显示失败原因；刷新开始或清空后清除。</summary>
         public ResourceException Error
         {
             get; private set;
         }
+        /// <summary>当前是否仍持有尚未完成的图片或目录请求。</summary>
         public bool IsLoading => _imageRequest != null && !_imageRequest.IsDone || _catalogRequest != null && !_catalogRequest.IsDone;
+        /// <summary>当前加载或显示结果的通知；Clear 与停用不主动通知，观察者异常分别记录。</summary>
         public event Action<ResourceImage> Completed;
 
+        /// <summary>目标 Image 或 RawImage；变更会先归还原显示责任并刷新，空值时刷新尝试同物体组件。</summary>
         public Graphic Target
         {
             get => target;
@@ -68,6 +77,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>是否在下次成功应用图片时同步原始尺寸；设置属性本身不立即修改目标。</summary>
         public bool SetNativeSize
         {
             get => setNativeSize; set => setNativeSize = value;
@@ -190,6 +200,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>清空输入并归还当前请求、租约和自有 Sprite；仅在目标仍显示本组件内容时恢复旧值。</summary>
         public void Clear()
         {
             location = null;
@@ -209,6 +220,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>只接受当前代且目标未变的完成结果，交割租约并应用图片；失配或失败时归还本次责任。</summary>
         private void Apply<T>(ResourceRequest<AssetLease<T>> request, int accepted, Graphic acceptedTarget) where T : UnityEngine.Object
         {
             if (accepted != _generation || !isActiveAndEnabled)
@@ -340,8 +352,10 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>读取支持的 UI 目标当前显示对象，供恢复时按引用身份核对。</summary>
         private static UnityEngine.Object ReadTarget(Graphic graphic) => graphic is Image image ? image.sprite : ((RawImage)graphic).texture;
 
+        /// <summary>使旧代请求失效并移出自有责任，再恢复未被外部替换的显示、销毁自有 Sprite 和归还租约。</summary>
         private void ReleaseDisplay()
         {
             _generation++;
@@ -406,6 +420,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>只为仍被接受的代次清理失败显示，合并恢复异常而不覆盖重入产生的新代状态。</summary>
         private void FailDisplay(int accepted, ResourceException failure)
         {
             if (accepted != _generation)
@@ -428,6 +443,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>保存失败状态与原因后通知观察者，不在此重复执行资源清理。</summary>
         private void Fail(ResourceException error)
         {
             Status = ResourceRequestStatus.Failed;
@@ -435,6 +451,7 @@ namespace YLFramework.Resource
             Notify();
         }
 
+        /// <summary>逐个通知完成观察者，将各自异常记录到日志而不阻断后续通知。</summary>
         private void Notify()
         {
             if (Completed == null)
@@ -455,6 +472,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>在配置允许且已有输入时显式刷新，不隐式初始化 ResourceSystem。</summary>
         private void OnEnable()
         {
             if (loadOnEnable && HasInput)
@@ -462,6 +480,7 @@ namespace YLFramework.Resource
                 Refresh();
             }
         }
+        /// <summary>停用时归还组件当前责任，并把仍在等待的显示状态记为取消。</summary>
         private void OnDisable()
         {
             try
@@ -476,7 +495,9 @@ namespace YLFramework.Resource
                 }
             }
         }
+        /// <summary>销毁时再次结算自身显示责任，不销毁目标原有或外部替换的资产。</summary>
         private void OnDestroy() => ReleaseDisplay();
+        /// <summary>检查已显示目标、借读资产与 Sprite 纹理的 Unity 存活状态，外部销毁时结束本代显示。</summary>
         private void LateUpdate()
         {
             if (!_hasDisplay || _displayTarget && _displayed && _leasedAsset && (!(_displayed is Sprite sprite) || sprite.texture))

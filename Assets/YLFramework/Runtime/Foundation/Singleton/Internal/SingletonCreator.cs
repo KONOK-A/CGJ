@@ -6,6 +6,7 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Singletons
 {
+    /// <summary>集中实现普通单例的构造，以及 MonoBehaviour 单例的场景采用和路径创建策略。</summary>
     internal static class SingletonCreator
     {
         /// <summary>
@@ -21,7 +22,6 @@ namespace YLFramework.Singletons
                     $"[Singleton] 无法创建 {type.FullName}：类型是抽象的，单例类型必须是可实例化的具体类型。");
             }
 
-            //获取无参构造函数（public / private / protected 均可）
             var constructors =
                 type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
             var constructor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
@@ -54,7 +54,6 @@ namespace YLFramework.Singletons
 
             if (monoBehaviourType.IsAssignableFrom(type))
             {
-                //Type继承自MonoBehaviour
                 return CreateMonoSingleton<T>();
             }
 
@@ -74,14 +73,13 @@ namespace YLFramework.Singletons
         /// <param name="allowEditMode">非播放模式下是否允许查找/创建。</param>
         /// <param name="includeInactive">查找时是否包含未激活对象。</param>
         /// <param name="persistent">采用/创建顶级实例时是否 DontDestroyOnLoad。</param>
-        /// <param name="onCreated">仅新建实例后调用一次的回调。</param>
+        /// <param name="onCreated">未采用场景候选而走路径或新建流程后调用的回调；路径复用已有组件时也会调用。</param>
         /// <param name="isExcluded">自定义排除判定，返回 true 的实例会被跳过。</param>
         public static T CreateMonoSingleton<T>(T excludedInstance = null, bool allowEditMode = false,
             bool includeInactive = false, bool persistent = false, Action<T> onCreated = null,
             Predicate<T> isExcluded = null) where T : class, ISingleton
         {
             var type = typeof(T);
-            //程序未运行 则MonoSingleton的实例为null
             if (!Application.isPlaying && !allowEditMode)
             {
                 return null;
@@ -89,7 +87,6 @@ namespace YLFramework.Singletons
 
             if (Application.isPlaying && SingletonSessionState.IsApplicationQuitting)
             {
-                //退出流程中禁止再创建新的单例对象
                 return null;
             }
 
@@ -146,9 +143,7 @@ namespace YLFramework.Singletons
                 return firstMatch;
             }
 
-            //类有MonoSingletonPathAttribute属性，则通过自定义路径去寻找或创建
             var instance = CreateByPathAttribute<T>(type, isExcluded);
-            //都没找到则直接创建
             if (instance == null)
             {
                 var obj = new GameObject(type.Name);
@@ -168,6 +163,7 @@ namespace YLFramework.Singletons
             return instance;
         }
 
+        /// <summary>读取类型继承链上的路径特性，存在时按该路径取得组件，否则返回 null。</summary>
         private static T CreateByPathAttribute<T>(Type type, Predicate<T> isExcluded) where T : class
         {
             var pathAttribute = Attribute.GetCustomAttribute(type, typeof(MonoSingletonPathAttribute), true)
@@ -178,7 +174,7 @@ namespace YLFramework.Singletons
         }
 
         /// <summary>
-        /// 根据路径创建某个类型的MonoSingleton承载GameObject
+        /// 沿路径取得或创建承载节点；已有组件被排除时，在同级替换节点上添加新组件。
         /// </summary>
         private static T CreateGameObjectOfMonoSingletonByPath<T>(string path, bool dontDestroy,
             Predicate<T> isExcluded) where T : class
@@ -215,6 +211,7 @@ namespace YLFramework.Singletons
 
         #region 根据路径找/创建 某个物体
 
+        /// <summary>拆分非空层级路径并启动逐级查找，可选补建缺失节点。</summary>
         private static GameObject FindGameObject(string path, bool build, bool dontDestroy)
         {
             if (string.IsNullOrEmpty(path))
@@ -232,7 +229,7 @@ namespace YLFramework.Singletons
         }
 
         /// <summary>
-        /// 利用循环一直找/创建到目标物体
+        /// 从指定层级逐级查找目标节点；允许补建时仅对新建的路径根节点应用常驻设置。
         /// </summary>
         /// <returns>目标物体</returns>
         private static GameObject FindGameObject(GameObject root, string[] subPath, int index, bool build,
@@ -274,7 +271,6 @@ namespace YLFramework.Singletons
                     return null;
                 }
 
-                //找到/创建到目标物体后返回
                 if (++index == subPath.Length)
                 {
                     return client;

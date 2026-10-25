@@ -12,13 +12,19 @@ using YLFramework.Skill;
 namespace YLFramework.Editor.Skill
 {
 
+    /// <summary>保存技能图标资源标识与对应 GUI 内容的缓存项。</summary>
     internal class IconGuiContent
     {
+        /// <summary>图标资源模块名称。</summary>
         public string ProjectName;
+        /// <summary>模块内图标名称。</summary>
         public string IconName;
+        /// <summary>对应图标的 GUI 内容。</summary>
         public GUIContent Content;
     }
 
+    /// <summary>以技能 ID 构建可搜索、重排的平面列表，提供定义创建、复制和删除菜单。</summary>
+    /// <remarks>基类负责列表重排的 Undo，窗口负责释放树订阅；不会因此为所有资产操作提供撤销或回滚。</remarks>
     public class SkillListTree : ReorderableTreeView<SkillConfigData>
     {
 
@@ -37,8 +43,10 @@ namespace YLFramework.Editor.Skill
         private Dictionary<int, GUIContent> _displayNameContents = new Dictionary<int, GUIContent>();
 
 
+        /// <summary>当前树绑定的源技能配表。</summary>
         public SkillsConfig SkillsConfig => _skillsConfig;
 
+        /// <summary>绑定配表及其当前技能列表并设置行高，创建后由调用方重载。</summary>
 #if UNITY_6000_2_OR_NEWER
         public SkillListTree(TreeViewState<int> state, SkillsConfig skillsConfig) : base(skillsConfig, () => skillsConfig.skills, state)
 #else
@@ -51,6 +59,7 @@ namespace YLFramework.Editor.Skill
             rowHeight = 25;
         }
 
+        /// <summary>跳过空条目，以技能 ID 建立平面行，名称和 ID 用于搜索。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override void OnBuildRoot(TreeViewItem<int> root, IList<SkillConfigData> datas)
 #else
@@ -75,6 +84,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>按行 ID 查询技能定义并绘制图标、带描述的名称和 ID。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             if (_skillsConfig == null)
@@ -117,6 +127,7 @@ namespace YLFramework.Editor.Skill
             GUI.Box(args.rowRect, string.Empty, "CN Box");
         }
 
+        /// <summary>允许选择多个技能行以执行批量菜单操作。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override bool CanMultiSelect(TreeViewItem<int> item)
 #else
@@ -127,6 +138,7 @@ namespace YLFramework.Editor.Skill
             return true;
         }
 
+        /// <summary>空白处右键显示技能创建菜单，避免条目右键重复触发菜单。</summary>
         protected override void ContextClicked()
         {
             base.ContextClicked();
@@ -141,6 +153,7 @@ namespace YLFramework.Editor.Skill
             CreateSkill(menu);
         }
 
+        /// <summary>为当前选择提供删除、复制定义和创建技能菜单。</summary>
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
@@ -187,13 +200,14 @@ namespace YLFramework.Editor.Skill
             CreateSkill(menu);
         }
 
+        /// <summary>根据配表绑定的数据基类扫描候选，创建菜单项并显示菜单。</summary>
         private void CreateSkill(GenericMenu menu)
         {
             Type parent = _skillsConfig.GetDataType();
 
             //Debug.Log(parent.FullName);
 
-            //  查找项目中所有继承自
+            // 扫描的是配置数据类型，技能运行脚本的绑定由条目绘制器另行处理。
             List<Type> skills = ScriptBindController.GetAllSkillConfigDataTypes(parent);
 
             foreach (var item in skills)
@@ -222,6 +236,7 @@ namespace YLFramework.Editor.Skill
             menu.ShowAsContext();
         }
 
+        /// <summary>经资产所有权边界移除技能条目，再清缓存并重载行。</summary>
         private void DeleteSkill(int id)
         {
             if (_skillsConfig == null)
@@ -240,6 +255,7 @@ namespace YLFramework.Editor.Skill
             Reload();
         }
 
+        /// <summary>复制源技能定义，创建新 ID 条目后分配副本名称；找不到源条目时返回 -1。</summary>
         private int CopySkill(int id)
         {
             if (_skillsConfig == null)
@@ -260,6 +276,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>重载行并清除源配表的技能查找缓存。</summary>
         protected override void RefreshDatas()
         {
             base.RefreshDatas();
@@ -269,8 +286,10 @@ namespace YLFramework.Editor.Skill
             }
         }
 
+        /// <summary>将技能行 ID 映射回当前序列化列表索引以支持重排。</summary>
         protected override int GetItemIndex(int id) => _skillsConfig.skills.FindIndex(data => data && data.id == id);
 
+        /// <summary>组合技能名称与单行描述，供列表富文本标签显示。</summary>
         private string GetDisplayName(SkillConfigData skillConfigData)
         {
             if (string.IsNullOrEmpty(skillConfigData.description))

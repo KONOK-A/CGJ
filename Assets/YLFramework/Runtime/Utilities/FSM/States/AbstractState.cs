@@ -51,26 +51,31 @@ namespace YLFramework.FSM
             Owner = null;
         }
 
+        /// <inheritdoc />
         bool IState.Condition()
         {
             return OnCondition();
         }
 
+        /// <inheritdoc />
         void IState.Enter()
         {
             OnEnter();
         }
 
+        /// <inheritdoc />
         void IState.Update()
         {
             OnUpdate();
         }
 
+        /// <inheritdoc />
         void IState.LateUpdate()
         {
             OnLateUpdate();
         }
 
+        /// <inheritdoc />
         void IState.FixedUpdate()
         {
             OnFixedUpdate();
@@ -82,6 +87,7 @@ namespace YLFramework.FSM
         {
         }
 
+        /// <inheritdoc />
         void IState.Exit()
         {
             OnExit();
@@ -129,7 +135,7 @@ namespace YLFramework.FSM
         }
 
         /// <summary>
-        /// 切换到指定状态；reCurrentState 为 true 时允许对当前状态重新执行 Exit/Enter。
+        /// 切换到指定状态；reenterCurrentState 为 true 时允许对当前状态重新执行 Exit/Enter。
         /// </summary>
         /// <param name="stateId">目标状态 ID。</param>
         /// <param name="reenterCurrentState">目标与当前相同时是否重新执行 Exit/Enter。</param>

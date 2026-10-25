@@ -12,6 +12,7 @@ namespace YLFramework.Actions
         private readonly uint _generation;
         private readonly ulong _nameToken;
 
+        // 快照命名登记、动作标识和控制器代次，避免旧句柄控制后来的执行。
         internal ActionHandle(MonoUpdateActionExecutor executor, MonoUpdateActionExecutor.ActionTask task)
         {
             _executor = executor;

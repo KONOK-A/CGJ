@@ -3,8 +3,10 @@ using UnityEngine;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>诊断仅复制缓存条目分类计数，不执行 Prune、退休收尾或 Prefab pin 归还。</remarks>
     public sealed partial class InstanceCache
     {
+        /// <summary>按当前对象存活、借出、闲置及过渡状态采样计数，不把条目引用交给报告。</summary>
         internal ResourceInstanceCacheDiagnostics CaptureDiagnostics()
         {
             // 复用 Foundation 的公开只读队列快照；不 Prune Resource 条目、不释放任何 Prefab pin。

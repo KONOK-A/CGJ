@@ -19,20 +19,25 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>已验证文件的只读字节身份副本，不持有文件句柄或冻结磁盘内容。</summary>
     public sealed class ResourceBuiltFile
     {
+        /// <summary>构建工作区内的文件名。</summary>
         public string Name
         {
             get;
         }
+        /// <summary>已验证的文件字节长度。</summary>
         public long Length
         {
             get;
         }
+        /// <summary>已验证的全部文件字节 SHA-256。</summary>
         public string Sha256
         {
             get;
         }
+        /// <summary>复制工作区摘要，避免公开可变的持久记录。</summary>
         internal ResourceBuiltFile(ResourceBuildWorkspace.FileDigest value)
         {
             Name = value.Name;
@@ -41,24 +46,30 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>实际 Bundle 读回结果及其源布局统计，区分 UnityHash 与文件字节摘要。</summary>
     public sealed class ResourceBuiltBundle
     {
+        /// <summary>经过读回验证的原生 Bundle 名称。</summary>
         public string Name
         {
             get;
         }
+        /// <summary>根 Manifest 记录的 Unity 内容 hash，不替代文件 SHA-256。</summary>
         public string UnityHash
         {
             get;
         }
+        /// <summary>构建图中最终分包的来源归类。</summary>
         public ResourceBundlePlacement Placement
         {
             get;
         }
+        /// <summary>本包源文件字节之和，不含 meta，不是压缩文件大小。</summary>
         public long SourceBytes
         {
             get;
         }
+        /// <summary>明确归属于本包的源文件数量。</summary>
         public int SourceFileCount
         {
             get;
@@ -68,14 +79,17 @@ namespace YLFramework.Editor.Resource
         {
             get;
         }
+        /// <summary>读回 Manifest 后确认的直接依赖 Bundle 名称。</summary>
         public IReadOnlyList<string> Dependencies
         {
             get;
         }
+        /// <summary>构建图中直接依赖本包的 Bundle 名称。</summary>
         public IReadOnlyList<string> Dependents
         {
             get;
         }
+        /// <summary>合并源布局与实际 Manifest、文件大小读回结果。</summary>
         internal ResourceBuiltBundle(ResourceBuildBundle source, string hash, string[] dependencies, long fileBytes)
         {
             Name = source.Name;
@@ -92,30 +106,37 @@ namespace YLFramework.Editor.Resource
     /// <summary>与同一兼容 Workspace 上次已验证记录比较，不把强制 native 重建等同于内容变化。</summary>
     public sealed class ResourceBundleChange
     {
+        /// <summary>本次比较的 Bundle 文件名。</summary>
         public string Name
         {
             get;
         }
+        /// <summary>当前原始 Bundle 文件的字节长度。</summary>
         public long FileBytes
         {
             get;
         }
+        /// <summary>当前原始 Bundle 文件的字节摘要。</summary>
         public string Sha256
         {
             get;
         }
+        /// <summary>兼容工作区先前记录中的摘要，没有对应项时为 null。</summary>
         public string PreviousSha256
         {
             get;
         }
+        /// <summary>有已验证基线时比较长度与摘要；无完整基线时为 null，不能据重建推断变化。</summary>
         public bool? ContentChanged
         {
             get;
         }
+        /// <summary>内容变化、未变化或未知的比较依据。</summary>
         public string Reason
         {
             get;
         }
+        /// <summary>依据完整基线及同名文件的字节身份生成变化说明。</summary>
         internal ResourceBundleChange(ResourceBuiltFile file, ResourceBuildWorkspace.FileDigest previous, bool baselineAvailable)
         {
             Name = file.Name;
@@ -133,22 +154,27 @@ namespace YLFramework.Editor.Resource
     /// <summary>已在真实 Bundle 中按唯一 name+type 验证过的公开子资产；localId 只作稳定身份。</summary>
     public sealed class ResourceBuiltSubAsset
     {
+        /// <summary>承载该子资产的主资产及逻辑地址。</summary>
         public ResourceBuildAsset MainAsset
         {
             get;
         }
+        /// <summary>源文件内持久 localId，转为十进制字符串后用作 Catalog 子资产键。</summary>
         public long LocalId
         {
             get;
         }
+        /// <summary>原生具名类型查找已确认唯一的子资产名称。</summary>
         public string Name
         {
             get;
         }
+        /// <summary>原生加载时明确使用的编译类型。</summary>
         public Type AssetType
         {
             get;
         }
+        /// <summary>复制公开子资产的持久身份和实际加载描述。</summary>
         internal ResourceBuiltSubAsset(ResourceBuildAsset main, long localId, string name, Type type)
         {
             MainAsset = main;
@@ -161,46 +187,57 @@ namespace YLFramework.Editor.Resource
     /// <summary>已验证的 Editor 构建结果及真实工作量；Workspace 是可变缓存，不是已发布版本或持久化 Catalog。</summary>
     public sealed class ResourceBuildResult
     {
+        /// <summary>本次验证所对应的显式资产与 Bundle 布局快照。</summary>
         public ResourceBuildMap Map
         {
             get; internal set;
         }
+        /// <summary>可变原始缓存的叶目录；后续使用必须复验，不能当作已发布版本。</summary>
         public string WorkspacePath
         {
             get; internal set;
         }
+        /// <summary>原始叶目录中的二进制根 Manifest Bundle 文件名。</summary>
         public string ManifestBundleFile
         {
             get; internal set;
         }
+        /// <summary>本次源文件、meta、依赖和配置的综合输入指纹，已在构建后复验。</summary>
         public string InputFingerprint
         {
             get; internal set;
         }
+        /// <summary>构建策略、目录定义、项目设置和编译输入组成的完整兼容分区指纹。</summary>
         public string BuildSettingsFingerprint
         {
             get; internal set;
         }
+        /// <summary>本次明确构建并读回的平台名称。</summary>
         public string Platform
         {
             get; internal set;
         }
+        /// <summary>本次构建使用的完整 Unity 版本。</summary>
         public string UnityCompatibility
         {
             get; internal set;
         }
+        /// <summary>本次实际采用的 Bundle 压缩策略。</summary>
         public ResourceCompression Compression
         {
             get; internal set;
         }
+        /// <summary>当前原始 Bundle、根 Manifest 及文本旁车的完整文件摘要，不含过时文件。</summary>
         public IReadOnlyList<ResourceBuiltFile> Files
         {
             get; internal set;
         }
+        /// <summary>本次交付编码策略，不表示发布签名策略。</summary>
         public ResourceContentEncryption ContentEncryption
         {
             get; internal set;
         }
+        /// <summary>非秘密的内容密钥标识；不加密时为 null，结果不保留密钥或 provider。</summary>
         public string ContentKeyId
         {
             get; internal set;
@@ -210,42 +247,52 @@ namespace YLFramework.Editor.Resource
         {
             get; internal set;
         }
+        /// <summary>实际交付文件的完整字节摘要；加密时与原始文件摘要区分。</summary>
         public IReadOnlyList<ResourceBuiltFile> DeliveryFiles
         {
             get; internal set;
         }
+        /// <summary>完整交付文件集的总字节数，包含文本旁车。</summary>
         public long DeliveryBytes
         {
             get; internal set;
         }
+        /// <summary>本次新编码的二进制交付字节数，不计原样复制的文本旁车。</summary>
         public long EncodedDeliveryBytes
         {
             get; internal set;
         }
+        /// <summary>本次复用的既有二进制交付字节数，不计文本旁车。</summary>
         public long ReusedDeliveryBytes
         {
             get; internal set;
         }
+        /// <summary>交付候选验证、复用或编码的累计耗时，单位毫秒。</summary>
         public double ContentEncodingMilliseconds
         {
             get; internal set;
         }
+        /// <summary>从原始产物读回并验证的 Bundle 集合。</summary>
         public IReadOnlyList<ResourceBuiltBundle> Bundles
         {
             get; internal set;
         }
+        /// <summary>已按唯一名称与编译类型验证的公开子资产，不包含图集内部表示。</summary>
         public IReadOnlyList<ResourceBuiltSubAsset> SubAssets
         {
             get; internal set;
         }
+        /// <summary>是否因完整输入与产物均匹配而跳过 Unity 构建；仍执行原生读回验证。</summary>
         public bool IsCacheHit
         {
             get; internal set;
         }
+        /// <summary>本次是否实际调用过 Unity 构建管线。</summary>
         public bool WasUnityBuildInvoked
         {
             get; internal set;
         }
+        /// <summary>是否因显式请求、产物不完整或未跟踪回调而使用原生强制重建选项。</summary>
         public bool ForceRebuild
         {
             get; internal set;
@@ -255,22 +302,27 @@ namespace YLFramework.Editor.Resource
         {
             get; internal set;
         }
+        /// <summary>构建前准备、输入及缓存检查的耗时，单位毫秒。</summary>
         public double PreflightMilliseconds
         {
             get; internal set;
         }
+        /// <summary>本次构建分支的耗时，单位毫秒，包含工作区尝试登记等开销。</summary>
         public double BuildMilliseconds
         {
             get; internal set;
         }
+        /// <summary>构建分支后读回、后验、交付处理及封口的耗时，单位毫秒。</summary>
         public double ValidationMilliseconds
         {
             get; internal set;
         }
+        /// <summary>本次成功构建流程记录的总耗时，单位毫秒，不包含后续发布。</summary>
         public double ElapsedMilliseconds
         {
             get; internal set;
         }
+        /// <summary>前置准备与分包计算的累计耗时，含后验重算，单位毫秒。</summary>
         public double MapMilliseconds
         {
             get; internal set;
@@ -280,38 +332,48 @@ namespace YLFramework.Editor.Resource
         {
             get; internal set;
         }
+        /// <summary>仅实际同步构建管线调用的耗时，单位毫秒。</summary>
         public double BuildPipelineMilliseconds
         {
             get; internal set;
         }
+        /// <summary>原始产物完整性哈希的累计耗时，单位毫秒，不含交付候选的另行校验。</summary>
         public double ArtifactHashMilliseconds
         {
             get; internal set;
         }
+        /// <summary>原始 Bundle 原生读回及子资产验证的耗时，单位毫秒。</summary>
         public double ReadbackMilliseconds
         {
             get; internal set;
         }
+        /// <summary>普通及场景 Bundle 的原始文件字节总量，不含根 Manifest 和文本旁车。</summary>
         public long BundleFileBytes
         {
             get; internal set;
         }
+        /// <summary>与兼容工作区先前完整基线比较的 Bundle 字节变化，不等同于原生重建情况。</summary>
         public IReadOnlyList<ResourceBundleChange> BundleChanges { get; internal set; } = Array.Empty<ResourceBundleChange>();
+        /// <summary>本次重建或整体跳过构建的实际判断依据。</summary>
         public IReadOnlyList<string> ExecutionReasons { get; internal set; } = Array.Empty<string>();
         /// <summary>本次冻结输入前执行的自动 Atlas 计划；为空表示项目未配置自动图集。</summary>
         public ResourceAtlasPlan AtlasGeneration
         {
             get; internal set;
         }
+        /// <summary>输入文件与设置哈希累计读取字节，包含后验重复读取，不是唯一源文件体积。</summary>
         public long SourceHashBytes
         {
             get; internal set;
         }
+        /// <summary>原始产物哈希累计读取字节，不计交付编码中的独立校验。</summary>
         public long ArtifactHashBytes
         {
             get; internal set;
         }
+        /// <summary>构建不复制发布快照，此统计固定为零。</summary>
         public long CopiedBytes => 0;
+        /// <summary>已登记但不在本次预期原始文件集中的保留项数，不表示文件实际存在或已被删除。</summary>
         public int RetainedObsoleteFiles
         {
             get; internal set;
@@ -325,8 +387,10 @@ namespace YLFramework.Editor.Resource
         private static readonly int _mainThread;
         private static bool _isBuilding;
 
+        /// <summary>在 Editor 初始化时记录允许调用构建的主线程身份。</summary>
         static ResourceBundleBuilder() => _mainThread = Thread.CurrentThread.ManagedThreadId;
 
+        /// <summary>将压缩白名单映射为 Unity 选项，并始终启用 StrictMode。</summary>
         private static BuildAssetBundleOptions Options(ResourceProject project) => BuildAssetBundleOptions.StrictMode | (project.compression switch
         {
             ResourceCompression.Lz4 => BuildAssetBundleOptions.ChunkBasedCompression,
@@ -344,6 +408,7 @@ namespace YLFramework.Editor.Resource
             return new ResourceBuildWorkspace(map, Settings(map, project, target, ref bytes), target.ToString(), project.contentEncryption, project.contentKeyId).Output;
         }
 
+        /// <summary>只读解析预期工作区并检查已有归属与内容，不创建目录或获取锁。</summary>
         internal static string PreflightWorkspace(ResourceProject project, BuildTarget target)
         {
             var map = ResourceBuildMap.Create(project);
@@ -362,10 +427,15 @@ namespace YLFramework.Editor.Resource
             bool forceRebuild = false, CancellationToken cancellation = default) =>
             ExecuteWithContentKey(project, target, forceRebuild, cancellation, BuildPipeline.BuildAssetBundles, provider);
 
+        /// <summary>以明确构建管线执行不附带内容密钥来源的构建。</summary>
         internal static ResourceBuildResult Execute(ResourceProject project, BuildTarget target, bool forceRebuild,
             CancellationToken cancellation, Func<string, AssetBundleBuild[], BuildAssetBundleOptions, BuildTarget, AssetBundleManifest> pipeline) =>
             ExecuteWithContentKey(project, target, forceRebuild, cancellation, pipeline, null);
 
+        /// <summary>
+        /// 准备图集后收集输入指纹，在自有工作区内构建、读回并复验，再标记缓存完整。
+        /// 持有锁不使源文件或结果路径不可变；失败保留已登记的部分产物，密钥副本在离开入口时清零。
+        /// </summary>
         internal static ResourceBuildResult ExecuteWithContentKey(ResourceProject project, BuildTarget target, bool forceRebuild,
             CancellationToken cancellation, Func<string, AssetBundleBuild[], BuildAssetBundleOptions, BuildTarget, AssetBundleManifest> pipeline,
             IResourceContentKeyProvider provider)
@@ -662,9 +732,11 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>取得并验证独立内容密钥副本，调用方负责在使用后清零，不接管 provider。</summary>
         internal static byte[] CopyContentKey(IResourceContentKeyProvider provider, string projectId, string keyId) =>
             ResourceContentValidation.CopyKey(provider == null ? null : new ResourceDecryptionOptions(provider), projectId, keyId);
 
+        /// <summary>校验交付模式、非秘密 KeyId 及实际支持的平台，不读取密钥。</summary>
         internal static void ValidateContentPolicy(ResourceContentEncryption mode, string keyId, string platform)
         {
             if (mode == ResourceContentEncryption.None)
@@ -684,10 +756,12 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>以项目、平台、Unity 版本和 Bundle 或根 Manifest 身份绑定内容封装上下文。</summary>
         internal static ResourceBundleContext ContentContext(ResourceBuildResult result, string name) => new(result.Map.ProjectId,
             result.Platform, result.UnityCompatibility, name == result.ManifestBundleFile ? "Manifest" : "Bundle",
             name == result.ManifestBundleFile ? "manifest" : name);
 
+        /// <summary>核对旁车原字节，或验证二进制封装身份及全部明文字节与原始构建一致，不接管输入流。</summary>
         internal static void ValidateDelivery(Stream input, ResourceBuildResult result, string name, byte[] key,
             long rawLength, string rawSha256, CancellationToken token)
         {
@@ -715,6 +789,7 @@ namespace YLFramework.Editor.Resource
             ResourceBundleEnvelope.ValidateAll(input, context, key, token, rawSha256, rawLength);
         }
 
+        /// <summary>复验可复用候选，必要时在新登记目录生成交付集，并逐文件保存完成记录。</summary>
         private static void BuildDelivery(ResourceBuildResult result, ResourceBuildWorkspace workspace,
             ResourceBuildWorkspace.EncryptedOwnership record, ResourceBuildWorkspace.FileDigest[] files, byte[] key, CancellationToken token)
         {
@@ -797,6 +872,7 @@ namespace YLFramework.Editor.Resource
             result.DeliveryFiles = delivery.Select(x => new ResourceBuiltFile(x)).ToList().AsReadOnly();
         }
 
+        /// <summary>按取消检查点复制流字节，不关闭流或刷新输出，由调用方管理其生命周期。</summary>
         internal static void CopyContent(Stream source, Stream output, CancellationToken token)
         {
             var buffer = new byte[32768];
@@ -809,9 +885,11 @@ namespace YLFramework.Editor.Resource
             token.ThrowIfCancellationRequested();
         }
 
+        /// <summary>仅在无强制请求、完整输入和产物匹配且无未跟踪回调时允许整体跳过构建。</summary>
         internal static bool CanSkipBuild(bool force, bool integrity, bool matchingInput, string[] callbacks) =>
             !force && integrity && matchingInput && callbacks.Length == 0;
 
+        /// <summary>列出可能读取任意外部状态的非 Unity 内置构建回调，用于阻止不可靠的缓存跳过。</summary>
         private static string[] UntrackedCallbacks()
         {
             var engine = typeof(EditorApplication).Assembly;
@@ -827,6 +905,7 @@ namespace YLFramework.Editor.Resource
                 .Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray();
         }
 
+        /// <summary>要求稳定主线程 Editor、已激活且与主机匹配的平台及无脏场景，不隐式保存或切平台。</summary>
         internal static void ValidateEditor(BuildTarget target)
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThread || EditorApplication.isPlayingOrWillChangePlaymode ||
@@ -862,6 +941,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>拒绝在存在外部已加载 Bundle 时启动可能卸载它们的原生流程。</summary>
         internal static void RejectLoadedBundles()
         {
             // 实测 native build 会卸载其他项目已经加载的 Bundle；只防同 namespace 不足以保护外部所有权。
@@ -871,6 +951,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按依赖顺序加载本次原始产物并核对布局、类型与子资产，最终只卸载本方法取得的 Bundle。</summary>
         private static List<ResourceBuiltBundle> ReadBack(ResourceBuildMap map, ResourceBuildWorkspace workspace,
             CancellationToken cancellation, out List<ResourceBuiltSubAsset> subAssets)
         {
@@ -1031,6 +1112,7 @@ namespace YLFramework.Editor.Resource
             return result;
         }
 
+        /// <summary>汇总构建策略、目录定义、项目设置及实际编译输入，生成完整兼容分区指纹。</summary>
         private static string Settings(ResourceBuildMap map, ResourceProject project, BuildTarget target, ref long bytes)
         {
             ValidateContentPolicy(project.contentEncryption, project.contentKeyId, target.ToString());
@@ -1105,6 +1187,7 @@ namespace YLFramework.Editor.Resource
             return HashText(data.ToString());
         }
 
+        /// <summary>按稳定路径顺序哈希输入文件及现有 meta，并返回实际累计读取字节。</summary>
         internal static string InputFilesFingerprint(IEnumerable<string> files, out long bytes)
         {
             bytes = 0;
@@ -1125,6 +1208,7 @@ namespace YLFramework.Editor.Resource
             return HashText(data.ToString());
         }
 
+        /// <summary>冻结布局、来源目录和源字节的综合身份，供构建前后及缓存复用时比较。</summary>
         private static string Fingerprint(ResourceBuildMap map, string settings, ref long bytes)
         {
             var data = new StringBuilder();
@@ -1189,6 +1273,7 @@ namespace YLFramework.Editor.Resource
             return HashText(data.ToString());
         }
 
+        /// <summary>生成用于内存定义复验的 JSON 表示，按目录身份排列来源定义，不替代磁盘字节哈希。</summary>
         internal static string CanonicalDefinition(ResourceProject project)
         {
             if (!project)
@@ -1210,6 +1295,7 @@ namespace YLFramework.Editor.Resource
             return serialized.ToString(Formatting.None);
         }
 
+        /// <summary>仅对完整识别的来源目录记录排序后哈希项目文件；未知布局保留原始字节参与身份。</summary>
         internal static string ProjectFileHash(string path, ref long bytes)
         {
             ResourceBuildOperation.RejectLinks(path);
@@ -1236,13 +1322,17 @@ namespace YLFramework.Editor.Resource
             return Hex(hash.ComputeHash(raw));
         }
 
+        /// <summary>以长度前缀追加指纹字段，避免字段拼接产生歧义。</summary>
         private static void Add(StringBuilder builder, string value) => builder.Append(value.Length).Append(':').Append(value).Append('\n');
+        /// <summary>计算指纹描述文本的 UTF-8 SHA-256。</summary>
         private static string HashText(string value)
         {
             using var hash = SHA256.Create();
             return Hex(hash.ComputeHash(Encoding.UTF8.GetBytes(value)));
         }
+        /// <summary>将摘要字节编码为无分隔符的小写十六进制。</summary>
         private static string Hex(byte[] value) => BitConverter.ToString(value).Replace("-", "").ToLowerInvariant();
+        /// <summary>计算文件长度和全部字节摘要，并累计本次读取量。</summary>
         private static ResourceBuildWorkspace.FileDigest HashFile(string path, ref long bytes)
         {
             using var file = File.OpenRead(path);

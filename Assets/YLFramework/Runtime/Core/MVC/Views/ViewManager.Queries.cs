@@ -37,6 +37,7 @@ namespace YLFramework.Core
             return module.OwnedViews.TryGetValue(id, out var view) ? Cast<T>(view) : null;
         }
 
+        /// <summary>保留缺失结果的 null 语义，对存在但类型不匹配的 View 明确抛错。</summary>
         private static T Cast<T>(View view) where T : View
         {
             if (view == null)
@@ -52,6 +53,7 @@ namespace YLFramework.Core
             throw new InvalidCastException($"View {view.GetType().FullName} cannot be queried as {typeof(T).FullName}.");
         }
 
+        /// <summary>取得最多一个匹配实例；缺失返回 null，多实例要求调用方按 ID 消除歧义。</summary>
         private static View Single(IEnumerable<View> views)
         {
             View result = null;
@@ -125,6 +127,7 @@ namespace YLFramework.Core
         }
 
 
+        /// <summary>清空并复用调用方列表，写入本模块中可赋给 T 的存活 View；清理死会话仍可能产生分配。</summary>
         internal static void GetViewsNonAlloc<T>(Module module, List<T> results) where T : View
         {
             if (results == null)

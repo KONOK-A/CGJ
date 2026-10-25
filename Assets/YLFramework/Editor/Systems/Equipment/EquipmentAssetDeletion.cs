@@ -7,10 +7,12 @@ using YLFramework.Equipment;
 
 namespace YLFramework.Editor.Equipment
 {
+    /// <summary>用可撤销的内存记录把装备独立文件的删除接入 Unity Undo 与 Redo。</summary>
     // Unity 的对象 Undo 不包含独立文件删除；用同组内存记录保留文件及 meta 原始身份。
     [InitializeOnLoad]
     internal static class EquipmentAssetDeletion
     {
+        /// <summary>恢复现有删除记录的处理状态，订阅 Undo 同步，并在编辑器退出时释放记录。</summary>
         static EquipmentAssetDeletion()
         {
             foreach (var state in Resources.FindObjectsOfTypeAll<EquipmentDeletionRecord>())
@@ -29,6 +31,7 @@ namespace YLFramework.Editor.Equipment
             };
         }
 
+        /// <summary>记录文件、元数据与内存状态，将配表解除引用和文件删除纳入同一 Undo 组。</summary>
         internal static void Delete(EquipmentConfigData data, EquipmentsConfig root, string path)
         {
             var state = ScriptableObject.CreateInstance<EquipmentDeletionRecord>();
@@ -39,6 +42,7 @@ namespace YLFramework.Editor.Equipment
             state.guid = AssetDatabase.AssetPathToGUID(path);
             state.assetBytes = File.ReadAllBytes(path);
             state.metaBytes = File.ReadAllBytes(path + ".meta");
+            // 磁盘字节保留原文件身份；内存快照另存未落盘字段，撤销后按原脏状态恢复而不强制保存条目。
             state.memory = EditorJsonUtility.ToJson(data);
             state.wasDirty = EditorUtility.IsDirty(data);
             state.indices = Enumerable.Range(0, root.Equipments.Count).Where(i => ReferenceEquals(root.Equipments[i], data)).ToArray();
@@ -63,6 +67,7 @@ namespace YLFramework.Editor.Equipment
             AssetDatabase.SaveAssetIfDirty(root);
         }
 
+        /// <summary>按 Undo 恢复的删除状态尝试同步文件，冲突或恢复失败只记录异常，不整体回滚。</summary>
         private static void Synchronize()
         {
             foreach (var state in Resources.FindObjectsOfTypeAll<EquipmentDeletionRecord>())
@@ -151,6 +156,7 @@ namespace YLFramework.Editor.Equipment
                 }
             }
         }
+        /// <summary>重做删除前核对原 GUID、资产与 meta 字节，拒绝删除已被外部替换的文件。</summary>
         private static void RequireOriginal(EquipmentDeletionRecord state)
         {
             if (AssetDatabase.AssetPathToGUID(state.path) != state.guid || !File.ReadAllBytes(state.path).SequenceEqual(state.assetBytes) ||

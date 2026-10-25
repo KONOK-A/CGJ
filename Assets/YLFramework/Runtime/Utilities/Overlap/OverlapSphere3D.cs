@@ -3,9 +3,7 @@ using UnityEngine;
 
 namespace YLFramework.Overlap
 {
-    /// <summary>
-    /// 重叠检测球形
-    /// </summary>
+    /// <summary>以对象世界位置为球心，按 XYZ 世界缩放的最大绝对分量缩放半径后检测三维重叠。</summary>
     public class OverlapSphere3D : OverlapBase3D
     {
 
@@ -19,9 +17,7 @@ namespace YLFramework.Overlap
 
         #region 属性
 
-        /// <summary>
-        /// 半径
-        /// </summary>
+        /// <summary>应用世界缩放前的球体半径，赋值本身不校验范围。</summary>
         public float Radius
         {
             get
@@ -36,7 +32,7 @@ namespace YLFramework.Overlap
 
         #endregion
 
-        // Fix编码
+        /// <summary>检测当前位置的球体重叠，过滤触发器后更新进入退出结果。</summary>
         public override void CheckOverlap()
         {
             if (!TryBeginCheck())

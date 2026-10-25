@@ -8,13 +8,14 @@ namespace YLFramework.Tables
     /// 为数据项建立按指定键查询的索引。
     /// 同一键可以关联多个数据项（multi-set：允许重复项，并保持添加顺序）。
     /// <para>
-    /// 键由构造时传入的选择器在 Add/Remove 时实时计算，索引不缓存键；
+    /// 键由构造时传入的选择器在 Add/Remove 时实时计算，不单独保存每个数据项添加时的键；
     /// 因此修改数据项的键属性后，Remove 无法定位旧索引项，会留下陈旧数据。
     /// 契约：索引期间用于生成键的值必须保持稳定；需要变更时先按原状态 Remove，再修改并 Add。
     /// </para>
     /// <para>
     /// 内部列表来自 <see cref="ListPool{T}"/>，字典来自 <see cref="DictionaryPool{TKey,TValue}"/>，
     /// Clear/Dispose 会正确归还；null 键不受支持（抛 <see cref="ArgumentNullException"/>）。
+    /// 数据项仅以引用或值保存在列表中，清空与释放不会调用数据项的 Dispose。
     /// </para>
     /// <para>
     /// 本类型非线程安全，且不提供嵌套操作保护：键选择器是用户委托，若选择器内 Dispose 索引，
@@ -190,6 +191,7 @@ namespace YLFramework.Tables
             _index = null;
         }
 
+        /// <summary>拒绝访问已归还内部字典的索引，防止继续使用池中可能被他人借走的容器。</summary>
         private void ThrowIfDisposed()
         {
             if (_isDisposed)
@@ -198,6 +200,7 @@ namespace YLFramework.Tables
             }
         }
 
+        /// <summary>在访问字典前拒绝 null 键，为键选择器或查询参数提供统一错误上下文。</summary>
         private static void ThrowIfKeyNull(TKey key)
         {
             // Dictionary 对 null 键会抛 ArgumentNullException，这里提前给出更明确的上下文；

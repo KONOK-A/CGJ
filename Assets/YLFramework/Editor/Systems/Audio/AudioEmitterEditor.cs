@@ -6,12 +6,14 @@ using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>编辑 AudioEmitter 的素材候选和播放配置，保留隐藏字段并显示逐对象诊断。</summary>
     [CustomEditor(typeof(AudioEmitter)), CanEditMultipleObjects]
     public sealed class AudioEmitterEditor : UnityEditor.Editor
     {
         private bool _showAdvanced;
         private ReorderableList _weightedClips;
 
+        /// <summary>配置加权列表的绘制和增删回调，多选时禁用拖动以保护不同长度的列表。</summary>
         private void OnEnable()
         {
             _weightedClips = new ReorderableList(serializedObject, serializedObject.FindProperty("weightedClips"), targets.Length == 1, true, true, true);
@@ -36,6 +38,7 @@ namespace YLFramework.Editor.Audio
             };
         }
 
+        /// <summary>绘制基础与高级配置，通过序列化提交保留 Undo 和 Prefab Override，再只读检查各对象。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -115,6 +118,8 @@ namespace YLFramework.Editor.Audio
             }
         }
 
+        /// <summary>检查音效配置、可选 Clip 和空间目标，不随机选曲、播放或自动修复字段。</summary>
+        /// <param name="serialized">单个 AudioEmitter 的序列化视图。</param>
         private static void DrawWarnings(SerializedObject serialized)
         {
             AudioInspectorUtility.RouteWarnings(serialized);

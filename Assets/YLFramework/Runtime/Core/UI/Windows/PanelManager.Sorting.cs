@@ -7,6 +7,7 @@ namespace YLFramework.Core
     public partial class PanelManager
     {
         private static readonly Unity.Profiling.ProfilerMarker _reconcileProfile = new Unity.Profiling.ProfilerMarker("YL.UI.Reconcile");
+        /// <summary>按根生成顺序预案并检查层与排序空间；可代入拟修改值，但不写回面板状态。</summary>
         private List<KeyValuePair<PanelState, int>> BuildOrders(Panel changed = null, PanelConfig? settings = null, long? accepted = null)
         {
             var list = new List<PanelState>();
@@ -36,6 +37,7 @@ namespace YLFramework.Core
                     root = state.Root;
                     order = root.Canvas.sortingOrder;
                 }
+                // 每个模态预留前一格给遮罩，不能用业务 Priority 直接占用 Canvas 顺序空间。
                 order += Settings(state).modal ? 2 : 1;
                 if (order < short.MinValue || order > short.MaxValue)
                 {
@@ -47,6 +49,7 @@ namespace YLFramework.Core
             return orders;
         }
 
+        /// <summary>在打开或重开前检查目标层与所需排序空间，不预先创建面板或遮罩。</summary>
         private void ValidateOpen(UIRootContext root, PanelConfig settings, Panel existing = null)
         {
             settings.Validate();
@@ -72,6 +75,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>为初始化中的精确会话登记输入与排序状态，并让首次排序通知参与打开失败处理。</summary>
         internal static void Prepare(Panel panel)
         {
             var manager = Instance;
@@ -102,6 +106,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>检查显示命令的调用阶段并取得当前会话记录；结束会话不创建协调器。</summary>
         private static bool TryDisplay(Panel panel, out PanelManager manager, out PanelState state)
         {
             panel.EnsureDisplayAllowed();
@@ -109,6 +114,7 @@ namespace YLFramework.Core
             state = null;
             return manager != null && manager._states.TryGetValue(panel, out state) && manager.IsCurrent(state);
         }
+        /// <summary>预检排序后修改显示意图，不通过启停 GameObject 来结束或重开 View 事件。</summary>
         internal static void SetVisible(Panel panel, bool value)
         {
             if (!TryDisplay(panel, out var manager, out var state))
@@ -120,6 +126,7 @@ namespace YLFramework.Core
             state.WantsVisible = value;
             manager.Reconcile(mutationTarget: panel);
         }
+        /// <summary>刷新平局序号以在原配置分组内置顶，预检失败时不消耗新序号。</summary>
         internal static void BringToFront(Panel panel)
         {
             if (!TryDisplay(panel, out var manager, out var state))
@@ -133,6 +140,7 @@ namespace YLFramework.Core
             state.Sequence = next;
             manager.Reconcile(mutationTarget: panel);
         }
+        /// <summary>校验五字段显示覆盖，预检通过后提交配置与可能的切层，不执行打开数据钩子。</summary>
         internal static void UpdateDisplay(Panel panel, PanelOverrides changes)
         {
             panel.EnsureDisplayAllowed();
@@ -151,6 +159,7 @@ namespace YLFramework.Core
 
             manager.Reconcile(mutationTarget: panel);
         }
+        /// <summary>必要时先重挂层容器，再向仍匹配的原会话提交配置、显隐意图与序号。</summary>
         private bool CommitDisplay(PanelState state, PanelConfig settings, bool visible, long? sequence)
         {
             if (!IsCurrent(state))
@@ -177,6 +186,7 @@ namespace YLFramework.Core
             return true;
         }
 
+        /// <summary>从会话快照派生排序、绘制、遮罩和输入，再通知变化；通知前复核身份以避开旧结果。</summary>
         private void Reconcile(Panel preparing = null, Panel mutationTarget = null)
         {
             using var profile = _reconcileProfile.Auto();
@@ -338,6 +348,7 @@ namespace YLFramework.Core
                 }
             }
         }
+        /// <summary>View 开放事件时同步 Panel 状态，普通 View 不参与 UI 协调。</summary>
         internal static void ActivateView(View view)
         {
             if (view is Panel panel)
@@ -345,6 +356,7 @@ namespace YLFramework.Core
                 _instance?.Reconcile(mutationTarget: panel);
             }
         }
+        /// <summary>View 暂停事件时重新评估 Panel 可用性，不据此直接删除会话。</summary>
         internal static void DeactivateView(View view)
         {
             if (view is Panel panel)

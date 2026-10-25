@@ -8,16 +8,17 @@ namespace YLFramework.Save
     /// 支持与 <see cref="Vector3"/> / <see cref="Vector3Int"/> 的隐式互转。
     /// </summary>
     /// <remarks>
-    /// 与 <see cref="Vector3Int"/> 互转时按 float 存储整数分量；转向 <see cref="Vector3Int"/> 使用 <c>(int)</c> 截断（向零取整），非整数分量会丢失小数。
+    /// 从 <see cref="Vector3Int"/> 转入时按 float 存储分量，大整数可能损失精度；转回整数使用 <c>(int)</c>
+    /// 向零截断，非整数分量会丢失小数，不做四舍五入或范围保护。
     /// </remarks>
     [Serializable]
     public class SerializedVector3
     {
-        /// <summary>X / Y / Z 分量。</summary>
+        /// <summary>X 轴分量。</summary>
         public float x;
-        /// <summary>X / Y / Z 分量。</summary>
+        /// <summary>Y 轴分量。</summary>
         public float y;
-        /// <summary>X / Y / Z 分量。</summary>
+        /// <summary>Z 轴分量。</summary>
         public float z;
 
         /// <summary>
@@ -42,24 +43,28 @@ namespace YLFramework.Save
         }
 
         /// <summary>从 <see cref="Vector3"/> 隐式转换（逐分量复制）。</summary>
+        /// <param name="vector3">要复制分量的 Unity 向量。</param>
         public static implicit operator SerializedVector3(Vector3 vector3)
         {
             return new SerializedVector3(vector3.x, vector3.y, vector3.z);
         }
 
         /// <summary>隐式转换回 <see cref="Vector3"/>（逐分量复制）。</summary>
+        /// <param name="vector3">保存三维分量的序列化对象，不能为 null。</param>
         public static implicit operator Vector3(SerializedVector3 vector3)
         {
             return new Vector3(vector3.x, vector3.y, vector3.z);
         }
 
-        /// <summary>从 <see cref="Vector3Int"/> 隐式转换（整数分量按 float 存储，值不变）。</summary>
+        /// <summary>从 <see cref="Vector3Int"/> 隐式转换，各整数分量转为 float 存储。</summary>
+        /// <param name="vector3">源整数向量，大整数转入时可能舍入。</param>
         public static implicit operator SerializedVector3(Vector3Int vector3)
         {
             return new SerializedVector3(vector3.x, vector3.y, vector3.z);
         }
 
         /// <summary>隐式转换为 <see cref="Vector3Int"/>（<c>(int)</c> 截断取整，非整数分量丢失小数）。</summary>
+        /// <param name="vector3">保存三维分量的序列化对象，不能为 null。</param>
         public static implicit operator Vector3Int(SerializedVector3 vector3)
         {
             return new Vector3Int((int)vector3.x, (int)vector3.y, (int)vector3.z);
@@ -71,14 +76,15 @@ namespace YLFramework.Save
     /// 支持与 <see cref="Vector2"/> / <see cref="Vector2Int"/> 的隐式互转。
     /// </summary>
     /// <remarks>
-    /// 与 <see cref="Vector2Int"/> 互转时按 float 存储整数分量；转向 <see cref="Vector2Int"/> 使用 <c>(int)</c> 截断（向零取整），非整数分量会丢失小数。
+    /// 从 <see cref="Vector2Int"/> 转入时按 float 存储分量，大整数可能损失精度；转回整数使用 <c>(int)</c>
+    /// 向零截断，非整数分量会丢失小数，不做四舍五入或范围保护。
     /// </remarks>
     [Serializable]
     public struct SerializedVector2
     {
-        /// <summary>X / Y 分量。</summary>
+        /// <summary>X 轴分量。</summary>
         public float x;
-        /// <summary>X / Y 分量。</summary>
+        /// <summary>Y 轴分量。</summary>
         public float y;
 
         /// <summary>
@@ -101,24 +107,28 @@ namespace YLFramework.Save
         }
 
         /// <summary>从 <see cref="Vector2"/> 隐式转换（逐分量复制）。</summary>
+        /// <param name="vector2">要复制分量的 Unity 向量。</param>
         public static implicit operator SerializedVector2(Vector2 vector2)
         {
             return new SerializedVector2(vector2.x, vector2.y);
         }
 
         /// <summary>隐式转换回 <see cref="Vector2"/>（逐分量复制）。</summary>
+        /// <param name="vector2">保存二维分量的序列化值。</param>
         public static implicit operator Vector2(SerializedVector2 vector2)
         {
             return new Vector2(vector2.x, vector2.y);
         }
 
-        /// <summary>从 <see cref="Vector2Int"/> 隐式转换（整数分量按 float 存储，值不变）。</summary>
+        /// <summary>从 <see cref="Vector2Int"/> 隐式转换，各整数分量转为 float 存储。</summary>
+        /// <param name="vector2">源整数向量，大整数转入时可能舍入。</param>
         public static implicit operator SerializedVector2(Vector2Int vector2)
         {
             return new SerializedVector2(vector2.x, vector2.y);
         }
 
         /// <summary>隐式转换为 <see cref="Vector2Int"/>（<c>(int)</c> 截断取整，非整数分量丢失小数）。</summary>
+        /// <param name="vector2">保存二维分量的序列化值。</param>
         public static implicit operator Vector2Int(SerializedVector2 vector2)
         {
             return new Vector2Int((int)vector2.x, (int)vector2.y);
@@ -160,7 +170,7 @@ namespace YLFramework.Save
         /// 注意：方法名中的 S 表示“序列化替身”，此处替身类型为 <see cref="SerializedVector3"/>（而非不存在的 SerializedVector3Int）。
         /// </summary>
         /// <param name="v3">源向量。</param>
-        /// <returns>等值的 <see cref="SerializedVector3"/>。</returns>
+        /// <returns>逐分量转为 float 后的 <see cref="SerializedVector3"/>，大整数可能损失精度。</returns>
         public static SerializedVector3 ConvertToSVector3Int(this Vector3Int v3)
         {
             return new SerializedVector3(v3.x, v3.y, v3.z);
@@ -195,7 +205,7 @@ namespace YLFramework.Save
 
         /// <summary>将 <see cref="Vector2Int"/> 转换为 <see cref="SerializedVector2"/>。</summary>
         /// <param name="v2">源向量。</param>
-        /// <returns>等值的 <see cref="SerializedVector2"/>。</returns>
+        /// <returns>逐分量转为 float 后的 <see cref="SerializedVector2"/>，大整数可能损失精度。</returns>
         public static SerializedVector2 ConvertToSVector2(this Vector2Int v2)
         {
             return new SerializedVector2(v2.x, v2.y);

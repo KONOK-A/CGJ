@@ -9,9 +9,13 @@ using UnityEngine;
 namespace YLFramework.Logging
 {
     /// <summary>
-    /// 同步过滤/转发/事件/文件会话，不自行安装Unity handler。
+    /// 同步过滤、转发、事件与文件会话，不自行安装 Unity 日志处理器。
     /// 回调在原日志线程顺序执行，不可等待另一条会记录日志的线程；嵌套日志丢弃并计数。
     /// </summary>
+    /// <remarks>
+    /// 本类不按编译符号裁剪输出，也不改 Unity 的日志与调用栈开关，只处理实际到达处理器的日志。
+    /// 普通日志不补采调用栈；异常文本使用 Exception.ToString，原异常及上下文继续传给目标处理器。
+    /// </remarks>
     public sealed class LoggerSession : ILogHandler, IDisposable
     {
         [ThreadStatic] private static HashSet<LoggerSession> _activeSessions;
@@ -29,6 +33,9 @@ namespace YLFramework.Logging
         private long _recursiveCount;
         private string _logFilePath;
 
+        /// <summary>借用目标处理器并复制过滤配置，尚不创建输出目录或文件。</summary>
+        /// <param name="destination">接收通过控制台过滤日志的目标处理器，不能为 null；会话不负责释放它。</param>
+        /// <param name="options">待复制的配置，不能为 null；开启文件输出时必须提供非空白目录。</param>
         public LoggerSession(ILogHandler destination, LoggerOptions options)
         {
             _destination = destination ?? throw new ArgumentNullException(nameof(destination));
@@ -48,6 +55,7 @@ namespace YLFramework.Logging
             _directory = options.Directory;
         }
 
+        /// <summary>本会话成功创建的日志文件路径；首次创建前为 null，关闭后仍保留该路径。</summary>
         public string LogFilePath
         {
             get
@@ -58,6 +66,7 @@ namespace YLFramework.Logging
                 }
             }
         }
+        /// <summary>最近一次被捕获的格式、转发、文件或订阅错误；后续成功不会自动清空它。</summary>
         public Exception LastError
         {
             get
@@ -68,7 +77,9 @@ namespace YLFramework.Logging
                 }
             }
         }
+        /// <summary>同一线程重入本会话而被丢弃的日志总数，包括格式化及回调产生的嵌套日志。</summary>
         public long SuppressedRecursiveCount => Interlocked.Read(ref _recursiveCount);
+        /// <summary>是否已经关闭文件与事件；关闭后仍可透明转发被其他处理器保留的调用。</summary>
         public bool IsDisposed
         {
             get
@@ -79,6 +90,8 @@ namespace YLFramework.Logging
                 }
             }
         }
+        /// <summary>同步报告类型与格式化文本，不受控制台或文件过滤限制；订阅异常逐个记录，不阻断后续订阅。</summary>
+        /// <remarks>回调持有会话锁并运行在日志原线程；关闭时清空订阅，关闭后新增订阅抛出异常。</remarks>
         public event Action<LogType, string> OnLogEvent
         {
             add
@@ -101,6 +114,7 @@ namespace YLFramework.Logging
             }
         }
 
+        /// <summary>把五类日志的过滤开关复制为固定数组，避免输出期间读取外部可变字典。</summary>
         private static bool[] Snapshot(Dictionary<LogType, bool> filter)
         {
             var result = new bool[5];
@@ -112,6 +126,9 @@ namespace YLFramework.Logging
             return result;
         }
 
+        /// <summary>按异常类型分发原异常，文本取其 ToString 结果，保留目标处理器的异常处理入口。</summary>
+        /// <param name="exception">要记录的异常，不能为 null。</param>
+        /// <param name="context">传给目标处理器的 Unity 上下文；允许为 null，不写入文件或事件参数。</param>
         public void LogException(Exception exception, UnityEngine.Object context)
         {
             if (exception == null)
@@ -122,13 +139,20 @@ namespace YLFramework.Logging
             Dispatch(LogType.Exception, context, null, null, exception);
         }
 
+        /// <summary>按当前区域格式化日志，再依次尝试目标转发、文件输出与事件通知。</summary>
+        /// <param name="logType">日志类别；未知类别不进入类型过滤输出，但仍可通知事件。</param>
+        /// <param name="context">传给目标处理器的 Unity 上下文；允许为 null。</param>
+        /// <param name="format">复合格式字符串；null 按空字符串处理，格式错误记录到 LastError。</param>
+        /// <param name="args">格式化参数；null 按空数组处理。</param>
         public void LogFormat(LogType logType, UnityEngine.Object context, string format, params object[] args)
         {
             Dispatch(logType, context, format, args, null);
         }
 
+        /// <summary>以线程级重入保护和会话锁串行处理日志，隔离目标处理器及各事件订阅的异常。</summary>
         private void Dispatch(LogType type, UnityEngine.Object context, string format, object[] args, Exception exception)
         {
+            // 格式化可能执行用户 ToString，必须在生成消息前阻止同线程递归。
             var active = _activeSessions ??= new HashSet<LoggerSession>();
             if (!active.Add(this))
             {
@@ -151,7 +175,7 @@ namespace YLFramework.Logging
                     }
                     var index = (int)type;
                     var knownType = index >= 0 && index < _console.Length;
-                    // 后续handler可能仍串联本对象。关闭后只透明转发，不重开writer/事件。
+                    // 后续处理器可能仍串联本对象。关闭后只透明转发，不重开文件或事件。
                     if (_isDisposed || knownType && _console[index])
                     {
                         try
@@ -210,6 +234,7 @@ namespace YLFramework.Logging
             }
         }
 
+        /// <summary>延迟独占创建 UTF-8 无 BOM 日志文件并逐条刷新；已捕获的文件失败会关闭本会话后续写盘。</summary>
         private void WriteToFile(LogType type, string message)
         {
             try
@@ -232,6 +257,7 @@ namespace YLFramework.Logging
             }
         }
 
+        /// <summary>清空并释放本会话文件写入器，将可捕获的关闭错误留在 LastError。</summary>
         private void ReleaseWriter()
         {
             var writer = _writer;
@@ -246,6 +272,7 @@ namespace YLFramework.Logging
             }
         }
 
+        /// <summary>幂等关闭文件并清空事件，不释放借用的目标处理器，也不修改 Unity 当前日志处理器。</summary>
         public void Dispose()
         {
             lock (_gate)

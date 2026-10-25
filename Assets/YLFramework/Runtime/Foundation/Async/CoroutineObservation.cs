@@ -19,6 +19,7 @@ namespace YLFramework.Async
         private Action _callback;
         private bool _isEnded;
 
+        /// <summary>保存本次观察的完成回调，等待协程由 Observe 另行启动。</summary>
         private CoroutineObservation(Action callback) => _callback = callback;
 
         /// <summary>
@@ -30,7 +31,9 @@ namespace YLFramework.Async
             get; private set;
         }
 
-        /// <summary>通过 CoroutineStarter 的原 owner 路由启动观察；参数无效时不创建宿主。</summary>
+        /// <summary>通过 CoroutineStarter 启动独立等待协程，不取得 producer 的所有权；参数无效时不创建宿主。</summary>
+        /// <param name="producer">借用的协程句柄，不能为 null。</param>
+        /// <param name="callback">原生等待结束后同步调用的回调，不能为 null；异常不在观察器内隔离。</param>
         public static CoroutineObservation Observe(Coroutine producer, Action callback)
         {
             if (producer == null)
@@ -53,6 +56,7 @@ namespace YLFramework.Async
             }
             else if (observation._isEnded)
             {
+                // 首步可能在 Start 返回前结束观察，不能再把返回的句柄写回已结束的观察器。
                 CoroutineStarter.Stop(wrapper);
             }
             else
@@ -63,6 +67,7 @@ namespace YLFramework.Async
             return observation;
         }
 
+        /// <summary>等待借用协程的原生等待结束，先提交观察终止并清空引用，再同步调用完成回调。</summary>
         private IEnumerator Wait(Coroutine producer)
         {
             yield return producer;

@@ -27,7 +27,7 @@ namespace YLFramework.Extensions
 
 
         /// <summary>
-        /// 去掉两端空格后再判断是否为 null 或空串。
+        /// 为 null 时返回 true，否则用 Trim 去掉两端空白字符后判断是否为空串，不修改原字符串。
         /// </summary>
         public static bool IsTrimNullOrEmpty(this string selfStr)
         {
@@ -35,7 +35,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 去掉两端空格后再判断是否为非 null 且非空串。
+        /// 为 null 时返回 false，否则用 Trim 去掉两端空白字符后判断是否非空，不修改原字符串。
         /// </summary>
         public static bool IsTrimNotNullAndEmpty(this string selfStr)
         {
@@ -120,7 +120,7 @@ namespace YLFramework.Extensions
         }
 
         /// <summary>
-        /// 是否包含空格字符。
+        /// 是否包含普通空格字符 U+0020，不匹配制表符、换行等其他空白；null 输入会抛异常。
         /// </summary>
         public static bool HasSpace(this string input)
         {
@@ -129,6 +129,7 @@ namespace YLFramework.Extensions
 
         /// <summary>
         /// 移除类名中的非法字符：/ @ ! &amp; - ( ) # 会被删除，空格替换为 _，连续下划线做三轮折叠（极长连续下划线可能残留多个）。
+        /// 仅执行这些固定替换，不保证结果是合法的 C# 标识符。
         /// </summary>
         public static string RemoveInvalidCharsFromClassName(this string className)
         {

@@ -105,7 +105,7 @@ namespace YLFramework.Editor.Help
         private bool _revealInNav;
         private float _navViewportHeight;
 
-        // “返回”使用的阅读状态快照：跳转前把页签、选中项、搜索、折叠与滚动位置整体压栈。
+        /// <summary>返回导航使用的位置快照，保存页签、选中项、全局搜索、目录折叠与滚动位置。</summary>
         private struct Navigation
         {
             internal int Tab;
@@ -119,6 +119,7 @@ namespace YLFramework.Editor.Help
             internal Vector2 Nav;
         }
 
+        /// <summary>从公共菜单打开窗口，保留当前模块选择。</summary>
         [MenuItem(MenuPath)]
         private static void OpenMenu() => Open();
 
@@ -138,6 +139,7 @@ namespace YLFramework.Editor.Help
             return window;
         }
 
+        /// <summary>恢复窗口入口状态并订阅注册变化，将模块内容留到加载流程重建。</summary>
         private void OnEnable()
         {
             titleContent = new GUIContent("项目帮助");
@@ -147,6 +149,7 @@ namespace YLFramework.Editor.Help
             _needsReload = true;
         }
 
+        /// <summary>将模块快照标记为过期并请求重绘，不在注册通知栈中建立内容。</summary>
         private void RegistryChanged()
         {
             _needsReload = true;
@@ -168,6 +171,7 @@ namespace YLFramework.Editor.Help
             Repaint();
         }
 
+        /// <summary>清除模块相关的搜索、选中项、展开状态、滚动缓存和返回历史。</summary>
         private void ResetReading()
         {
             search = guideId = apiId = aboutId = "";
@@ -194,6 +198,7 @@ namespace YLFramework.Editor.Help
             _highlights.Clear();
         }
 
+        /// <summary>按注册快照惰性加载选中模块及 API 索引；同一注册项复用内容，新注册项清除旧缓存。</summary>
         private void LoadModule()
         {
             if (!_needsReload)
@@ -247,6 +252,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>退订注册变化，销毁窗口自有字体与纹理，并丢弃依赖它们的样式和高亮缓存。</summary>
         private void OnDisable()
         {
             HelpRegistry.Changed -= RegistryChanged;
@@ -285,6 +291,7 @@ namespace YLFramework.Editor.Help
             _highlights.Clear();
         }
 
+        /// <summary>在复制提示有效期间驱动重绘，到期后清除按钮反馈。</summary>
         private void OnInspectorUpdate()
         {
             if (_copiedKey == null)
@@ -300,6 +307,7 @@ namespace YLFramework.Editor.Help
             Repaint();
         }
 
+        /// <summary>在样式缺失或皮肤变化时重建窗口样式副本及自有背景纹理。</summary>
         private void EnsureStyles()
         {
             var dark = EditorGUIUtility.isProSkin;
@@ -516,6 +524,7 @@ namespace YLFramework.Editor.Help
             _highlights.Clear();
         }
 
+        /// <summary>准备窗口数据并组织标题、目录与阅读区域，按当前 IMGUI 事件处理交互。</summary>
         private void OnGUI()
         {
             EnsureStyles();
@@ -553,6 +562,7 @@ namespace YLFramework.Editor.Help
         /// <summary>限制侧栏宽度：下限 132；窗口够宽时为正文区保留至少 240 像素。</summary>
         internal static float ClampSidebar(float width, float windowWidth) => Mathf.Clamp(width, 132, Mathf.Max(132, windowWidth - 240));
 
+        /// <summary>绘制模块选择、返回和全局搜索入口；条件变化时终止旧布局事件以待重绘。</summary>
         private void DrawHeader(HelpHeaderLayout layout)
         {
             EditorGUI.DrawRect(new Rect(0, 0, position.width, layout.BodyY), _palette.HeaderBg);
@@ -606,6 +616,7 @@ namespace YLFramework.Editor.Help
             GUI.Label(layout.Scope, new GUIContent(scope + " 空格分词同时匹配。"), _small);
         }
 
+        /// <summary>绘制指南、API 与关于页签，通过统一导航记录切换前的位置。</summary>
         private void DrawTabs(HelpHeaderLayout layout)
         {
             EditorGUI.DrawRect(layout.Tabs, _palette.TabBarBg);
@@ -640,6 +651,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>按过滤键更新页面、类型与成员结果，并修正已被过滤掉的当前选中项。</summary>
         private void UpdateResults()
         {
             // 只在模块、页签或搜索词变化时重建过滤结果，避免每次 OnGUI 都扫描全部条目。
@@ -700,6 +712,7 @@ namespace YLFramework.Editor.Help
                 .Select(item => item.page).ToArray();
         }
 
+        /// <summary>复用字段缓冲计算单页得分，避免把上一页的搜索字段带入当前评分。</summary>
         private static int PageScore(HelpPage page, string[] terms, List<HelpSearchField> fields)
         {
             fields.Clear();
@@ -717,6 +730,7 @@ namespace YLFramework.Editor.Help
                 .Select(item => item.type).ToArray();
         }
 
+        /// <summary>复用字段缓冲计算类型与其成员的联合搜索得分。</summary>
         private static int TypeScore(HelpApiType type, string[] terms, List<HelpSearchField> fields)
         {
             fields.Clear();
@@ -772,6 +786,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>按当前页签分组展示过滤结果，搜索 API 时追加可跳转的成员行。</summary>
         private void DrawNavigation(Rect rect)
         {
             if (rect.width < 24 || rect.height < 24)
@@ -863,6 +878,7 @@ namespace YLFramework.Editor.Help
             GUILayout.EndArea();
         }
 
+        /// <summary>绘制目录或 API 分组标题，维护当前搜索上下文下的折叠状态并返回是否展开。</summary>
         private bool DrawGroup(string key, string title, int count, GUIStyle style)
         {
             // 搜索期间使用独立的折叠集合：搜索结果中的展开/折叠不会覆盖用户手动设置的组状态。
@@ -921,6 +937,7 @@ namespace YLFramework.Editor.Help
             return open;
         }
 
+        /// <summary>绘制可点击目录行，处理选中定位；自定义点击用于成员跳转，否则导航到页面或类型。</summary>
         private void DrawNavItem(string id, string title, string summary, string selected, int stripe,
             string tag = null, float indent = 0f, Action click = null)
         {
@@ -1005,6 +1022,7 @@ namespace YLFramework.Editor.Help
             GUIUtility.ExitGUI();
         }
 
+        /// <summary>以 hotControl 持有一次分隔条拖动，在正文宽度约束内更新侧栏宽度。</summary>
         private void DrawSplitter(Rect rect, float windowWidth)
         {
             var hovered = rect.Contains(Event.current.mousePosition);
@@ -1031,6 +1049,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>在阅读滚动区展示当前页面或类型，并在可用宽度变化时失效高亮几何。</summary>
         private void DrawReader(Rect rect)
         {
             if (rect.width < 48 || rect.height < 24)
@@ -1093,6 +1112,7 @@ namespace YLFramework.Editor.Help
             GUILayout.EndArea();
         }
 
+        /// <summary>分别提示尚无模块、缺少关于页或当前搜索无匹配，不编造替代内容。</summary>
         private void DrawEmpty()
         {
             if (_module == null)
@@ -1110,6 +1130,7 @@ namespace YLFramework.Editor.Help
             DrawText("可清空搜索，或减少关键词。搜索按名称、说明与正文加权，空格分词且所有词都需要匹配。", _body, false);
         }
 
+        /// <summary>按内容块顺序绘制静态页面与精选 API；链接只在用户点击后打开。</summary>
         private void DrawPage(HelpPage page)
         {
             DrawText(tab == 0 ? "使用指南  ›  " + page.Group : "关于", _small);
@@ -1168,6 +1189,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>组织类型声明、真实说明、继承入口和成员浏览器，切换类型时重置局部筛选。</summary>
         private void DrawType(HelpApiType type)
         {
             // 切换类型时只重置该类型浏览器的筛选状态；展开状态按类型/成员标识保留。
@@ -1288,6 +1310,7 @@ namespace YLFramework.Editor.Help
             return open;
         }
 
+        /// <summary>展示基类与接口；只有已进入当前模块索引的类型才提供内部跳转。</summary>
         private void DrawInheritance(HelpApiType type)
         {
             // 排除 object、ValueType 和 Enum：它们是类、结构体与枚举的隐式基类型，列出只会干扰阅读。
@@ -1315,6 +1338,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>在确有说明时展示可折叠的类型参数与备注区，不从声明推断文档。</summary>
         private void DrawTypeNotes(HelpApiType type)
         {
             var parameters = type.Help.TypeParameters;
@@ -1347,6 +1371,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>将类型索引中已关联的页面列为指南导航入口。</summary>
         private void DrawRelatedGuides(HelpApiType type)
         {
             if (type.RelatedPages.Length == 0 || !DrawSection(type.Id + ":related", "相关指南", type.RelatedPages.Length))
@@ -1363,6 +1388,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>绘制当前类型的局部搜索与分类，将筛选后的同名成员归为重载组。</summary>
         private void DrawMemberBrowser(HelpApiType type)
         {
             GUILayout.Space(18);
@@ -1652,6 +1678,7 @@ namespace YLFramework.Editor.Help
             }
         }
 
+        /// <summary>展示可复制声明及实际提供的参数、返回值和备注；缺失说明只提示缺失。</summary>
         private void DrawMemberDetail(HelpApiType type, HelpApiMember entry, float inner)
         {
             var help = entry.Help;
@@ -1761,8 +1788,10 @@ namespace YLFramework.Editor.Help
             GUILayout.Space(2);
         }
 
+        /// <summary>为构造函数显示所属类型名，其他成员保留元数据名称。</summary>
         private static string DisplayName(HelpApiType type, HelpApiMember entry) => entry.Name == ".ctor" ? type.Name : entry.Name;
 
+        /// <summary>仅从编译元数据生成成员标题旁的参数或类型简表，不读取运行时成员值。</summary>
         private string DescribeBrief(MemberInfo member)
         {
             if (member is ConstructorInfo constructor)
@@ -1799,6 +1828,7 @@ namespace YLFramework.Editor.Help
             return "";
         }
 
+        /// <summary>为成员标题列出参数修饰符、类型和名称，省略默认值以压缩展示。</summary>
         private string BriefParameters(MethodBase method)
         {
             var extension = method.IsDefined(typeof(ExtensionAttribute), false);
@@ -1809,6 +1839,7 @@ namespace YLFramework.Editor.Help
                 HelpApiFormatter.FormatType(parameter.ParameterType, _shortNamespaces) + " " + parameter.Name));
         }
 
+        /// <summary>按真实参数名称取得带引用修饰符的显示类型；文档名称无对应声明时留空。</summary>
         private string ParameterType(MemberInfo member, string name)
         {
             var parameters = member is ConstructorInfo constructor ? constructor.GetParameters() :
@@ -1824,6 +1855,7 @@ namespace YLFramework.Editor.Help
             return prefix + HelpApiFormatter.FormatType(parameter.ParameterType, _shortNamespaces);
         }
 
+        /// <summary>按成员元数据生成静态性、访问级别和常量等标签，并标记全局查询中的成员命中。</summary>
         private string[] MemberBadges(HelpApiType type, HelpApiMember entry)
         {
             var member = entry.Member;
@@ -1865,9 +1897,11 @@ namespace YLFramework.Editor.Help
             return badges.ToArray();
         }
 
+        /// <summary>只为受保护访问级别生成标签，公开成员不额外占用标签空间。</summary>
         private static string AccessBadge(bool isPublic, bool isFamily, bool isFamilyOrAssembly) => isPublic ? "" :
             isFamilyOrAssembly ? "protected internal" : isFamily ? "protected" : "";
 
+        /// <summary>优先按公开访问器确定属性标签；没有公开访问器时使用首个访问器的级别。</summary>
         private static string PropertyAccess(PropertyInfo property)
         {
             var accessors = property.GetAccessors(true);
@@ -1875,6 +1909,7 @@ namespace YLFramework.Editor.Help
             return primary == null ? "" : AccessBadge(primary.IsPublic, primary.IsFamily, primary.IsFamilyOrAssembly);
         }
 
+        /// <summary>从成员标题行右侧排布标签并返回占用宽度，供名称区域避让。</summary>
         private float DrawBadges(Rect row, float y, string[] badges)
         {
             if (badges.Length == 0)
@@ -1898,6 +1933,7 @@ namespace YLFramework.Editor.Help
             return total;
         }
 
+        /// <summary>绘制短文本链接按钮并返回点击结果，不自行执行导航。</summary>
         private bool DrawSmallLink(string label)
         {
             var size = _smallLink.CalcSize(new GUIContent(label));
@@ -1906,6 +1942,7 @@ namespace YLFramework.Editor.Help
                 new GUIContent(label, label), _smallLink);
         }
 
+        /// <summary>按当前阅读宽度绘制文本，供页面和类型正文共用。</summary>
         private void DrawText(string text, GUIStyle style, bool highlight = true) => DrawTextAt(text, style, _readingWidth, highlight);
 
         /// <summary>按给定宽度绘制可选择文本；正文自动换行且换行后对齐内容起点。</summary>
@@ -1921,12 +1958,14 @@ namespace YLFramework.Editor.Help
             DrawSelectable(rect, text, style, highlight);
         }
 
+        /// <summary>将全局搜索词同步给高亮缓存，并在目标文字下绘制匹配背景。</summary>
         private void DrawHighlight(Rect rect, string text, GUIStyle style)
         {
             _highlights.SetQuery(search);
             _highlights.Draw(rect, text, style, _isDarkTheme);
         }
 
+        /// <summary>在给定区域绘制可选择文本，可选在缩进后的文字区域叠加搜索高亮。</summary>
         private void DrawSelectable(Rect rect, string text, GUIStyle style, bool highlight = true)
         {
             if (highlight)
@@ -1937,6 +1976,7 @@ namespace YLFramework.Editor.Help
             EditorGUI.SelectableLabel(rect, text, style);
         }
 
+        /// <summary>按正文高度绘制带图标和边框的提示块，空内容不占用布局。</summary>
         private void DrawNotice(string text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -1957,6 +1997,7 @@ namespace YLFramework.Editor.Help
             GUILayout.Space(10);
         }
 
+        /// <summary>按阅读宽度绘制可换行链接并返回点击状态，具体打开或导航由调用方决定。</summary>
         private bool DrawLink(string label, string tooltip, bool highlight = true)
         {
             var height = Mathf.Max(22, _link.CalcHeight(new GUIContent(label), _readingWidth));
@@ -1969,6 +2010,7 @@ namespace YLFramework.Editor.Help
             return GUI.Button(rect, new GUIContent(label, tooltip), _link);
         }
 
+        /// <summary>绘制只读代码块及复制反馈，按稳定键保留各块独立的滚动位置。</summary>
         private void DrawCode(string key, string text)
         {
             var label = new GUIContent(text);
@@ -2007,9 +2049,9 @@ namespace YLFramework.Editor.Help
             GUILayout.Space(10);
         }
 
+        /// <summary>记录当前位置后切换页签或条目，可按链接语义清除全局搜索并回到正文顶部。</summary>
         private void Navigate(int tab, string id, bool clearSearch)
         {
-            // 跳转前保存完整阅读状态，返回时才能还原页签、搜索、折叠与滚动位置。
             _history.Push(new Navigation
             {
                 Tab = this.tab,
@@ -2054,6 +2096,7 @@ namespace YLFramework.Editor.Help
             GUIUtility.ExitGUI();
         }
 
+        /// <summary>恢复最近的导航位置快照；调用方须先确认历史栈非空。</summary>
         private void GoBack()
         {
             var previous = _history.Pop();
@@ -2076,6 +2119,7 @@ namespace YLFramework.Editor.Help
             GUIUtility.ExitGUI();
         }
 
+        /// <summary>在当前普通或搜索折叠集合中展开选中条目所在的目录组。</summary>
         private void RevealSelectedGroup()
         {
             var group = tab == 0 ? _visibleTopics.FirstOrDefault(topic => topic.Id == guideId)?.Group :

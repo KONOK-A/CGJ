@@ -15,30 +15,37 @@ namespace YLFramework.Editor.Resource
     /// <summary>一次明确版本的只读预检，不是写入权限或可跳过复验的凭证。</summary>
     public sealed class ResourceBuiltInPlan
     {
+        /// <summary>已明确绑定摘要的独立发布快照，执行部署时仍须重新打开验证。</summary>
         public ResourceLocalSnapshot Source
         {
             get;
         }
+        /// <summary>源完成记录中的项目配置 GUID，用于目标归属和恢复空间分区。</summary>
         public string ProjectGuid
         {
             get;
         }
+        /// <summary>预期的内置版本外壳绝对路径，不是 payload 目录。</summary>
         public string DirectoryPath
         {
             get;
         }
+        /// <summary>Assets 外专属部署恢复空间的绝对路径。</summary>
         public string WorkspacePath
         {
             get;
         }
+        /// <summary>待复制进 payload 的完整文件名集合，包含 Catalog 和完成记录。</summary>
         public IReadOnlyList<string> Files
         {
             get;
         }
+        /// <summary>预检时源文件集合的字节总量，不包含新建部署外壳的控制记录。</summary>
         public long PayloadBytes
         {
             get;
         }
+        /// <summary>预检时是否已有身份与文件完整匹配的目标版本，不是执行时免检许可。</summary>
         public bool IsRepeat
         {
             get;
@@ -51,6 +58,7 @@ namespace YLFramework.Editor.Resource
         {
             get; set;
         }
+        /// <summary>复制本次预检定位信息并统计明确源文件集。</summary>
         internal ResourceBuiltInPlan(ResourceLocalSnapshot source, string guid, string directory, string workspace, int depth, bool repeat)
         {
             Source = source;
@@ -62,14 +70,17 @@ namespace YLFramework.Editor.Resource
             Files = ResourceBuiltInDeployer.PayloadFiles(source.Document).ToList().AsReadOnly();
             PayloadBytes = Files.Sum(name => new FileInfo(Path.Combine(source.DirectoryPath, name)).Length);
         }
+        /// <summary>展示明确版本、目标和操作范围，不创建目录或执行部署。</summary>
         public override string ToString() => $"ProjectId={Source.Document.ProjectId} / Platform={Source.Document.Platform}\n" +
             $"Unity={Source.Document.UnityCompatibility} / App={Source.Document.AppContentCompatibilityId}\nCatalogDigest={Source.Document.CatalogDigest}\n" +
             $"来源={Source.DirectoryPath}\n目标={DirectoryPath}\n文件={Files.Count} / payload bytes={PayloadBytes} / 已完整部署={IsRepeat}\n" +
             $"操作空间={WorkspacePath}；仅新增不可变版本，不初始化或激活Runtime。";
     }
 
+    /// <summary>已确认的内置版本位置及复制结果，不表示 Runtime 已挂载或激活。</summary>
     public sealed class ResourceBuiltInDeployment
     {
+        /// <summary>完整部署版本的外壳绝对路径。</summary>
         public string DirectoryPath
         {
             get;
@@ -79,18 +90,22 @@ namespace YLFramework.Editor.Resource
         {
             get;
         }
+        /// <summary>通过正式内置入口重新打开验证的 payload 快照。</summary>
         public ResourceLocalSnapshot Snapshot
         {
             get;
         }
+        /// <summary>是否确认既有完整版本而未新增复制，恢复已安装版本时也为 true。</summary>
         public bool IsRepeat
         {
             get;
         }
+        /// <summary>本次复制的 payload 字节数，不包含部署控制记录，重复确认时为零。</summary>
         public long CopiedBytes
         {
             get;
         }
+        /// <summary>记录已确认的外壳、快照及运行时可用的相对定位。</summary>
         internal ResourceBuiltInDeployment(string directory, ResourceLocalSnapshot snapshot, bool repeat, long bytes)
         {
             DirectoryPath = directory;
@@ -109,6 +124,7 @@ namespace YLFramework.Editor.Resource
         private const string LockFile = "deploy.lock";
         private static readonly int _mainThread = Thread.CurrentThread.ManagedThreadId;
         private static bool _isDeploying;
+        /// <summary>自有内置交付的固定根位置；读取此路径不认领或创建目录。</summary>
         public static string ResourcesRoot => ResourceBuildMap.Absolute("Assets/StreamingAssets/YLFrameworkResources");
 
         /// <summary>纯值定位独立恢复空间；不预检版本、不解析journal、不创建目录/锁或恢复。</summary>
@@ -123,6 +139,7 @@ namespace YLFramework.Editor.Resource
             return WorkspaceFor(projectGuid, platform);
         }
 
+        /// <summary>单次部署日志还原的明确 Catalog、归属、尝试身份和最外层缺失安装节点。</summary>
         private sealed class Attempt
         {
             internal ResourceCatalogDocument Catalog;
@@ -201,6 +218,7 @@ namespace YLFramework.Editor.Resource
         /// <summary>预检会重新执行。取消仅在Directory.Move提交前生效；提交后故障须Recover确认，不能按异常假定未安装。</summary>
         public static ResourceBuiltInDeployment Deploy(ResourceBuiltInPlan plan, CancellationToken cancellation = default) => Execute(plan, cancellation, null);
 
+        /// <summary>锁内复验来源和目标，暂存完整外壳后仅搬入最外层缺失节点，故障保留日志供显式恢复。</summary>
         internal static ResourceBuiltInDeployment Execute(ResourceBuiltInPlan plan, CancellationToken cancellation, Action<string> checkpoint)
         {
             ValidateEditor();
@@ -330,6 +348,7 @@ namespace YLFramework.Editor.Resource
             return Recover(project.projectId, target.ToString(), AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project)));
         }
 
+        /// <summary>按完整项目与平台身份恢复登记尝试，确认已安装版本或清理私有暂存；不扫描猜测最新版本。</summary>
         public static ResourceBuiltInDeployment Recover(string projectId, string platform, string projectGuid)
         {
             ValidateEditor();
@@ -384,21 +403,27 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按稳定顺序列出交付文件、Catalog 与完成记录，不把签名元数据混入 payload。</summary>
         internal static IEnumerable<string> PayloadFiles(ResourceCatalogDocument catalog) => catalog.Bundles.Select(x => x.RelativeFile)
             .Concat(catalog.SupportFiles.Select(x => x.RelativeFile)).Concat(new[] { "resource-catalog.json", ".ylr-complete.json" }).OrderBy(x => x, StringComparer.Ordinal);
 
+        /// <summary>通过正式内置快照入口复验安装结果，再创建部署描述。</summary>
         private static ResourceBuiltInDeployment Result(string wrapper, ResourceCatalogDocument catalog, bool repeat, long copied) =>
             new(wrapper, ResourceLocalSnapshot.OpenBuiltIn(catalog.ProjectId, catalog.CatalogDigest, catalog.Platform, catalog.AppContentCompatibilityId), repeat, copied);
 
+        /// <summary>列出根、项目、平台到确切摘要版本的四层目标节点。</summary>
         private static string[] Paths(ResourceCatalogDocument catalog) => new[] { ResourcesRoot, Path.Combine(ResourcesRoot, catalog.ProjectId),
             Path.Combine(ResourcesRoot, catalog.ProjectId, catalog.Platform), Path.Combine(ResourcesRoot, catalog.ProjectId, catalog.Platform, catalog.CatalogDigest) };
         // 短路径只作定位；完整GUID/平台仍在owner中比较，任何token碰撞只能拒绝，不能认领。
         private static string WorkspaceFor(string guid, string platform) => ResourceBuildMap.Absolute("AssetBundles/YLBI_" +
             ResourceCatalogCodec.Digest(Encoding.UTF8.GetBytes(guid + "/" + platform)).Substring(0, 16));
+        /// <summary>为已确认祖先关系的路径计算相对后缀。</summary>
         private static string Relative(string path, string parent) => path == parent ? "" : path.Substring(parent.Length + 1);
+        /// <summary>忽略大小写判断路径是否等于或位于指定绝对根内。</summary>
         private static bool Inside(string path, string root) => path.Equals(root, StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>按部署层级生成包含完整工程归属的规范 owner 字节。</summary>
         private static byte[] Owner(string project = null, string platform = null, string guid = null) => ResourceCatalogCodec.CanonicalBytes(new JObject
         {
             ["Version"] = 1,
@@ -408,6 +433,7 @@ namespace YLFramework.Editor.Resource
             ["ProjectGuid"] = guid
         });
 
+        /// <summary>要求现有目录的规范 owner 与明确预期逐字节相同，不接管未知归属。</summary>
         private static void RequireOwner(string directory, byte[] expected)
         {
             var path = Path.Combine(directory, ResourceBuiltInLayout.OwnerFile);
@@ -417,6 +443,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>递归验证整个自有部署根的层级归属、目录 meta 和完整版本，拒绝未知内容。</summary>
         private static void ValidateRoot()
         {
             ResourceLocalSnapshot.RejectLinks(ResourcesRoot);
@@ -489,6 +516,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>若目录 meta 已生成则验证真实文件夹元数据形状，首次导入前允许缺失。</summary>
         private static void ValidateFolderMeta(string directory)
         {
             var meta = directory + ".meta";
@@ -511,6 +539,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>通过正式布局验证外壳与 payload，并逐字节核对明确归属的部署回执。</summary>
         private static void VerifyWrapper(string wrapper, ResourceCatalogDocument catalog, string guid)
         {
             ResourceBuiltInLayout.Open(wrapper, catalog.ProjectId, catalog.CatalogDigest, catalog.Platform, catalog.AppContentCompatibilityId);
@@ -520,6 +549,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>拒绝不安全项目名、不支持平台和超出当前文件 API 限制的目标路径。</summary>
         private static void ValidateIdentity(string project, string platform)
         {
             ResourceCatalogCodec.Id(project);
@@ -536,6 +566,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>要求目标本体及 meta 均未占用且不经过链接，避免覆盖或接管。</summary>
         private static void RequireAbsent(string path)
         {
             ResourceLocalSnapshot.RejectLinks(path);
@@ -546,6 +577,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>验证或新建专属恢复空间，已存在时不重新授予归属。</summary>
         private static void EnsureWorkspace(ResourceBuiltInPlan plan)
         {
             ValidateWorkspace(plan.WorkspacePath, plan.ProjectGuid, plan.Source.Document.ProjectId, plan.Source.Document.Platform, false);
@@ -558,6 +590,7 @@ namespace YLFramework.Editor.Resource
             WriteNew(Path.Combine(plan.WorkspacePath, ResourceBuiltInLayout.OwnerFile), Owner(plan.Source.Document.ProjectId, plan.Source.Document.Platform, plan.ProjectGuid));
         }
 
+        /// <summary>核对完整恢复空间归属、日志和已登记暂存闭包，未恢复尝试阻止下一次部署。</summary>
         private static void ValidateWorkspace(string workspace, string guid, string project, string platform, bool recovering)
         {
             ResourceBuildOperation.RejectLinks(workspace);
@@ -589,6 +622,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>严格读取 journal 或独立 next 记录并还原明确部署计划，冲突记录拒绝恢复写入。</summary>
         private static Attempt ReadAttempt(string workspace, string guid, string project, string platform)
         {
             var journal = Path.Combine(workspace, JournalFile);
@@ -628,6 +662,7 @@ namespace YLFramework.Editor.Resource
             return new Attempt { Catalog = document, Guid = guid, Token = token, Depth = (int)depth };
         }
 
+        /// <summary>序列化尝试身份、安装深度与完整 Catalog，供恢复时精确重建范围。</summary>
         private static byte[] Journal(Attempt attempt) => ResourceCatalogCodec.CanonicalBytes(new JObject
         {
             ["Version"] = 1,
@@ -638,6 +673,7 @@ namespace YLFramework.Editor.Resource
             ["Catalog"] = ResourceCatalogCodec.ParseObject(ResourceCatalogCodec.Write(attempt.Catalog))
         });
 
+        /// <summary>独占新建并刷新 next 记录后更名为 journal，不覆盖已有恢复记录。</summary>
         private static void WriteJournal(Attempt attempt)
         {
             var next = Path.Combine(attempt.Workspace, JournalFile + ".next");
@@ -645,6 +681,7 @@ namespace YLFramework.Editor.Resource
             File.Move(next, Path.Combine(attempt.Workspace, JournalFile));
         }
 
+        /// <summary>复验恢复空间并要求现场日志仍与本次尝试的完整规范字节一致。</summary>
         private static void RequireAttempt(Attempt attempt)
         {
             ValidateWorkspace(attempt.Workspace, attempt.Guid, attempt.Catalog.ProjectId, attempt.Catalog.Platform, true);
@@ -655,6 +692,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>展开私有暂存的完整文件集合，控制记录带确切字节，待复制 payload 以 null 标记。</summary>
         private static Dictionary<string, byte[]> StageFiles(Attempt attempt)
         {
             var paths = Paths(attempt.Catalog);
@@ -675,6 +713,7 @@ namespace YLFramework.Editor.Resource
             return expected;
         }
 
+        /// <summary>允许登记文件尚未写全，但拒绝暂存中的链接、未知文件及未知目录。</summary>
         private static void ValidatePartialStage(Attempt attempt, Dictionary<string, byte[]> expected)
         {
             ResourceBuildOperation.RejectLinks(attempt.Stage);
@@ -707,6 +746,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>确认暂存文件集完整且控制字节匹配，再完整验证外壳和 payload。</summary>
         private static void VerifyStage(Attempt attempt, Dictionary<string, byte[]> expected)
         {
             ValidatePartialStage(attempt, expected);
@@ -727,6 +767,7 @@ namespace YLFramework.Editor.Resource
             VerifyWrapper(attempt.Wrapper, attempt.Catalog, attempt.Guid);
         }
 
+        /// <summary>先验证部分暂存仅含登记范围，再删除其文件与空目录，不触碰已安装版本。</summary>
         private static void DeleteStage(Attempt attempt, Dictionary<string, byte[]> expected)
         {
             ValidatePartialStage(attempt, expected);
@@ -743,6 +784,7 @@ namespace YLFramework.Editor.Resource
             Directory.Delete(attempt.Stage, false);
         }
 
+        /// <summary>核对尝试身份且暂存已不存在后删除恢复记录，保留恢复空间和已部署版本。</summary>
         private static void FinishAttempt(Attempt attempt)
         {
             RequireAttempt(attempt);
@@ -755,6 +797,7 @@ namespace YLFramework.Editor.Resource
             File.Delete(Path.Combine(attempt.Workspace, JournalFile));
         }
 
+        /// <summary>独占新建并刷新完整字节，不覆盖现有文件。</summary>
         private static void WriteNew(string path, byte[] bytes)
         {
             using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -762,6 +805,7 @@ namespace YLFramework.Editor.Resource
             stream.Flush(true);
         }
 
+        /// <summary>要求稳定的 Editor 主线程且不处于播放、编译或导入状态。</summary>
         private static void ValidateEditor()
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThread || EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)

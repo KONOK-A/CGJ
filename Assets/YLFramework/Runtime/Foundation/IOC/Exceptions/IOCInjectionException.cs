@@ -3,7 +3,7 @@ using System;
 namespace YLFramework.DependencyInjection
 {
     /// <summary>
-    /// 成员注入失败：成员不可注入（readonly / 无 setter / indexer）或成员依赖无法解析。
+    /// 成员注入失败：成员不可注入（readonly / 无 setter / 索引器）、必要依赖缺失或成员写入抛错。
     /// </summary>
     public class IOCInjectionException : IOCException
     {

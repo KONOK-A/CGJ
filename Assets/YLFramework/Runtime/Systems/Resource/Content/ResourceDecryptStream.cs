@@ -6,6 +6,10 @@ using System.Threading;
 namespace YLFramework.Resource
 {
     /// <summary>每段先认证再交付的独占可定位视图；native 卸载前不能释放。</summary>
+    /// <remarks>
+    /// 以锁串行处理原生读取线程的流访问，读取路径不访问 Unity 对象或应用密钥来源。
+    /// 打开只认证首尾段，后续按需认证；完整明文长度与 SHA-256 比对须显式调用 ValidateAll。
+    /// </remarks>
     internal sealed class ResourceDecryptStream : Stream
     {
         internal const long DataBufferBytes = ResourceBundleEnvelope.DataBufferBytes;
@@ -71,7 +75,7 @@ namespace YLFramework.Resource
             }
         }
 
-        // sink 仅由创建此输入的主体安装，只做有界入队，不得等待主线程或访问 Unity/provider。
+        /// <summary>由创建输入的主体安装唯一故障接收器；只允许有界入队，不得等待主线程或访问 Unity、应用密钥来源。</summary>
         internal void SetFaultNotification(Action<Exception> notification)
         {
             if (notification == null)
@@ -96,6 +100,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>派生文件密钥、建立 CNG 后端并认证首尾段；构造失败不接管调用方输入流。</summary>
         internal ResourceDecryptStream(Stream input, ResourceBundleEnvelopeHeader envelope, byte[] key,
             bool leaveOpen, CancellationToken token)
         {
@@ -157,6 +162,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>仅在未释放且未锁定内容故障时允许读取。</summary>
         public override bool CanRead
         {
             get
@@ -167,6 +173,7 @@ namespace YLFramework.Resource
                 }
             }
         }
+        /// <summary>仅在未释放且未锁定内容故障时允许改变逻辑位置。</summary>
         public override bool CanSeek
         {
             get
@@ -177,7 +184,9 @@ namespace YLFramework.Resource
                 }
             }
         }
+        /// <summary>解密视图只读，始终不支持写入。</summary>
         public override bool CanWrite => false;
+        /// <summary>封装声明的明文字节长度；本属性不扫描全部内容。</summary>
         public override long Length
         {
             get
@@ -189,6 +198,7 @@ namespace YLFramework.Resource
                 }
             }
         }
+        /// <summary>明文视图的逻辑游标；设置位置不立即读取或认证对应段。</summary>
         public override long Position
         {
             get
@@ -202,6 +212,8 @@ namespace YLFramework.Resource
             set => Seek(value, SeekOrigin.Begin);
         }
 
+        /// <summary>按需认证完整段后复制明文，遇 EOF 返回实际读取量；内容错误永久锁定视图。</summary>
+        /// <remarks>跨段读取若后段失败，先前已认证段可能已写入目标缓冲，整次调用仍抛出错误。</remarks>
         public override int Read(byte[] buffer, int offset, int count)
         {
             lock (_gate)
@@ -242,7 +254,7 @@ namespace YLFramework.Resource
                         {
                             throw new InvalidDataException("Invalid authenticated segment mapping.");
                         }
-                        // 槽的 index 只在完整 tag 成功后发布；坏段的任何字节均不复制给 caller。
+                        // 槽的 index 只在完整 tag 成功后发布；坏段的任何字节均不复制给调用方。
                         Buffer.BlockCopy(_plain[slot], within, buffer, offset + total, take);
                         _position += take;
                         total += take;
@@ -256,6 +268,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>从已认证段读取一个明文字节并推进游标；达到明文末尾返回 -1。</summary>
         public override int ReadByte()
         {
             lock (_gate)
@@ -283,6 +296,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>按明文长度计算逻辑位置，拒绝负数与溢出，允许定位到末尾之后而不读取内容。</summary>
         public override long Seek(long offset, SeekOrigin origin)
         {
             lock (_gate)
@@ -322,6 +336,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>认证全部段并核对明文总长度与 SHA-256；使用独立遍历，不推进逻辑游标。</summary>
         internal void ValidateAll(CancellationToken token)
         {
             lock (_gate)
@@ -358,6 +373,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>复用两槽缓存或认证指定段，只有标签和输出长度都通过后才发布可读槽身份。</summary>
         private int GetSegment(long index, CancellationToken token = default)
         {
             for (int i = 0; i < _indices.Length; ++i)
@@ -399,6 +415,7 @@ namespace YLFramework.Resource
             return slot;
         }
 
+        /// <summary>检查底层交付长度未改变；不重新计算密文摘要，也不检测所有同长度改写。</summary>
         private void CheckLength()
         {
             if (_input.Length != _deliveryLength)
@@ -407,6 +424,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>拒绝已释放或已永久锁定故障的视图，不通过后续读取自动恢复。</summary>
         private void RequireUsable()
         {
             if (_isDisposed)
@@ -420,6 +438,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>保留首次内容错误、清除数据缓存并尝试关闭 CNG 后端，再通知所有者拒绝后续接纳。</summary>
         private IOException Latch(Exception error)
         {
             if (_fault == null)
@@ -445,6 +464,7 @@ namespace YLFramework.Resource
             return new IOException("Resource content read failed; state is permanently faulted.", _fault);
         }
 
+        /// <summary>在存在故障及接收器时最多通知一次；回调在当前持锁线程同步执行。</summary>
         private void NotifyFault()
         {
             if (_fault == null || _faultNotification == null || _hasNotifiedFault)
@@ -456,6 +476,7 @@ namespace YLFramework.Resource
             _faultNotification(_fault);
         }
 
+        /// <summary>清除密文、明文和 nonce 缓冲，并使所有缓存槽身份失效。</summary>
         private void ClearData()
         {
             Array.Clear(_cipher, 0, _cipher.Length);
@@ -468,6 +489,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>使视图失效并清除缓存，依序释放 CNG 与自有输入；释放失败保留原因并向外传播。</summary>
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -499,6 +521,7 @@ namespace YLFramework.Resource
             base.Dispose(disposing);
         }
 
+        /// <summary>只检查视图仍可用；只读视图没有待刷出的写入内容。</summary>
         public override void Flush()
         {
             lock (_gate)
@@ -506,7 +529,9 @@ namespace YLFramework.Resource
                 RequireUsable();
             }
         }
+        /// <summary>始终拒绝修改明文长度。</summary>
         public override void SetLength(long value) => throw new NotSupportedException();
+        /// <summary>始终拒绝向解密视图写入。</summary>
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

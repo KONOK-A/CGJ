@@ -8,15 +8,18 @@ using UnityEngine;
 
 namespace YLFramework.Extensions
 {
+    /// <summary>
+    /// 将类型与其泛型参数整理为委托风格的可读名称，不用于解析或还原类型。
+    /// </summary>
     public static class TypeExtensions
     {
         /// <summary>
         /// 获取委托风格的类型显示名称，泛型参数以名称拼接；支持开放/部分构造泛型。
         /// FullName 不可用时回退到 Name；null 类型抛 ArgumentNullException。
         /// </summary>
-        /// <param name="type"></param>
-        /// <param name="fullName"></param>
-        /// <returns></returns>
+        /// <param name="type">待显示的类型，不可为 null。</param>
+        /// <param name="fullName">是否使用类型定义的 FullName；泛型参数始终只使用 Name。</param>
+        /// <returns>去掉泛型元数后附加括号参数列表的名称；非泛型类型也带空括号。</returns>
         public static string GetDelegateDisplayName(this Type type, bool fullName = true)
         {
 
@@ -57,12 +60,10 @@ namespace YLFramework.Extensions
                     builder.Append(t.Name);
                     if (i == args.Length - 1)
                     {
-                        // 说明是最后一个
                         builder.Append(")");
                     }
                     else
                     {
-                        // 不是最后一个
                         builder.Append(",");
                     }
                 }

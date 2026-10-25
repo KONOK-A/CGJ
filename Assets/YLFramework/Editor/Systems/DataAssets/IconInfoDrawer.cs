@@ -5,11 +5,14 @@ using YLFramework.Editor.Utilities;
 
 namespace YLFramework.Editor.DataAssets
 {
+    /// <summary>绘制图标资源定位字段及编辑器预览，不为运行时持有图标资源租约。</summary>
     [CustomPropertyDrawer(typeof(IconInfo))]
     public sealed class IconInfoDrawer : PropertyDrawer
     {
+        /// <summary>为标题、项目标识和地址行预留固定绘制高度。</summary>
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label) => EditorGUIUtility.singleLineHeight * 3 + 6;
 
+        /// <summary>在序列化属性作用域中编辑定位字段，点击有图像的预览时定位该编辑器资产。</summary>
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
             using (new EditorGUI.PropertyScope(position, label, property))

@@ -12,6 +12,7 @@ namespace YLFramework.Resource
         internal const string Algorithm = "RSA-SHA256-PKCS1";
         internal const int MaximumBytes = 64 * 1024;
 
+        /// <summary>检查有界发布信封的字段、算法与规范字节形式；此步骤尚未验签。</summary>
         internal static JObject ReadEnvelope(byte[] bytes)
         {
             if (bytes == null || bytes.Length > MaximumBytes)
@@ -31,6 +32,7 @@ namespace YLFramework.Resource
             return data;
         }
 
+        /// <summary>解码指定字段并要求非空、有界且编码形式规范的 Base64 数据。</summary>
         internal static byte[] Base64(JObject data, string field, int maximum)
         {
             if (data[field]?.Type != JTokenType.String || ((string)data[field]).Length > (maximum + 2L) / 3 * 4)
@@ -54,6 +56,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>用指定可信公钥验证移除 Signature 字段后的规范信封，再解析规范 Payload。</summary>
         internal static JObject Verify(byte[] bytes, string trustedKeyId, RSAParameters publicKey)
         {
             var envelope = ReadEnvelope(bytes);

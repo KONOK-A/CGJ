@@ -18,6 +18,7 @@ namespace YLFramework.Resource
         private ContentWork _initializationWork;
         private int _liveContentInputs;
 
+        /// <summary>一份后台纯内容工作及其主线程交割责任，取消后仍等待实际完成。</summary>
         internal sealed class ContentWork
         {
             internal Task Task;
@@ -25,10 +26,11 @@ namespace YLFramework.Resource
             internal Action Complete;
             internal bool IsCompleting;
             internal ResourceLocalSnapshot[] Snapshots;
+            /// <summary>请求后台工作取消，不移除任务或提前释放其输入责任。</summary>
             internal void Cancel() => Cancellation?.Cancel();
         }
 
-        // 只在主线程登记/交割；worker不访问Unity、应用provider或Current。
+        /// <summary>只在主线程登记/交割；worker不访问Unity、应用provider或Current。</summary>
         private ContentWork StartContentWork<T>(Func<CancellationToken, T> work, Action<T, Exception> completed,
             CancellationToken cancellation = default, IEnumerable<ResourceLocalSnapshot> snapshots = null)
         {
@@ -70,6 +72,7 @@ namespace YLFramework.Resource
             return job;
         }
 
+        /// <summary>登记本系统的内容清理责任并确保统一帧驱动已安装。</summary>
         private void RegisterContentCleanup()
         {
             if (!_contentCleanup.Contains(this))
@@ -80,6 +83,7 @@ namespace YLFramework.Resource
             InstallInstanceCleanup();
         }
 
+        /// <summary>在主线程交割已完成后台任务，采集输入故障并检查原系统是否排空。</summary>
         private static void TickContentWork()
         {
             for (var ownerIndex = _contentCleanup.Count - 1; ownerIndex >= 0; ownerIndex--)
@@ -138,6 +142,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>请求本系统的全部后台内容任务取消，不提前移走其清理账本。</summary>
         private void CancelContentWork()
         {
             foreach (var job in _contentWork)
@@ -146,6 +151,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>保留清理失败对象及错误，阻止未决责任被误判为已排空。</summary>
         private void RetainContentCleanup(IDisposable owner, Exception error)
         {
             if (_retainedContentCleanup.Any(x => ReferenceEquals(x.Owner, owner)))
@@ -159,6 +165,7 @@ namespace YLFramework.Resource
                 "Content cleanup failed; ownership is retained and no unconditional native retry is performed.", error));
         }
 
+        /// <summary>沿异常链和聚合异常提取仍拥有未完成内容清理的对象。</summary>
         private void RetainContentFailureOwners(Exception error)
         {
             if (error == null)
@@ -184,6 +191,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>对 Bundle 资产检查其依赖闭包健康状况，非 Bundle 条目无需此检查。</summary>
         internal void RequireContentAdmission(ResourceCatalogEntry entry)
         {
             if (entry.Snapshot != null && entry.Descriptor != null)
@@ -192,6 +200,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>遍历目标依赖闭包，拒绝正在卸载、清理未决或已故障的输入。</summary>
         private void RequireHealthyBundle(ResourceLocalSnapshot snapshot, string bundleId)
         {
             var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -231,9 +240,11 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>按内部有效图根租约检查其所属快照的依赖闭包。</summary>
         internal void RequireHealthyBundle(BundleLease lease)
             => RequireHealthyBundle(lease.Record.Snapshot, lease.Record.Descriptor.LogicalId);
 
+        /// <summary>结算一次共享初始化，为全部仍等待的消费者设置终态后统一通知。</summary>
         private void FinishInitialization(Exception error)
         {
             _initializationWork = null;
@@ -287,6 +298,7 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>加入独立初始化等待者，最后一人退出时请求取消后台初始化工作。</summary>
         private void JoinInitialization(ResourceRequest<ResourceSystem> request)
         {
             _initialization.Add(request);
@@ -300,6 +312,7 @@ namespace YLFramework.Resource
             }, () => 0);
         }
 
+        /// <summary>验证已挂载配置并捕获内容输入，按需后台认证后完成初始化。</summary>
         private void ContinueInitialization(IReadOnlyList<ResourceLocalSnapshot> mounted)
         {
             ResourceContentValidation validation = null;

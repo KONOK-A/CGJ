@@ -4,9 +4,13 @@ using UnityEngine.UIElements;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>提供图绘制所需的元素局部变换矩阵，隔离不同 Unity 版本的变换读取方式。</summary>
     public static class VisualElementExtension
     {
 
+        /// <summary>取得元素局部变换；新版本由样式及反射读取的旋转轴重建，旧版本使用元素变换矩阵。</summary>
+        /// <param name="visualElement">待查询的非空元素。</param>
+        /// <returns>用于将节点局部坐标转换到图绘制坐标的矩阵。</returns>
         public static Matrix4x4 Matrix(this VisualElement visualElement)
         {
 #if UNITY_6000_2_OR_NEWER

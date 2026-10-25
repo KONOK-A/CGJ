@@ -9,6 +9,11 @@ namespace YLFramework.Platform2D
 {
 
 
+    /// <summary>在固定更新中沿世界坐标折线路径移动对象。</summary>
+    /// <remarks>
+    /// 路径初始化时复制运行快照，直接修改公开集合或节点 Transform 不会同步当前快照。
+    /// UnscaledTime 只改变固定步长的取值，不改变更新回调；停用组件不会自动 Stop 或重置计时。
+    /// </remarks>
     public class Moveable : MonoBehaviour
     {
         #region 字段
@@ -56,9 +61,7 @@ namespace YLFramework.Platform2D
 
         #region 属性
 
-        /// <summary>
-        /// 移动速度
-        /// </summary>
+        /// <summary>沿路径移动的每秒距离；运行中变为非正数或非有限值会停止移动。</summary>
         public float Speed
         {
             get
@@ -71,9 +74,7 @@ namespace YLFramework.Platform2D
             }
         }
 
-        /// <summary>
-        /// 移动类型
-        /// </summary>
+        /// <summary>当前采用的往返、循环或单次进度模式。</summary>
         public MoveType MoveType
         {
             get
@@ -86,27 +87,23 @@ namespace YLFramework.Platform2D
             }
         }
 
-        /// <summary>
-        /// 路径点
-        /// </summary>
+        /// <summary>直接可写的 Transform 路径源，初始化时读取节点的世界位置。</summary>
         public List<Transform> Transforms => transforms;
-        /// <summary>
-        /// 路径点
-        /// </summary>
+        /// <summary>直接可写的世界坐标路径源，不是当前运行快照的只读副本。</summary>
         public List<Vector3> Positions => positions;
 
+        /// <summary>下一次路径初始化采用的节点来源，修改后不自动重建运行快照。</summary>
         public PositionType PositionType
         {
             get => positionType; set => positionType = value;
         }
+        /// <summary>固定更新中累计移动和延迟时间时使用的时间步来源。</summary>
         public UpdateMode UpdateMode
         {
             get => updateMode; set => updateMode = value;
         }
 
-        /// <summary>
-        /// 延迟时间
-        /// </summary>
+        /// <summary>每次 Run 后首次移动前等待的秒数，暂停期间不累计。</summary>
         public float Delay
         {
             get
@@ -119,14 +116,11 @@ namespace YLFramework.Platform2D
             }
         }
 
-        /// <summary>
-        /// 是否正在移动中
-        /// </summary>
+        /// <summary>是否处于运行状态，包含启动延迟期间；暂停或停止时为 false。</summary>
         public bool IsRunning => _isRunning;
 
-        /// <summary>
-        /// 路径总长度
-        /// </summary>
+        /// <summary>按当前路径源重新计算的相邻节点总长度，不一定等于已建立运行快照的长度。</summary>
+        /// <remarks>路径源无效时返回零；读取不会替换运行快照。</remarks>
         public float Distance
         {
             get
@@ -146,9 +140,7 @@ namespace YLFramework.Platform2D
             }
         }
 
-        /// <summary>
-        /// 从起点移动到终点所需要的时间
-        /// </summary>
+        /// <summary>按当前路径源长度和速度估算的单程秒数，不含启动延迟；速度无效时返回零。</summary>
         public float Time => speed > 0 && !float.IsInfinity(speed) ? Distance / speed : 0;
 
 
@@ -156,18 +148,22 @@ namespace YLFramework.Platform2D
 
         #region 事件
 
+        /// <summary>Run 成功建立路径并标记运行后触发，不表示已经提交了首个位置。</summary>
         [Header("开始移动时触发")]
         [Tooltip("开始移动时触发")]
         public UnityEvent onStartRun;
 
+        /// <summary>提交位置前触发，参数是目标世界位置，不是速度或位移。</summary>
         [Header("移动时触发")]
         [Tooltip("移动时触发")]
         public Vector3UnityEvent onMove;
 
+        /// <summary>已启动的移动切换暂停状态后触发，参数为是否暂停。</summary>
         [Header("暂停时或取消暂停时触发")]
         [Tooltip("暂停时或取消暂停时触发")]
         public BoolUnityEvent onPause;
 
+        /// <summary>Stop 清除运行状态与计时后触发，包括单次路径完成或运行速度失效导致的停止。</summary>
         [Header("结束移动时触发")]
         [Tooltip("结束移动时触发")]
         public UnityEvent onStop;
@@ -176,6 +172,7 @@ namespace YLFramework.Platform2D
 
         #region 生命周期
 
+        /// <summary>启用自动运行配置时，在唤醒阶段请求启动路径。</summary>
         protected virtual void Awake()
         {
             if (runOnAwake)
@@ -184,6 +181,7 @@ namespace YLFramework.Platform2D
             }
         }
 
+        /// <summary>运行时先累计启动延迟，延迟满足后推进路径移动。</summary>
         protected virtual void FixedUpdate()
         {
             if (!_isRunning)
@@ -218,6 +216,9 @@ namespace YLFramework.Platform2D
 
         #region 方法
 
+        /// <summary>检查速度、延迟及所选路径源，填充待构建节点但不替换运行快照。</summary>
+        /// <param name="error">失败原因，节点问题包含索引；成功时为 null。</param>
+        /// <returns>速度、延迟和节点是否通过此处校验；路径总长度溢出由构建阶段继续检查。</returns>
         public bool ValidatePath(out string error)
         {
             if (speed <= 0 || float.IsNaN(speed) || float.IsInfinity(speed))
@@ -233,6 +234,8 @@ namespace YLFramework.Platform2D
             return TryGetPathPoints(out error);
         }
 
+        /// <summary>清空临时节点列表，从当前路径源读取并验证世界坐标。</summary>
+        /// <param name="error">失败原因；成功时为 null。</param>
         private bool TryGetPathPoints(out string error)
         {
             _pathPoints.Clear();
@@ -261,6 +264,7 @@ namespace YLFramework.Platform2D
             return true;
         }
 
+        /// <summary>使旧路径流程失效并重建运行快照，失败时取消运行状态并记录诊断。</summary>
         private bool Init()
         {
             _pathVersion++;
@@ -275,6 +279,7 @@ namespace YLFramework.Platform2D
         }
 
 
+        /// <summary>按固定步长计算目标并通知监听者，确认状态仍有效后提交位置和处理路径结束。</summary>
         private void Move()
         {
             if (speed <= 0 || float.IsNaN(speed) || float.IsInfinity(speed))
@@ -283,7 +288,6 @@ namespace YLFramework.Platform2D
                 return;
             }
 
-            // 向目标位置移动
             switch (updateMode)
             {
                 case UpdateMode.Normal:
@@ -299,6 +303,7 @@ namespace YLFramework.Platform2D
             Vector3 target = GetPosition(t);
             int version = _pathVersion;
             onMove?.Invoke(target);
+            // 监听者可能销毁、停用、停止或重建路径，不能继续提交旧版本的目标。
             if (!this || !isActiveAndEnabled || !_isRunning || version != _pathVersion)
             {
                 return;
@@ -311,21 +316,16 @@ namespace YLFramework.Platform2D
             }
         }
 
-        /// <summary>
-        /// 移动时触发
-        /// </summary>
-        /// <param name="target"></param>
+        /// <summary>提交目标位置的扩展入口，默认直接写入 Transform 的世界位置。</summary>
+        /// <param name="target">本次计算出的目标世界位置。</param>
         protected virtual void Move(Vector3 target)
         {
             transform.position = target;
         }
 
-        /// <summary>
-        /// 开始移动
-        /// </summary>
+        /// <summary>未运行时重建路径并从零计时启动；对暂停中的路径调用也会重新开始。</summary>
         public void Run()
         {
-            // 正在运行中 不需要再次运行
             if (_isRunning)
             {
                 return;
@@ -343,10 +343,8 @@ namespace YLFramework.Platform2D
             onStartRun?.Invoke();
         }
 
-        /// <summary>
-        /// 暂停移动
-        /// </summary>
-        /// <param name="pause"></param>
+        /// <summary>切换已启动路径的暂停状态，保留进度和延迟计时；不能恢复已停止的路径。</summary>
+        /// <param name="pause">true 暂停，false 继续。</param>
         public void Pause(bool pause)
         {
             if (!_hasStarted || _isRunning == !pause)
@@ -358,9 +356,7 @@ namespace YLFramework.Platform2D
             onPause?.Invoke(pause);
         }
 
-        /// <summary>
-        /// 停止移动
-        /// </summary>
+        /// <summary>使当前路径流程失效并清零计时，不将对象移回起点；重复停止不再通知。</summary>
         public void Stop()
         {
             if (!_hasStarted && !_isRunning)
@@ -376,30 +372,24 @@ namespace YLFramework.Platform2D
             onStop?.Invoke();
         }
 
-        /// <summary>
-        /// 添加一个路径点
-        /// </summary>
-        /// <param name="position"></param>
+        /// <summary>向坐标路径源添加节点，并按当前节点来源重建运行快照，不清零已有计时。</summary>
+        /// <param name="position">新增节点的世界坐标。</param>
         public void AddPosition(Vector3 position)
         {
             positions.Add(position);
             Init();
         }
 
-        /// <summary>
-        /// 添加一个路径点
-        /// </summary>
-        /// <param name="transform"></param>
+        /// <summary>向 Transform 路径源添加节点，并按当前节点来源重建运行快照，不清零已有计时。</summary>
+        /// <param name="transform">新增节点，构建时读取其世界位置。</param>
         public void AddPosition(Transform transform)
         {
             transforms.Add(transform);
             Init();
         }
 
-        /// <summary>
-        /// 移除一个路径点
-        /// </summary>
-        /// <param name="index">路径的下标</param>
+        /// <summary>移除当前路径源的指定节点并重建快照；索引越界时仍执行重建。</summary>
+        /// <param name="index">从零开始的节点索引。</param>
         public void RemovePosition(int index)
         {
             if (positionType == PositionType.Positions)
@@ -420,9 +410,7 @@ namespace YLFramework.Platform2D
             Init();
         }
 
-        /// <summary>
-        /// 清空所有的路径点
-        /// </summary>
+        /// <summary>清空当前路径源并尝试重建；空路径校验失败会取消运行并记录诊断。</summary>
         public void ClearPosition()
         {
             if (positionType == PositionType.Positions)
@@ -437,6 +425,8 @@ namespace YLFramework.Platform2D
             Init();
         }
 
+        /// <summary>按累计路程占比从当前运行快照取得世界坐标。</summary>
+        /// <param name="t">路径进度，通常位于零到一之间。</param>
         private Vector3 GetPosition(float t)
             => _path.Evaluate(t);
 

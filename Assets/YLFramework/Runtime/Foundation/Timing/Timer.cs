@@ -5,6 +5,7 @@ namespace YLFramework.Timing
     /// <summary>主线程 Timer 默认服务；仅有效投递惰性创建独立 DDOL 驱动，不依赖 UpdateManager 或 Root。</summary>
     public static class Timer
     {
+        /// <summary>取得当前默认调度器；执行门禁关闭时拒绝，允许执行且没有宿主时才惰性创建。</summary>
         internal static TimerScheduler GetScheduler() => Internal.TimerDriver.GetScheduler();
 
         /// <summary>一次秒等待，默认 Unscaled；非法参数或无运行权限时拒绝，不创建宿主。</summary>
@@ -24,6 +25,7 @@ namespace YLFramework.Timing
             return GetScheduler().Repeat(firstDelay, interval, callback, count, clock, onCancelled);
         }
 
+        /// <summary>在获取默认宿主前校验秒周期的首延迟、正间隔、次数及计时域。</summary>
         internal static void ValidateRepeat(double firstDelay, double interval, int? count, TimerClock clock)
         {
             TimerScheduler.ValidateSeconds(firstDelay, nameof(firstDelay));
@@ -57,6 +59,7 @@ namespace YLFramework.Timing
             return GetScheduler().RepeatFrames(firstDelay, interval, callback, count, onCancelled);
         }
 
+        /// <summary>在获取默认宿主前校验帧周期的非负首延迟、正间隔及次数。</summary>
         internal static void ValidateFrameRepeat(long firstDelay, long interval, int? count)
         {
             if (firstDelay < 0)
@@ -77,6 +80,7 @@ namespace YLFramework.Timing
             Action<TimerCancellationReason> onCancelled = null) =>
             Delay(DelayUntil(target, DateTimeOffset.UtcNow), callback, TimerClock.Unscaled, onCancelled);
 
+        /// <summary>将目标时刻相对给定当前时刻换算为非负秒数，不保留墙钟跟踪责任。</summary>
         internal static double DelayUntil(DateTimeOffset target, DateTimeOffset now) => Math.Max(0, (target - now).TotalSeconds);
 
         /// <summary>只结束既有默认 owner，不创建宿主，不清理其他领域。后续有效投递可以显式建立新 owner。</summary>

@@ -10,28 +10,40 @@ using UnityEditor;
 
 namespace YLFramework.Core
 {
+    /// <summary>单次 View 加载请求的状态，与交付后 View 自身的会话状态分离。</summary>
     public enum LoadViewStatus
     {
+        /// <summary>尚未提交终态，包含等待、同步初始化及其回滚阶段。</summary>
         Pending,
+        /// <summary>加载已成功提交；之后关闭 View 不会改写请求结果。</summary>
         Succeeded,
+        /// <summary>资源、初始化或收尾发生错误，具体原因见请求的 Exception。</summary>
         Failed,
+        /// <summary>调用方通过 Abort 逻辑取消本次请求，不代表共享后端加载已停止。</summary>
         Canceled,
+        /// <summary>所属模块、父会话或目标场景等接受请求时的上下文已经失效。</summary>
         Invalidated
     }
 
+    /// <summary>将模块关闭时的输入释放与完成通知分开，允许关闭管线先撤销全部业务归属。</summary>
     internal interface IPendingViewRequest
     {
+        /// <summary>标记所属模块失效并释放输入，暂不派发完成通知。</summary>
         void Invalidate();
+        /// <summary>在模块收尾后提交此前保存的失效结果。</summary>
         void PublishInvalidation();
     }
 
     /// <summary>主线程表现请求；Abort仅取消Core业务结果，不停止或卸载共享后端加载。</summary>
+    /// <typeparam name="T">要求根 View 可赋给的组件类型。</typeparam>
     public sealed class LoadViewRequest<T> : YLFramework.Async.CustomAsyncOperation<LoadViewRequest<T>>, IPendingViewRequest where T : View
     {
+        /// <summary>请求交付的实例引用；是否成功以 Status 为准，之后关闭该实例不会清空此引用。</summary>
         public T View
         {
             get; private set;
         }
+        /// <summary>本次请求的稳定结果状态；初始化回调中的 Abort 要等事务回滚后才离开 Pending。</summary>
         public LoadViewStatus Status
         {
             get; private set;
@@ -64,6 +76,7 @@ namespace YLFramework.Core
         private LoadViewStatus _interruptedStatus;
         private readonly int _threadId = Thread.CurrentThread.ManagedThreadId;
 
+        /// <summary>捕获模块、父会话及资源查找上下文，接收已接管参数并登记退出监听，不立即加载实例。</summary>
         internal LoadViewRequest(Module module, string name, Transform target, LoadViewArgs claimedArgs, object[] parameters, GameObject prefab = null)
         {
             _owner = module;
@@ -94,11 +107,12 @@ namespace YLFramework.Core
 #endif
         }
 
-        // Unity 停止原生 Coroutine 不保证执行迭代器的 finally；业务请求必须自行提交退出终态。
+        /// <summary>执行会话结束时主动提交失效结果，不依赖 Unity 停止协程时执行迭代器的 finally。</summary>
         private void OnExecutionEnded()
             => Finish(null, new InvalidOperationException("View execution session has ended."), LoadViewStatus.Invalidated);
 
 #if UNITY_EDITOR
+        /// <summary>离开 Play Mode 时复用执行结束入口，释放尚未完成请求的监听与输入。</summary>
         private void OnPlayModeChanged(PlayModeStateChange state)
         {
             if (state == PlayModeStateChange.ExitingPlayMode)
@@ -108,6 +122,7 @@ namespace YLFramework.Core
         }
 #endif
 
+        /// <summary>复检接受请求时的模块和父会话身份，并确认目标场景仍可承载实例。</summary>
         private void Validate()
         {
             if (_interruption != null)
@@ -145,7 +160,7 @@ namespace YLFramework.Core
                         throw new InvalidOperationException("View parent session has ended.");
                     }
                 }
-                // 存活parent的合法Scene/DDOL迁移遵循C；无parent则固定接受时的Scene。
+                // 有父节点时跟随其合法场景迁移；无父节点时仍使用接受请求时捕获的场景。
                 _targetScene = _parent.gameObject.scene;
             }
             if (!_targetScene.IsValid() || !_targetScene.isLoaded)
@@ -175,6 +190,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>记录所属生命周期失效并释放输入责任，终态通知留待所属模块完成清理后发布。</summary>
         void IPendingViewRequest.Invalidate()
         {
             if (_isTerminal)
@@ -196,12 +212,14 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>在所属模块清理后发布已记录的失效终态。</summary>
         void IPendingViewRequest.PublishInvalidation()
         {
             _isClosingOwner = false;
             Finish(null, _interruption, _interruptedStatus);
         }
 
+        /// <summary>先撤销监听和持有引用，再释放本请求的资源租约及参数；不接管已交付实例的退出。</summary>
         private void ReleaseInputs()
         {
             Application.quitting -= OnExecutionEnded;
@@ -249,6 +267,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>至多提交一次终态，在释放输入后通知完成；通知异常只记录，不改写已提交结果。</summary>
         private void Finish(T result, Exception failure, LoadViewStatus status)
         {
             if (_isTerminal || _isClosingOwner)
@@ -286,6 +305,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>推进加载迭代器并记录同步执行边界，使回调中的取消等待初始化回滚后再通知。</summary>
         internal IEnumerator Run()
         {
             var routine = Load();
@@ -329,6 +349,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>从下一帧开始取得 Prefab，按允许的错误类别回退项目，最后同步初始化并交付实例。</summary>
         private IEnumerator Load()
         {
             GameObject prefab = _directPrefab;
@@ -415,6 +436,7 @@ namespace YLFramework.Core
             Finish(result, null, LoadViewStatus.Succeeded);
         }
 
+        /// <summary>将上下文校验失败记为首次失效中断，同时保留原异常交给初始化或等待管线回滚。</summary>
         private void ValidateWaiting()
         {
             try

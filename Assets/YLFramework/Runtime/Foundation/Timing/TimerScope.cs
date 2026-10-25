@@ -119,6 +119,7 @@ namespace YLFramework.Timing
             return Schedule(name, true, TimerClock.RenderedFrame, 0, firstDelay, 0, interval, true, count, null, callback, onCancelled, true);
         }
 
+        /// <summary>校验并登记范围内任务；命名替换以版本标记确认取消通知重入后是否仍持有本次投递责任。</summary>
         private TimerHandle Schedule(string name, bool replace, TimerClock clock, double delay, long frames,
             double intervalSeconds, long intervalFrames, bool repeating, int? count, Action callback,
             Action<long> tickCallback, Action<TimerCancellationReason> onCancelled, bool frameTask = false)
@@ -307,6 +308,7 @@ namespace YLFramework.Timing
             CancelAll();
         }
 
+        /// <summary>解除仍归属于本范围的任务与名称占用，不移除已经被其他任务替换的同名条目。</summary>
         internal void Detach(TimerRun run)
         {
             if (!ReferenceEquals(run.Scope, this))
@@ -324,6 +326,7 @@ namespace YLFramework.Timing
             run.Name = null;
         }
 
+        /// <summary>拒绝空白名称，避免命名入口与匿名任务混用。</summary>
         private static void ValidateName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -332,6 +335,7 @@ namespace YLFramework.Timing
             }
         }
 
+        /// <summary>拒绝已关闭范围、已关闭的绑定内核，以及默认范围捕获的旧执行会话。</summary>
         private void ThrowIfUnavailable()
         {
             if (IsDisposed)

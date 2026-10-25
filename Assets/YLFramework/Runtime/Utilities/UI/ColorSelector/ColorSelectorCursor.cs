@@ -7,6 +7,7 @@ namespace YLFramework.UI
     [RequireComponent(typeof(CanvasRenderer))]
     public sealed class ColorSelectorCursor : MaskableGraphic
     {
+        /// <summary>按矩形短边绘制外黑内白的双环游标，并用 Graphic.color 调制顶点颜色。</summary>
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
             mesh.Clear();

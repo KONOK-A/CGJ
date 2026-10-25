@@ -13,6 +13,7 @@ namespace YLFramework.Pooling
     /// </summary>
     public class GameObjectPoolData : IOfPool, IPoolType
     {
+        /// <summary>区分借出、空闲与生命周期转换阶段，防止 Unity 回调重入时重复接纳同一实例。</summary>
         private enum State
         {
             Leased,
@@ -22,6 +23,7 @@ namespace YLFramework.Pooling
             Retired
         }
 
+        /// <summary>一次桶初始化的稳定归属；Data 复用后旧实例仍凭此身份识别晚归还。</summary>
         internal sealed class Lifetime
         {
             internal object Owner;
@@ -29,6 +31,7 @@ namespace YLFramework.Pooling
             internal bool IsClosed;
         }
 
+        /// <summary>按 GameObject 弱键保存不可迁移的桶生命周期与当前借用状态。</summary>
         private sealed class Entry
         {
             internal Lifetime Lifetime;
@@ -88,15 +91,18 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>创建使用默认队列容量的 Data，缓存根与桶归属须另行 Init。</summary>
         public GameObjectPoolData() : this(-1) { }
 
         /// <summary>capacity 是队列初始容量，-1 使用默认值，不是缓存上限。</summary>
+        /// <param name="capacity">队列初始容量，必须不小于 -1；不会创建 GameObject。</param>
         public GameObjectPoolData(int capacity = -1)
         {
             ValidateCapacity(capacity);
             _queue = capacity == -1 ? new Queue<GameObject>() : new Queue<GameObject>(capacity);
         }
 
+        /// <summary>校验容量取值；-1 保留为不限缓存或使用默认队列容量的约定值。</summary>
         internal static void ValidateCapacity(int capacity)
         {
             if (capacity < -1)
@@ -105,6 +111,7 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>拒绝不能标识桶的 null 或空名称。</summary>
         internal static void ValidateKey(string key)
         {
             if (string.IsNullOrEmpty(key))
@@ -113,6 +120,7 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>拒绝非已加载场景中的实例以及缓存根，避免把资产或池自身当作可复用对象。</summary>
         internal static void ValidateInstance(GameObject obj)
         {
             if (obj && (!obj.scene.IsValid() || !obj.scene.isLoaded))
@@ -126,6 +134,7 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>沿祖先链判断目标层级是否属于任意已登记缓存根，供借出时排除缓存层级。</summary>
         internal static bool IsCacheHierarchy(Transform parent)
         {
             for (var node = parent; node; node = node.parent)
@@ -139,6 +148,7 @@ namespace YLFramework.Pooling
             return false;
         }
 
+        /// <summary>按托管引用查询初次接纳时的桶归属，不依赖对象当前名称或 Unity 存活状态。</summary>
         internal static bool TryGetLifetime(GameObject obj, out Lifetime lifetime)
         {
             if (!ReferenceEquals(obj, null) && _entries.TryGetValue(obj, out var entry))
@@ -150,6 +160,7 @@ namespace YLFramework.Pooling
             return false;
         }
 
+        /// <summary>拒绝已登记实例跨宿主或跨 key 归还，未登记实例留给接纳流程处理。</summary>
         internal static void ValidateOwner(GameObject obj, object owner, string key)
         {
             if (TryGetLifetime(obj, out var lifetime) &&
@@ -160,9 +171,13 @@ namespace YLFramework.Pooling
         }
 
         /// <summary>创建独立桶；活动桶不能重复 Init，须先 OnRecycle 关闭。</summary>
+        /// <param name="assetPath">桶的非空 key，仅用作名称，不在此加载资产。</param>
+        /// <param name="poolRootObj">新建失活缓存根的父节点，不能为 null 或已销毁对象。</param>
+        /// <param name="capacity">空闲实例上限，-1 表示不限，0 禁止缓存。</param>
         public void Init(string assetPath, Transform poolRootObj, int capacity = -1) =>
             Init(assetPath, poolRootObj, capacity, _identity);
 
+        /// <summary>以给定宿主身份开启新桶生命周期；先登记归属再挂接缓存根，失败时关闭本次生命周期。</summary>
         internal void Init(string key, Transform poolRoot, int capacity, object owner)
         {
             ValidateKey(key);
@@ -212,9 +227,11 @@ namespace YLFramework.Pooling
         }
 
         internal Lifetime CurrentLifetime => _lifetime;
+        /// <summary>确认操作仍属于当前未关闭的桶，且缓存根未被外部销毁。</summary>
         internal bool IsLive(Lifetime lifetime) => ReferenceEquals(_lifetime, lifetime) &&
             lifetime != null && !lifetime.IsClosed && RootTransform;
 
+        /// <summary>从空闲队列剔除已销毁实例，保留其余实例的 FIFO 顺序。</summary>
         private void PruneDestroyed()
         {
             // 不新增扫描宿主；在计数、归还、分配及容量操作时惰性剔除 fake-null。
@@ -233,6 +250,7 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>永久标记实例后停用并请求延迟销毁，即使停用失败也尝试销毁，不允许重复处理。</summary>
         private static void Retire(GameObject obj, Entry entry)
         {
             if (entry.State == State.Retired)
@@ -259,6 +277,7 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>消费旧桶的有效晚归还并退休实例，始终返回 false，不转入新桶缓存。</summary>
         internal static bool ReturnToClosedLifetime(GameObject obj)
         {
             if (!_entries.TryGetValue(obj, out var entry) || entry.State != State.Leased)
@@ -274,8 +293,11 @@ namespace YLFramework.Pooling
         /// 接管未登记的场景实例，或归还本桶借出实例；跨桶抛错且无副作用。
         /// false 仅表示未缓存，满池/旧桶晚还已消费并销毁引用；重复/转换期不重复处理。
         /// </summary>
+        /// <param name="obj">待接纳或归还的场景实例，null 或已销毁对象会被忽略。</param>
+        /// <returns>是否进入当前桶的空闲缓存。</returns>
         public bool Recycle(GameObject obj) => Recycle(obj, int.MaxValue, _lifetime);
 
+        /// <summary>按指定生命周期接纳或消费借用；停用和换父节点后复核归属、存活与容量，再发布为空闲实例。</summary>
         internal bool Recycle(GameObject obj, int target, Lifetime lifetime)
         {
             if (!obj)
@@ -364,6 +386,8 @@ namespace YLFramework.Pooling
         /// 空池返回 null；取得期间拒绝同对象归还。先设置最终层级/场景，再激活。
         /// parent 为 null 时移入当前活动场景；回调关闭桶或破坏对象时不交付失效实例。
         /// </summary>
+        /// <param name="parent">借出后的父节点，不能位于任何缓存根层级内。</param>
+        /// <returns>当前桶可交付的借出实例；无有效缓存或桶已关闭时为 null。</returns>
         public GameObject Allocate(Transform parent = null) => Allocate(parent, SceneManager.GetActiveScene());
 
         // 异步调用方可捕获目标场景；不能在完成时误用后来切换的 active scene。
@@ -436,6 +460,7 @@ namespace YLFramework.Pooling
             return null;
         }
 
+        /// <summary>按目标空闲数克隆缺口并走统一归还流程；桶失效即停止，已接纳实例不回滚。</summary>
         internal void Prewarm(GameObject prefab, int target)
         {
             var lifetime = _lifetime;
@@ -460,6 +485,7 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>先摘除空闲快照阻止回调重复借出，再逐项退休并汇总清理异常。</summary>
         private void RetireCached(int count)
         {
             if (count == 0)

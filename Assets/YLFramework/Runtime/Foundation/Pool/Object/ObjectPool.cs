@@ -11,6 +11,7 @@ namespace YLFramework.Pooling
     /// <typeparam name="T">不要求实现领域接口的引用类型。</typeparam>
     public sealed class ObjectPool<T> : IPool<T>, IDisposable where T : class
     {
+        /// <summary>记录借用与转换阶段，用于拒绝重复归还和同一对象的回调重入。</summary>
         private enum State
         {
             Allocating,
@@ -19,6 +20,7 @@ namespace YLFramework.Pooling
             Idle,
             Retired
         }
+        /// <summary>附着于弱键的状态记录，不反向持有被跟踪对象。</summary>
         private sealed class Entry
         {
             internal State State;
@@ -39,6 +41,12 @@ namespace YLFramework.Pooling
         /// 创建实例池。工厂必须提供独占的新引用；回收 Reset 清租用数据，
         /// onDiscard 释放永久附属资源，两者均不由池猜测或自动反射执行。
         /// </summary>
+        /// <param name="factory">缓存为空时调用的创建委托，不能为 null；允许返回 null。</param>
+        /// <param name="onAllocate">冷、热取得时的准备回调，可为 null。</param>
+        /// <param name="reset">结束借用时的状态清理回调，可为 null；满池或关闭后归还仍会执行。</param>
+        /// <param name="onDiscard">对象永久退出本池时的清理回调，可为 null；池不自动调用对象的 Dispose。</param>
+        /// <param name="maxPoolSize">空闲缓存上限，默认 20，非正值不限。</param>
+        /// <param name="cacheOrder">空闲对象的分配顺序，只支持 FIFO 或 LIFO。</param>
         public ObjectPool(Func<T> factory, Action<T> onAllocate = null, Action<T> reset = null,
             Action<T> onDiscard = null, int maxPoolSize = 20, PoolCacheOrder cacheOrder = PoolCacheOrder.Fifo)
         {
@@ -92,6 +100,7 @@ namespace YLFramework.Pooling
         /// <summary>用既有委托工厂配置后续冷创建。</summary>
         public void SetFactoryMethod(Func<T> factoryMethod) => SetObjectFactory(new CustomObjectFactory<T>(factoryMethod));
 
+        /// <summary>阻止关闭后的创建或取得流程继续运行，包括回调中关闭池的情况。</summary>
         private void ThrowIfDisposed()
         {
             if (_isDisposed)
@@ -100,8 +109,10 @@ namespace YLFramework.Pooling
             }
         }
 
+        /// <summary>按配置的分配顺序摘取一个空闲对象，由调用方推进其状态。</summary>
         private T TakeCached() => _stack == null ? _queue.Dequeue() : _stack.Pop();
 
+        /// <summary>将已准备好的对象放入空闲容器，并将身份记录转为空闲态。</summary>
         private void Cache(T item, Entry entry)
         {
             if (_stack == null)
@@ -116,6 +127,7 @@ namespace YLFramework.Pooling
             entry.State = State.Idle;
         }
 
+        /// <summary>调用工厂并登记非空新引用；已在本池登记的引用不能再次作为新对象接纳。</summary>
         private T Create()
         {
             if (_factory == null)
@@ -169,6 +181,8 @@ namespace YLFramework.Pooling
         }
 
         /// <summary>工厂返回 null 时为 false；回调/工厂错误仍传播，不静默回退。</summary>
+        /// <param name="item">成功时为已完成取得回调的借出对象，否则为 null。</param>
+        /// <returns>是否取得非 null 对象。</returns>
         public bool TryAllocate(out T item)
         {
             item = Allocate();
@@ -178,7 +192,7 @@ namespace YLFramework.Pooling
         /// <summary>
         /// 仅归还本池借出对象，先 Reset 后缓存。返回值仅表示是否入空闲缓存：
         /// 满池或关闭池的 false 仍已消费引用，不得继续使用或重试。
-        /// null、重复及同对象转换期归还为 false；foreign 抛异常且不调用 Reset。
+        /// null、重复及同对象转换期归还为 false；外来对象抛异常且不调用 Reset。
         /// 归还后的旧别名无法与重新借出的同一原始引用区分，调用方不得保留旧引用。
         /// </summary>
         public bool Recycle(T item) => Return(item, true);
@@ -186,6 +200,7 @@ namespace YLFramework.Pooling
         /// <summary>结束本池借用，执行一次 Reset 及永久清理，绝不缓存；重复调用不重复清理。</summary>
         public void Discard(T item) => Return(item, false);
 
+        /// <summary>消费一次有效借用，执行 Reset 后按容量和目标数缓存或永久清理；失败后不允许重试清理。</summary>
         private bool Return(T item, bool allowCache, int cacheTarget = int.MaxValue)
         {
             if (ReferenceEquals(item, null))
@@ -227,6 +242,7 @@ namespace YLFramework.Pooling
             return false;
         }
 
+        /// <summary>先永久隔离失败对象再尝试附属资源清理；清理也失败时合并原始异常。</summary>
         private void RetireFailed(T item, Entry entry, Exception error)
         {
             entry.State = State.Retired;
@@ -241,12 +257,17 @@ namespace YLFramework.Pooling
         }
 
         /// <summary>按目标空闲数量补齐并执行 Reset，返回本次新增缓存数。</summary>
+        /// <param name="count">期望的空闲总数，不是本次创建数量；非正数不补齐。</param>
+        /// <returns>本次实际新增的缓存数。</returns>
         public int Prewarm(int count) => Prewarm(count, PoolPrewarmMode.Recycle);
 
         /// <summary>
         /// 最多创建目标缺口次数，受正容量裁剪；null 不缓存、不无限重试。
         /// Raw 不调用取得/Reset，但仍登记身份；失败前已缓存的对象保留。
         /// </summary>
+        /// <param name="count">期望的空闲总数，不是本次创建数量；非正数不补齐。</param>
+        /// <param name="mode">新对象入缓存前是否执行回收清理。</param>
+        /// <returns>本次实际新增的缓存数。</returns>
         public int Prewarm(int count, PoolPrewarmMode mode) => Prewarm(count, mode, null);
 
         // 领域适配只标记 Raw 空闲状态，不暴露额外公共预热模式或重复缓存机制。
@@ -322,6 +343,7 @@ namespace YLFramework.Pooling
             return cached;
         }
 
+        /// <summary>先摘除并退休空闲快照，再逐项尝试两类清理回调，全部处理后汇总异常。</summary>
         private void RetireCached(int count, Action<T> itemClearCallback = null)
         {
             if (count == 0)

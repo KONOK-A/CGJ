@@ -5,6 +5,7 @@ namespace YLFramework.Extensions
     /// <summary>
     /// 方向、距离与 Vector2/Vector3 分量扩展。
     /// 所有距离方法基于 transform 坐标计算，不做 null 保护（强制查询，调用方保证对象有效）。
+    /// 局部距离直接比较各自父空间中的坐标，不转换空间；父空间不同时不能视为实际空间距离。
     /// </summary>
     public static class VectorExtension
     {

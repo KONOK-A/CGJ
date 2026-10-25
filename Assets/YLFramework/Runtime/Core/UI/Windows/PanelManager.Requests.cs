@@ -11,7 +11,8 @@ namespace YLFramework.Core
 {
     public partial class PanelManager
     {
-        // 每个异步消费者恰好一份记录进入 Module.pendingViews。批次只存在于当前提交栈，不是第二套 pending 权威。
+        /// <summary>单个 Panel 消费者持有的请求输入、资源解析和终态状态。</summary>
+        /// <remarks>异步记录只登记在 Module.PendingViews；合流批次仅存在于提交栈，不另建在途请求权威。</remarks>
         internal sealed class PanelOperation : IPendingViewRequest
         {
             internal Module Owner;
@@ -37,6 +38,7 @@ namespace YLFramework.Core
             internal bool IsCommitted;
             internal bool IsTerminal;
             private bool _isFailing;
+            /// <summary>在失败回滚开始前封住主动取消，并把失败阶段传给同批消费者。</summary>
             internal void MarkFailing()
             {
                 if (_isFailing)
@@ -56,6 +58,7 @@ namespace YLFramework.Core
             internal object DeliveredSession;
             internal Exception Failure;
 
+            /// <summary>保存接受时的依赖快照；异步请求另登记到 owner 并监听执行结束。</summary>
             internal PanelOperation(Module owner, string name, GameObject prefab, LoadViewArgs args, UIRootContext root,
                 PanelRuleSnapshot rules, PanelOverrides overrides, Type expected, long sequence, bool asynchronous)
             {
@@ -82,8 +85,10 @@ namespace YLFramework.Core
 #endif
                 }
             }
+            /// <summary>执行环境退出时将未完成请求标记为失效，而不是用户取消。</summary>
             private void OnExecutionEnded() => Finish(null, null, new InvalidOperationException("Panel 执行会话已结束。"), LoadViewStatus.Invalidated);
 #if UNITY_EDITOR
+            /// <summary>退出 Play Mode 时结束仍在途的消费者。</summary>
             private void OnPlayChanged(PlayModeStateChange state)
             {
                 if (state == PlayModeStateChange.ExitingPlayMode)
@@ -92,6 +97,7 @@ namespace YLFramework.Core
                 }
             }
 #endif
+            /// <summary>复核 owner 代次、固定根、来源与租约，以及接受后是否已关闭同一单实例范围。</summary>
             internal void Validate()
             {
                 if (IsTerminal || _isInvalidating || Owner == null || !ReferenceEquals(Owner.ViewLifecycle, _lifecycle))
@@ -128,6 +134,7 @@ namespace YLFramework.Core
                     }
                 }
             }
+            /// <summary>只在 owner、根及可证明来源一致时判为同范围，不凭相似地址猜测资源身份。</summary>
             internal bool KnownSame(PanelOperation other)
             {
                 if (Owner != other.Owner || Root != other.Root)
@@ -155,6 +162,7 @@ namespace YLFramework.Core
 
                 return true;
             }
+            /// <summary>校验已解析 Prefab 的根类型并计算一次有效配置，后续仍复核请求依赖。</summary>
             internal void Prepare(GameObject resolved)
             {
                 Validate();
@@ -177,11 +185,13 @@ namespace YLFramework.Core
                         throw new InvalidCastException("Panel 入口需要根 Panel。");
                     }
 
+                    // 逐字段按 Prefab 默认、Module 规则、本次覆盖的顺序合成，未指定字段继续沿用下层值。
                     Settings = _overrides.ApplyTo(Rules.Resolve(Name, Prefab).ApplyTo(panel.Defaults));
                     _isPrepared = true;
                 }
                 Validate();
             }
+            /// <summary>直接使用 Prefab 或按项目顺序同步取租约；只有允许回退的资源错误才尝试下一来源。</summary>
             internal void ResolveSync()
             {
                 Validate();
@@ -213,6 +223,7 @@ namespace YLFramework.Core
                 }
                 throw new InvalidOperationException("Panel prefab not found: " + Name, failure);
             }
+            /// <summary>拒绝实例后端交付与请求类型或已解析 Prefab 根类型不一致的对象。</summary>
             internal void ValidateAcquired(View view)
             {
                 if (!view || !_expected.IsInstanceOfType(view) || view.GetType() != Prefab.GetComponent<View>().GetType())
@@ -220,6 +231,7 @@ namespace YLFramework.Core
                     throw new InvalidCastException("Panel 实例后端交付的根类型与已解析 Prefab/请求类型不匹配。");
                 }
             }
+            /// <summary>至少跨一帧解析来源并转发真实资源进度，等待期间持续检查接受时的依赖。</summary>
             private IEnumerator ResolveAsync()
             {
                 yield return null;
@@ -283,6 +295,7 @@ namespace YLFramework.Core
                 }
                 throw new InvalidOperationException("Panel prefab not found: " + Name, failure);
             }
+            /// <summary>驱动资源解析后进入打开仲裁，将未产生结果的错误归入失败或依赖失效终态。</summary>
             internal IEnumerator Run()
             {
                 var routine = ResolveAsync();
@@ -329,6 +342,7 @@ namespace YLFramework.Core
                     StillValid() ? LoadViewStatus.Failed : LoadViewStatus.Invalidated);
                 }
             }
+            /// <summary>仅将当前依赖校验转换为布尔值，供异常收尾区分 Failed 与 Invalidated。</summary>
             internal bool StillValid()
             {
                 try
@@ -341,6 +355,7 @@ namespace YLFramework.Core
                     return false;
                 }
             }
+            /// <summary>仅在接受线程、尚未提交且未进入失效或失败收尾时取消本消费者。</summary>
             internal void Abort()
             {
                 if (Thread.CurrentThread.ManagedThreadId != _thread)
@@ -355,6 +370,7 @@ namespace YLFramework.Core
 
                 Finish(null, null, new OperationCanceledException("Panel 请求已取消。"), LoadViewStatus.Canceled);
             }
+            /// <summary>owner 退出时先撤销输入责任，延后终态通知以免观察者干扰 Module 清理。</summary>
             void IPendingViewRequest.Invalidate()
             {
                 if (IsTerminal)
@@ -366,6 +382,7 @@ namespace YLFramework.Core
                 Failure = new InvalidOperationException("Panel owner 生命周期已结束。");
                 ReleaseInputs();
             }
+            /// <summary>在 owner 清理边界之后发布此前保留的失效结果。</summary>
             void IPendingViewRequest.PublishInvalidation()
             {
                 _isInvalidating = false;
@@ -373,6 +390,7 @@ namespace YLFramework.Core
             }
             internal void AddClosedScope(GameObject source, UIRootContext root) => _closedScopes.Add((source, root));
 
+            /// <summary>先断开 pending、退出监听及输入引用，再释放资源请求、租约和参数，汇总清理错误。</summary>
             internal void ReleaseInputs()
             {
                 Application.quitting -= OnExecutionEnded;
@@ -415,6 +433,7 @@ namespace YLFramework.Core
                 }
                 ViewManager.ThrowCleanupErrors(errors);
             }
+            /// <summary>至多提交一次终态；成功通知前复核原 Session，清理失败可将本次结果改为失败。</summary>
             internal void Finish(Panel result, object session, Exception failure, LoadViewStatus status)
             {
                 if (IsTerminal || _isInvalidating)
@@ -472,6 +491,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>检查实例租约、额外来源 pin 和原 Prefab 引用，不因面板组件仍存活就视为资源有效。</summary>
         private static bool AreResourcesValid(PanelState state)
         {
             if (state.Panel.BackendLease != null && !state.Panel.BackendLease.IsValid)
@@ -492,9 +512,11 @@ namespace YLFramework.Core
         internal static bool IsPreparedValid(Panel panel) => _instance != null && _instance._states.TryGetValue(panel, out var state) &&
             _instance.IsCurrent(state) && state.Root && state.Root.HasValidStructure &&
             panel.GetComponentInParent<UIRootContext>(true) == state.Root && AreResourcesValid(state);
+        /// <summary>汇集已证明同源的会话地址和候选请求，拒绝它们在本规则快照中命中不同条目。</summary>
         private void ValidateRules(PanelOperation operation, PanelState existing, List<PanelOperation> candidates)
         {
             int matched = operation.Rules.Match(operation.Name, operation.Prefab);
+            // 同一 Prefab 的别名可补充唯一命中，但不能为同一资源叠加多条规则。
             void Check(string name)
             {
                 int other = operation.Rules.Match(name, operation.Prefab);
@@ -527,6 +549,7 @@ namespace YLFramework.Core
                 }
             }
         }
+        /// <summary>仲裁同范围消费者，复用有效 Single 或创建新会话，并分别交付每个消费者的结果。</summary>
         private void Execute(PanelOperation origin)
         {
             var rejected = new List<(PanelOperation Operation, Exception Error)>();
@@ -618,6 +641,7 @@ namespace YLFramework.Core
                     throw new InvalidOperationException("Single Panel 仍在首开初始化，不能重开半成品会话。");
                 }
 
+                // Single 只采用序号最新的有效数据与显示意图；较早消费者仍各自保有交付结果。
                 var winner = valid[valid.Count - 1];
                 Panel result = existing?.Panel;
                 object resultSession = existing?.Session;

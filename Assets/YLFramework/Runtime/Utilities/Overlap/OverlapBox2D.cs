@@ -5,15 +5,15 @@ using UnityEngine;
 
 namespace YLFramework.Overlap
 {
-    /// <summary>
-    /// 重叠检测矩形2D
-    /// </summary>
+    /// <summary>按局部中心偏移、缩放后的尺寸和世界 Z 轴旋转检测二维矩形重叠。</summary>
     public class OverlapBox2D : OverlapBase2D
     {
 
         #region 字段
+        /// <summary>检测中心相对对象原点的局部偏移。</summary>
         [SerializeField]
         protected Vector2 offset;
+        /// <summary>应用世界缩放前的矩形完整尺寸，查询时逐轴取缩放结果的绝对值。</summary>
         [SerializeField]
         protected Vector2 size = Vector2.one;
 
@@ -22,9 +22,7 @@ namespace YLFramework.Overlap
 
         #region 属性
 
-        /// <summary>
-        /// 偏移
-        /// </summary>
+        /// <summary>检测中心的局部偏移，转换到世界坐标时包含对象的缩放和旋转。</summary>
         public Vector2 Offset
         {
             get
@@ -37,9 +35,7 @@ namespace YLFramework.Overlap
             }
         }
 
-        /// <summary>
-        /// 大小
-        /// </summary>
+        /// <summary>未缩放的矩形完整尺寸，不是半尺寸；赋值本身不校验范围。</summary>
         public Vector2 Size
         {
             get
@@ -55,10 +51,9 @@ namespace YLFramework.Overlap
         #endregion
 
 
-        // Fix编码
-
         #region 方法
 
+        /// <summary>检测当前位置的矩形重叠并更新进入退出结果，不沿移动方向进行投射。</summary>
         public override void CheckOverlap()
         {
             if (!TryBeginCheck())

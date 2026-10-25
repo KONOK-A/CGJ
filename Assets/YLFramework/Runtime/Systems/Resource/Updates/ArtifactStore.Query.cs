@@ -8,13 +8,18 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>制品查询分段复制观测结果，不持有跨段文件锁，也不把候选判断作为实际删除授权。</remarks>
     public sealed partial class ArtifactStore
     {
         /// <summary>分段只读观测，不 Mount、不 Recover、不建锁。每次 MoveNext 须在 Unity 主线程，中止须 Dispose。</summary>
         /// <remarks>默认最多处理 10000 个扫描步骤，每段最多 32 步。正常 Store 事务不等待此扫描；事务/会话/保护变化使候选结论失效。</remarks>
+        /// <param name="completed">观测结束后接收报告的回调；提前释放枚举器不会交付报告。</param>
+        /// <param name="maxEntries">扫描步骤上限，范围为 1 至 100000，并非仅统计最终条目数。</param>
+        /// <param name="cancellation">取消观测后交付 Canceled 报告，不修改 Store。</param>
         public IEnumerator QueryAsync(Action<ArtifactStoreReport> completed, int maxEntries = 10000, CancellationToken cancellation = default)
             => Query(this, completed, maxEntries, cancellation);
 
+        /// <summary>在调用时校验线程、回调和扫描预算，再创建可处理未配置 Store 的观测枚举器。</summary>
         internal static IEnumerator Query(ArtifactStore store, Action<ArtifactStoreReport> completed, int maxEntries, CancellationToken cancellation)
         {
             ResourceSystem.AssertThread();
@@ -32,6 +37,7 @@ namespace YLFramework.Resource
             return RunQuery(store, completed, maxEntries, cancellation);
         }
 
+        // 分段扫描并复核运行中身份与文件观测值；发生变化时保留数据但撤销候选结论。
         private static IEnumerator RunQuery(ArtifactStore store, Action<ArtifactStoreReport> completed, int maxEntries, CancellationToken cancellation)
         {
             ResourceSystem.AssertThread();
@@ -125,6 +131,7 @@ namespace YLFramework.Resource
             completed(scan.Report(scan.Status));
         }
 
+        // 仅探测已有文件锁是否可读，不创建、等待或跨扫描步骤持有锁。
         private void ProbeQueryLock()
         {
             var path = Path.Combine(RootPath, ".ylr-store.lock");
@@ -144,11 +151,14 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>标记文件系统观测值在本次分段扫描期间发生变化。</summary>
         private sealed class ObservationChanged : IOException
         {
+            /// <summary>保存需要重新观测的路径说明。</summary>
             internal ObservationChanged(string path) : base("An observed filesystem entry changed; retry: " + path) { }
         }
 
+        /// <summary>保存一次分段扫描的可变中间数据，最终报告只复制值与只读集合。</summary>
         private sealed class ArtifactScan
         {
             private readonly ArtifactStore _store;
@@ -161,8 +171,10 @@ namespace YLFramework.Resource
             internal readonly List<string> Operations = new();
             internal readonly List<string> Issues = new();
             internal ArtifactQueryStatus Status = ArtifactQueryStatus.Ready;
+            /// <summary>绑定要观测的 Store，不执行目录访问。</summary>
             internal ArtifactScan(ArtifactStore store) => this._store = store;
 
+            /// <summary>扫描期间逐步补充的单个条目，不直接暴露给报告使用者。</summary>
             private sealed class Entry
             {
                 internal string Path;
@@ -176,12 +188,14 @@ namespace YLFramework.Resource
                 internal readonly List<string> Issues = new();
             }
 
+            /// <summary>合并某路径的持久或运行中保护原因，不实际保活版本。</summary>
             internal void Protect(string path, ArtifactProtection reason)
             {
                 _protections.TryGetValue(path, out var current);
                 _protections[path] = current | reason;
             }
 
+            // 采集路径存在性、属性、逻辑长度和修改时间；不跟随链接或读取内容 hash。
             private static (bool exists, FileAttributes attributes, long length, long ticks) Observe(string path)
             {
                 try
@@ -201,6 +215,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 保存路径观测值，重复遇到同一路径时要求仍一致。
             private void Remember(string path)
             {
                 var value = Observe(path);
@@ -212,6 +227,7 @@ namespace YLFramework.Resource
                 _observations[path] = value;
             }
 
+            /// <summary>分步复查已采集路径，并要求持久保护版本具有已识别的完整记录集合。</summary>
             internal IEnumerable<object> VerifyObservations()
             {
                 if (Status != ArtifactQueryStatus.Ready)
@@ -239,6 +255,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>依次读取归属、控制记录、保护与目录布局，发现待恢复控制槽时不代为恢复。</summary>
             internal IEnumerable<object> Scan()
             {
                 Remember(_store.RootPath);
@@ -317,6 +334,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 复制正式准备记录的转换并登记保护，未知或 next 条目仅报告而不收尾。
             private IEnumerable<object> Prepared()
             {
                 Remember(_store.PreparedRoot);
@@ -355,6 +373,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 核对当前层的预期目录和控制文件，将未登记条目单独保留为未知观测。
             private IEnumerable<object> Layout(string root, IEnumerable<string> directories, IEnumerable<string> files, ResourceProjectMount project)
             {
                 Remember(root);
@@ -385,6 +404,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 建立并登记扫描中的可变条目，后续统计与错误写入同一对象。
             private Entry NewEntry(string path, ResourceProjectMount project, ArtifactKind kind, ArtifactState state)
             {
                 var entry = new Entry { Path = path, Project = project, Kind = kind, State = state };
@@ -392,6 +412,7 @@ namespace YLFramework.Resource
                 return entry;
             }
 
+            // 记录普通文件的逻辑长度并累加，路径消失或改成目录视为观测变化。
             private void AddBytes(Entry entry, string path)
             {
                 Remember(path);
@@ -404,12 +425,14 @@ namespace YLFramework.Resource
                 entry.Bytes = checked(entry.Bytes + value.length);
             }
 
+            // 将单个已知文件登记为仅统计大小的条目，不赋予清理资格。
             private void AddFile(string path, ResourceProjectMount project, ArtifactKind kind)
             {
                 var entry = NewEntry(path, project, kind, ArtifactState.Unknown);
                 Attempt(entry, () => AddBytes(entry, path));
             }
 
+            // 只观察未知条目本身；未知目录不遍历、链接不跟随且始终保留。
             private void AddUnknown(string path, ResourceProjectMount project)
             {
                 var entry = NewEntry(path, project, ArtifactKind.Unknown, ArtifactState.Unknown);
@@ -437,6 +460,7 @@ namespace YLFramework.Resource
                 entry.Issues.Add("Not a registered cleanup target; preserved.");
             }
 
+            // 将文件类失败写入条目并撤销候选资格，观测变化则上抛以终止整次结论。
             private static bool Attempt(Entry entry, Action action)
             {
                 try
@@ -458,6 +482,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 分步核对正式或 staging 的归属与文件集合，不重新计算内容摘要。
             private IEnumerable<object> Versions(ResourceProjectMount project, string folder, ArtifactKind kind)
             {
                 var root = Path.Combine(_store.ProjectRoot(project.ProjectId), folder);
@@ -557,6 +582,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 将可匹配的分片与元数据作为一组统计，未认领路径另列为未知条目。
             private IEnumerable<object> Parts(ResourceProjectMount project)
             {
                 var root = Path.Combine(_store.ProjectRoot(project.ProjectId), "parts");
@@ -625,6 +651,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>复制扫描中间数据，仅为 Ready 且归属、大小及保护判断合格的条目标记候选。</summary>
             internal ArtifactStoreReport Report(ArtifactQueryStatus status) => new(_store, _started, status,
                 _entries.Select(x =>
                 {

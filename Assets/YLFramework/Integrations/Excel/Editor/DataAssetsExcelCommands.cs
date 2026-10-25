@@ -11,6 +11,10 @@ namespace YLFramework.Integrations.Excel.Editor
     /// <summary>只在可选Excel程序集依赖普通DataAssets作者工具，不建立反向依赖。</summary>
     public static class DataAssetsExcelCommands
     {
+        /// <summary>校验 DataAssets 根及其绑定类型，为本根拥有的定义资产创建导入预览。</summary>
+        /// <param name="root">已保存的 YL DataAssets 主资产根。</param>
+        /// <param name="path">待读取的 .xlsx 工作簿路径。</param>
+        /// <returns>包含诊断的一次性计划；根校验失败也以计划错误返回，不立即写入资产。</returns>
         public static ExcelImportPlan PreviewImport(ScriptableObjectConfigs root, string path)
         {
             try
@@ -27,6 +31,10 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        /// <summary>按根绑定的数据类型导出全部定义，成功后按根 GUID 记住工作簿路径。</summary>
+        /// <param name="root">绑定类型和条目所有权均有效的已保存 DataAssets 主资产根。</param>
+        /// <param name="path">父目录已存在的 .xlsx 输出路径，将替换整个工作簿。</param>
+        /// <remarks>最近路径保存在编辑器偏好中，不序列化进运行时配置资产。</remarks>
         public static void Export(ScriptableObjectConfigs root, string path)
         {
             var type = RequireValidRoot(root);
@@ -34,6 +42,7 @@ namespace YLFramework.Integrations.Excel.Editor
             DataAssetsWorkbookMemory.Remember(root, path);
         }
 
+        // 验证已保存的根、可用绑定类型及现有条目所有权，返回实际导出或导入基类型。
         private static Type RequireValidRoot(ScriptableObjectConfigs root)
         {
             if (root == null || !AssetDatabase.IsMainAsset(root) || !AssetDatabase.GetAssetPath(root).StartsWith("Assets/", StringComparison.Ordinal))
@@ -64,6 +73,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return type;
         }
 
+        // 为当前根选择工作簿并显示预览，成功应用后清除此根的查询缓存。
         [MenuItem("Assets/YLFramework/Excel/Preview Import Selected Data Root", false, 2100)]
         private static void ImportSelected()
         {
@@ -84,9 +94,11 @@ namespace YLFramework.Integrations.Excel.Editor
             };
         }
 
+        // 仅依据当前选择是否为 DataAssets 根决定导入菜单可用性，不替代导入预检。
         [MenuItem("Assets/YLFramework/Excel/Preview Import Selected Data Root", true)]
         private static bool CanImportSelected() => Selection.activeObject is ScriptableObjectConfigs;
 
+        // 导出当前根并在覆盖前确认，将导出异常显示给用户。
         [MenuItem("Assets/YLFramework/Excel/Export Selected Data Root", false, 2101)]
         private static void ExportSelected()
         {
@@ -112,6 +124,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 仅依据当前选择是否为 DataAssets 根决定导出菜单可用性。
         [MenuItem("Assets/YLFramework/Excel/Export Selected Data Root", true)]
         private static bool CanExportSelected() => Selection.activeObject is ScriptableObjectConfigs;
     }

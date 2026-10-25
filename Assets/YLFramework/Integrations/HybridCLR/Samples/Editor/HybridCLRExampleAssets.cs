@@ -10,9 +10,14 @@ using YLFramework.Integrations.HybridCLR.Editor;
 
 namespace YLFramework.Samples.HybridCLR.Editor
 {
+    /// <summary>仅供 Editor 显式创建隔离接入样例的作者工具，不在运行时或打开窗口时自动执行。</summary>
     public static class HybridCLRExampleAssets
     {
         /// <summary>只创建一个全新自有样例目录；不配置官方热更名单、切换后端或保存场景。</summary>
+        /// <param name="assetDirectory">父文件夹已存在、目标尚不存在的 Assets 相对目录。</param>
+        /// <param name="persistentBaselineDirectory">写入 Profile 的持久基线目录，后续构建另行检查边界和归属。</param>
+        /// <returns>已保存并关联代码、配置和真实热更 Prefab 的样例 Profile。</returns>
+        /// <remarks>调用前须已加载 Entry 样例程序集；官方热更登记及原生环境仍由接收工程显式准备。</remarks>
         public static HybridCLRBuildProfile Create(string assetDirectory, string persistentBaselineDirectory)
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)

@@ -27,9 +27,9 @@ namespace YLFramework.Core
             () => new LoadViewArgs(), onAllocate: args => args.BeginLease(),
             reset: args => args.ResetLease(), cacheOrder: PoolCacheOrder.Lifo);
 
+        /// <summary>在执行会话重置时清空闲置缓存，仍在使用的参数继续由原操作归还。</summary>
         static LoadViewArgs()
         {
-            // 只清空闲缓存；已接管参数仍由原操作终态负责释放，不替换其所属池。
             SingletonSessionState.RegisterSessionReset(_pool.Clear);
         }
 
@@ -59,6 +59,7 @@ namespace YLFramework.Core
 
         #region 查询
 
+        /// <summary>在可读窗口按键读取字符串；该类型分区缺失此键时返回空字符串。</summary>
         public string GetString(string name)
         {
             EnsureReadable();
@@ -70,6 +71,7 @@ namespace YLFramework.Core
             return string.Empty;
         }
 
+        /// <summary>在可读窗口按键读取 int；缺失时返回 0，不向其他数值分区转换。</summary>
         public int GetInt(string name)
         {
             EnsureReadable();
@@ -81,6 +83,7 @@ namespace YLFramework.Core
             return 0;
         }
 
+        /// <summary>在可读窗口按键读取 bool；缺失时返回 false。</summary>
         public bool GetBool(string name)
         {
             EnsureReadable();
@@ -92,6 +95,7 @@ namespace YLFramework.Core
             return false;
         }
 
+        /// <summary>在可读窗口按键读取 float；缺失时返回 0，不向其他数值分区转换。</summary>
         public float GetFloat(string name)
         {
             EnsureReadable();
@@ -103,6 +107,7 @@ namespace YLFramework.Core
             return 0.0f;
         }
 
+        /// <summary>在可读窗口按键读取 long；缺失时返回 0，不向其他数值分区转换。</summary>
         public long GetLong(string name)
         {
             EnsureReadable();
@@ -114,6 +119,7 @@ namespace YLFramework.Core
             return 0;
         }
 
+        /// <summary>在可读窗口按键读取 double；缺失时返回 0，不向其他数值分区转换。</summary>
         public double GetDouble(string name)
         {
             EnsureReadable();
@@ -125,6 +131,7 @@ namespace YLFramework.Core
             return 0.0;
         }
 
+        /// <summary>在可读窗口按键借读对象引用；缺失时返回 null，不转移对象所有权。</summary>
         public object GetObject(string name)
         {
             EnsureReadable();
@@ -140,42 +147,49 @@ namespace YLFramework.Core
 
         #region 修改
 
+        /// <summary>在加载操作接管前写入或覆盖字符串分区的键值。</summary>
         public void SetString(string name, string value)
         {
             EnsureWritable();
             _strings[name] = value;
         }
 
+        /// <summary>在加载操作接管前写入或覆盖 int 分区的键值。</summary>
         public void SetInt(string name, int value)
         {
             EnsureWritable();
             _ints[name] = value;
         }
 
+        /// <summary>在加载操作接管前写入或覆盖 bool 分区的键值。</summary>
         public void SetBool(string name, bool value)
         {
             EnsureWritable();
             _bools[name] = value;
         }
 
+        /// <summary>在加载操作接管前写入或覆盖 float 分区的键值。</summary>
         public void SetFloat(string name, float value)
         {
             EnsureWritable();
             _floats[name] = value;
         }
 
+        /// <summary>在加载操作接管前写入或覆盖 long 分区的键值。</summary>
         public void SetLong(string name, long value)
         {
             EnsureWritable();
             _longs[name] = value;
         }
 
+        /// <summary>在加载操作接管前写入或覆盖 double 分区的键值。</summary>
         public void SetDouble(string name, double value)
         {
             EnsureWritable();
             _doubles[name] = value;
         }
 
+        /// <summary>在加载操作接管前保存对象引用；参数归还只清除引用，不释放对象。</summary>
         public void SetObject(string name, object value)
         {
             EnsureWritable();
@@ -186,6 +200,7 @@ namespace YLFramework.Core
 
         #region 生命周期
 
+        /// <summary>开始一次干净的本地租用，记录线程并清除旧数据，不授予加载操作所有权。</summary>
         private void BeginLease()
         {
             if (_isLeased)
@@ -200,6 +215,7 @@ namespace YLFramework.Core
             _isLeased = true;
         }
 
+        /// <summary>归还时清空值与租用标记，使旧引用在再次租用前不可访问。</summary>
         private void ResetLease()
         {
             ClearValues();
@@ -256,6 +272,7 @@ namespace YLFramework.Core
             _isReading = false;
         }
 
+        /// <summary>拒绝从 New 所在线程之外访问这次参数租用。</summary>
         private void EnsureThread()
         {
             if (_threadId != 0 && _threadId != Thread.CurrentThread.ManagedThreadId)
@@ -264,6 +281,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>要求参数仍处于租用期且未跨线程，归还后的引用不能继续使用。</summary>
         private void EnsureLeased()
         {
             if (!_isLeased)
@@ -274,6 +292,7 @@ namespace YLFramework.Core
             EnsureThread();
         }
 
+        /// <summary>允许未接管租用读取；接管后只在加载回调开放的借读窗口内允许读取。</summary>
         private void EnsureReadable()
         {
             EnsureLeased();
@@ -283,6 +302,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>只允许调用方修改或主动归还尚未被加载操作接管的租用。</summary>
         private void EnsureWritable()
         {
             EnsureLeased();
@@ -292,6 +312,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>清空全部类型分区，解除参数对业务对象的持有，不负责这些对象的释放。</summary>
         private void ClearValues()
         {
             _strings.Clear();
@@ -303,6 +324,7 @@ namespace YLFramework.Core
             _objects.Clear();
         }
 
+        /// <summary>通过专用池归还当前参数，由池重置租用状态并清除引用。</summary>
         private void ReturnToPool()
         {
             _pool.Recycle(this);
@@ -315,7 +337,7 @@ namespace YLFramework.Core
         /// <summary>
         /// 在主线程开始本地租用。接管前由调用方读写，交给加载操作后不得保存引用。
         /// </summary>
-        /// <returns></returns>
+        /// <returns>本次租用的空参数容器，不得跨加载操作保存或复用引用。</returns>
         public static LoadViewArgs New()
         {
             return _pool.Allocate();

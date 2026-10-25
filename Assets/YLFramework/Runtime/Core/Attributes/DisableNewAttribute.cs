@@ -15,10 +15,13 @@ namespace YLFramework.Core.RoslynAnalyzers
     public class DisableNewAttribute : Attribute
     {
 
+        /// <summary>声明类型须通过正式工厂创建；构造器不改变类型的可访问性。</summary>
         public DisableNewAttribute()
         {
         }
 
+        /// <summary>声明带诊断原因的工厂创建约束。</summary>
+        /// <param name="message">YL0004 从 Attribute 元数据读取并附加到诊断的说明。</param>
         public DisableNewAttribute(string message)
         {
         }

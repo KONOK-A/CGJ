@@ -45,6 +45,7 @@ namespace YLFramework.Actions
                 }
             });
 
+        /// <summary>仅供对象池创建重复组合，内部序列在每次分配时另行取得。</summary>
         private Repeat()
         {
         }

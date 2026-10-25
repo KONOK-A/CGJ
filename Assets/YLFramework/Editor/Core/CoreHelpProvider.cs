@@ -10,16 +10,20 @@ using YLFramework.Core;
 
 namespace YLFramework.Editor.Core
 {
+    /// <summary>显式注册 Core 的精选指南、API 类型和 XML 路径，不扫描业务模块或执行生成器。</summary>
     [InitializeOnLoad]
     internal static class CoreHelpProvider
     {
         private const string ModuleId = "core";
 
+        /// <summary>在 Editor 初始化时登记惰性内容工厂，尚不建立模块内容或 API 索引。</summary>
         static CoreHelpProvider() => HelpRegistry.Register(ModuleId, "Core", CreateModule);
 
+        /// <summary>从 Core 菜单打开公共帮助窗口并选择本模块。</summary>
         [MenuItem("YLFramework/Core/帮助")]
         private static void Open() => HelpWindow.Open(ModuleId);
 
+        /// <summary>建立本模块的静态展示数据；XML 路径仅指明读取来源，不生成缺失文档。</summary>
         private static HelpModule CreateModule()
         {
             var guides = new[]
@@ -91,9 +95,11 @@ namespace YLFramework.Editor.Core
             };
         }
 
+        /// <summary>建立 Core 指南，并将明确选定的类型同时用于反向关联和正文精选入口。</summary>
         private static HelpPage Guide(string id, string title, string summary, Type[] types, params HelpBlock[] blocks) =>
             new HelpPage(id, title, "Core 指南", summary, blocks) { RelatedTypes = types, FeaturedTypes = types };
 
+        /// <summary>将框架文档的相对路径转换为链接；实际打开交由用户点击触发。</summary>
         private static HelpBlock Document(string title, string path) => HelpBlock.Link(title,
             new Uri(Path.GetFullPath("Assets/YLFramework/Documentation/" + path)).AbsoluteUri);
     }

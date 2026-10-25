@@ -16,6 +16,7 @@ using YLFramework.Async;
 
 namespace YLFramework.Integrations.HybridCLR
 {
+    /// <summary>隔离原生调用与已加载程序集查询，供加载器按明确的执行模式使用。</summary>
     internal sealed class HybridCLRRuntimeCalls
     {
         internal bool IsSimulation;
@@ -24,8 +25,10 @@ namespace YLFramework.Integrations.HybridCLR
         internal Func<Assembly[]> LoadedAssemblies;
     }
 
+    /// <summary>跨加载器共享的进程代码登记及互斥状态，不随实例释放而清除。</summary>
     internal sealed class HybridCLRProcessState
     {
+        /// <summary>已成功登记的 DLL 身份与内容；metadata 记录不持有程序集实例。</summary>
         internal sealed class Loaded
         {
             internal string Identity;
@@ -40,6 +43,11 @@ namespace YLFramework.Integrations.HybridCLR
         internal bool RequiresRestart;
     }
 
+    /// <summary>借用已启动的 ResourceSystem，在 Unity 主线程校验代码并衔接 Core Module 生命周期。</summary>
+    /// <remarks>
+    /// 由 asmdef 的 YL_HYBRIDCLR_9_0_3 门禁启用，不会自行安装运行库或启动资源服务。
+    /// Editor 模式不证明目标 Player 可用；非 Editor 的默认调用仅开放 Windows IL2CPP 条件编译路径。
+    /// </remarks>
     public sealed class HybridCLRLoader : IDisposable
     {
         private static HybridCLRProcessState _processState = new HybridCLRProcessState();
@@ -62,12 +70,14 @@ namespace YLFramework.Integrations.HybridCLR
         private bool _isDisposed;
         private bool _hasSessionEnded;
 
+        /// <summary>成功加载后的结果与唯一 manifest 租约，用于保持活动代码资源闭包。</summary>
         private sealed class Session
         {
             internal AssetLease<TextAsset> Manifest;
             internal HybridCLRLoadResult Result;
         }
 
+        /// <summary>一次加载中的资源请求、已校验字节及不可逆调用状态。</summary>
         private sealed class Job
         {
             internal ResourceAddress Address;
@@ -90,6 +100,7 @@ namespace YLFramework.Integrations.HybridCLR
             _moduleRequests.Values;
 #endif
 
+        // 开始新 Play 会话并使上一轮未完成请求失效，重绑退出通知。
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void BeginSession()
         {
@@ -106,6 +117,7 @@ namespace YLFramework.Integrations.HybridCLR
         }
 
 #if UNITY_EDITOR
+        // 记录 Editor 主线程并重绑 Play 状态通知，兼顾禁用 Domain Reload 的会话。
         [UnityEditor.InitializeOnLoadMethod]
         private static void InitializeEditorThread()
         {
@@ -113,6 +125,7 @@ namespace YLFramework.Integrations.HybridCLR
             UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeChanged;
             UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeChanged;
         }
+        // 在退出 Play 时终结待处理入口，不让回调越过会话边界。
         private static void OnPlayModeChanged(UnityEditor.PlayModeStateChange state)
         {
             if (state == UnityEditor.PlayModeStateChange.ExitingPlayMode || state == UnityEditor.PlayModeStateChange.EnteredEditMode)
@@ -122,6 +135,7 @@ namespace YLFramework.Integrations.HybridCLR
         }
 #endif
 
+        // 先封闭新请求，再终结登记中的加载器请求并释放其资源屏障。
         private static void InvalidatePendingSessions()
         {
             _isExecutionStopping = true;
@@ -155,6 +169,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 仅在存在加载或 Module 请求时登记加载器，供会话终结统一处理。
         private void UpdatePendingRegistration()
         {
             if (_active == null && !PendingModuleRequests.Any())
@@ -167,9 +182,13 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        /// <summary>在主线程创建加载器，借用当前可用的资源服务而不取得其关闭权。</summary>
+        /// <param name="resources">已启动并挂载所需项目的 ResourceSystem。</param>
+        /// <param name="appContentCompatibilityId">应用明确提供的基座内容兼容身份。</param>
         public HybridCLRLoader(ResourceSystem resources, string appContentCompatibilityId)
             : this(resources, appContentCompatibilityId, DefaultCalls(), _processState) { }
 
+        // 校验借用服务和调用集，并固定本加载器所属的会话代次。
         internal HybridCLRLoader(ResourceSystem resources, string appContentCompatibilityId, HybridCLRRuntimeCalls calls, HybridCLRProcessState process)
         {
             AssertThread();
@@ -196,6 +215,7 @@ namespace YLFramework.Integrations.HybridCLR
             _session = _generation;
         }
 
+        // 按编译路径选择 Editor 模拟或原生 SuperSet metadata 调用，其他路径直接拒绝。
         private static HybridCLRRuntimeCalls DefaultCalls()
         {
             AssertThread();
@@ -217,6 +237,13 @@ namespace YLFramework.Integrations.HybridCLR
 #endif
         }
 
+        /// <summary>读取并验证清单及全部 DLL 字节；原生路径先补充 metadata，再依赖优先加载热更程序集。</summary>
+        /// <param name="manifestAddress">显式项目内的 hybridclr/manifest.json 地址。</param>
+        /// <returns>可 yield 的请求；同实例同地址的进行中调用共享请求，成功会话复用结果。</returns>
+        /// <remarks>
+        /// 进程内其他加载任务占用时返回 Busy 终态，不排队；成功后只保留 manifest Lease，DLL 租约随读取释放。
+        /// 进程代码登记冲突或不可逆调用失败通过 RequiresRestart 报告，释放加载器不能允许同进程换版。
+        /// </remarks>
         public HybridCLRLoadRequest LoadAsync(ResourceAddress manifestAddress)
         {
             RequireAvailable(manifestAddress);
@@ -283,6 +310,7 @@ namespace YLFramework.Integrations.HybridCLR
             return request;
         }
 
+        // 持续检查资源会话并映射实际读取进度，不依赖调用方是否等待请求。
         private IEnumerator ObserveLoad(Job job)
         {
             while (!job.Request.IsDone)
@@ -307,6 +335,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 接收唯一有效的清单回调，取得屏障租约并核验运行身份。
         private void ReadManifest(Job job, ResourceRequest<AssetLease<TextAsset>> pending)
         {
             if (!ReferenceEquals(job.Pending, pending) || job.Request.IsDone)
@@ -344,6 +373,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 顺序读取代码资源，兼容同步完成及异步回调，全部验证后才进入加载阶段。
         private void Pump(Job job)
         {
             try
@@ -388,6 +418,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 核对 DLL 长度、摘要及 PE MVID，留存字节后立即释放大资源租约。
         private static void ReadPayload(Job job, ResourceRequest<AssetLease<TextAsset>> pending)
         {
             job.Pending = null;
@@ -413,6 +444,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 先核对进程共享登记，再模拟复用或执行不可逆加载，并提交成功会话。
         private void LoadValidated(Job job)
         {
             RequireAvailable(job.Address);
@@ -518,9 +550,11 @@ namespace YLFramework.Integrations.HybridCLR
             Finish(job, result, null);
         }
 
+        // 从已验证描述创建进程登记，供后续加载器严格识别相同内容。
         private static HybridCLRProcessState.Loaded Record(HybridCLRPayload payload, bool metadata, Assembly assembly) =>
             new HybridCLRProcessState.Loaded { Identity = payload.Identity, Hash = payload.Sha256, Mvid = payload.Mvid, IsMetadata = metadata, Assembly = assembly };
 
+        // 收尾资源与互斥占用；进入不可逆阶段后的错误污染整个进程的后续加载资格。
         private void Finish(Job job, HybridCLRLoadResult result, Exception error)
         {
             if (job.Request.IsDone)
@@ -557,6 +591,12 @@ namespace YLFramework.Integrations.HybridCLR
             job.Request.Finish(result, error, job.RequiresRestart || _process.RequiresRestart);
         }
 
+        /// <summary>先加载项目代码，再仅从精确入口程序集解析类型并使用 Core 启动 Module。</summary>
+        /// <param name="manifestAddress">项目内规范代码清单地址。</param>
+        /// <param name="entryAssemblyName">清单中入口程序集的精确简单名称。</param>
+        /// <param name="moduleTypeFullName">入口程序集内具体 Module 类型的完整名称。</param>
+        /// <returns>同一地址、程序集及类型的进行中调用共享的启动请求。</returns>
+        /// <remarks>进度将代码加载映射到 0 至 0.8，Core 启动映射到 0.8 至 1；Module 关闭后才能释放入口。</remarks>
         public HybridCLRModuleRequest StartModuleAsync(ResourceAddress manifestAddress, string entryAssemblyName, string moduleTypeFullName)
         {
             RequireAvailable(manifestAddress);
@@ -566,6 +606,11 @@ namespace YLFramework.Integrations.HybridCLR
 
 #if UNITY_EDITOR
         /// <summary>显式使用 Editor 已加载的程序集启动 Module；不校验代码包，也不读取或回退到代码资源。</summary>
+        /// <param name="projectId">Core 资源访问所属项目身份。</param>
+        /// <param name="entryAssemblyName">AppDomain 中唯一匹配的入口程序集简单名称。</param>
+        /// <param name="moduleTypeFullName">该程序集内具体 Module 类型的完整名称。</param>
+        /// <returns>快路径启动请求；已解析的代码结果使用 EditorFast 模式，CodePackageId 为空。</returns>
+        /// <remarks>要求已有 Core 资源绑定，不作加载失败回退；Module 所有权与正式入口相同。</remarks>
         public HybridCLRModuleRequest StartEditorModuleAsync(string projectId, string entryAssemblyName, string moduleTypeFullName)
         {
             AssertThread();
@@ -581,6 +626,7 @@ namespace YLFramework.Integrations.HybridCLR
         }
 #endif
 
+        // 拒绝空入口名称，避免通过扫描其他程序集猜测 Module 类型。
         private static void RequireModuleArguments(string entryAssemblyName, string moduleTypeFullName)
         {
             if (string.IsNullOrWhiteSpace(entryAssemblyName))
@@ -594,6 +640,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 按入口合并进行中请求，并统一连接代码、Core 启动及会话失效的收尾路径。
         private HybridCLRModuleRequest StartModuleRequest(Dictionary<(ResourceAddress, string, string), HybridCLRModuleRequest> requests,
             ResourceAddress manifestAddress, string entryAssemblyName, string moduleTypeFullName, bool editorFast)
         {
@@ -606,6 +653,7 @@ namespace YLFramework.Integrations.HybridCLR
             var request = new HybridCLRModuleRequest { ProjectId = manifestAddress.ProjectId, AssemblyName = entryAssemblyName };
             requests[key] = request;
             UpdatePendingRegistration();
+            // 先解绑观察与去重记录，再通知终态，允许完成回调安全地发起后续请求。
             void FinishModule(Exception error, bool restart = false)
             {
                 if (request.IsDone)
@@ -657,6 +705,7 @@ namespace YLFramework.Integrations.HybridCLR
                 }
 #endif
                 var load = LoadAsync(manifestAddress);
+                // 将代码加载的阶段与进度转发到外层 Module 请求。
                 void Progressed(HybridCLRLoadRequest source)
                 {
                     if (request.IsDone)
@@ -711,6 +760,7 @@ namespace YLFramework.Integrations.HybridCLR
             return request;
         }
 
+        // 校验精确 Module 类型及所有权，并观察既有 Core 启动请求。
         private void StartCoreModule(ResourceAddress address, string entryAssemblyName, string moduleTypeFullName,
             HybridCLRModuleRequest request, Action<Exception, bool> finish)
         {
@@ -739,6 +789,7 @@ namespace YLFramework.Integrations.HybridCLR
             var startup = ModuleManager.StartUpModule(type);
             request.Module = startup.Module;
             _modules.Add(startup.Module);
+            // 转发 Core 终态，并在启动失败时移除加载器的 Module 登记。
             void Started(StartUpModuleRequest done)
             {
                 if (request.IsDone)
@@ -754,6 +805,7 @@ namespace YLFramework.Integrations.HybridCLR
                 request.Stage = done.Exception == null ? "Complete" : "Module/" + done.Step;
                 finish(done.Exception, false);
             }
+            // 以协程检查会话并转发 Core 的实际阶段与进度。
             IEnumerator ObserveCore()
             {
                 while (!request.IsDone)
@@ -806,6 +858,9 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        /// <summary>在请求结束且本入口 Module 已关闭后释放 manifest 屏障，重复释放无操作。</summary>
+        /// <remarks>不关闭借用的 ResourceSystem、不卸载程序集、不清除进程代码身份或重启要求。</remarks>
+        /// <exception cref="InvalidOperationException">仍有请求或当前会话内尚未关闭的 Module。</exception>
         public void Dispose()
         {
             AssertThread();
@@ -831,6 +886,7 @@ namespace YLFramework.Integrations.HybridCLR
             _pendingLoaders.Remove(this);
         }
 
+        // 在接受工作前核对主线程、实例与会话有效性，以及显式清单地址。
         private void RequireAvailable(ResourceAddress address)
         {
             AssertThread();
@@ -850,6 +906,7 @@ namespace YLFramework.Integrations.HybridCLR
             }
         }
 
+        // 将 Unity 对象、资源及 Module 操作限制在初始化记录的主线程。
         private static void AssertThread()
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThread)

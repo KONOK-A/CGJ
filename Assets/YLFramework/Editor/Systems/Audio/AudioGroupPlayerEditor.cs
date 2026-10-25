@@ -7,9 +7,11 @@ using YLFramework.Audio;
 
 namespace YLFramework.Editor.Audio
 {
+    /// <summary>编辑组播放器的素材、通道和借源配置，不在 Inspector 中登记通道或接管音源。</summary>
     [CustomEditor(typeof(AudioGroupPlayer)), CanEditMultipleObjects]
     public sealed class AudioGroupPlayerEditor : UnityEditor.Editor
     {
+        /// <summary>绘制组播放配置与事件，通过序列化提交保留 Undo 和 Prefab Override，再逐对象显示诊断。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -57,6 +59,9 @@ namespace YLFramework.Editor.Audio
             }
         }
 
+        /// <summary>只读检查素材组、通道身份、借源可观察状态与播放配置，不加载素材或写入持久设置。</summary>
+        /// <param name="serialized">单个 AudioGroupPlayer 的序列化视图。</param>
+        /// <remarks>不查询运行时借用登记或通道占用表；音源未播放不代表可借用，通道名合法也不代表当前唯一。</remarks>
         internal static List<string> GetWarnings(SerializedObject serialized)
         {
             var warnings = new List<string>();

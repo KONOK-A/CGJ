@@ -11,6 +11,8 @@ using YLFramework.Serialization;
 
 namespace YLFramework.Editor.Foundation
 {
+    /// <summary>在 Editor 中绘制可序列化字典的原始行与诊断，支持 UI Toolkit 和 IMGUI。</summary>
+    /// <remarks>通过 SerializedProperty 编辑原始数据，不直接重建运行时索引；多选仅在各目标字段存在且行数一致时开放同行字段编辑。</remarks>
     [CustomPropertyDrawer(typeof(SerializedDictionary<,>), true)]
     public class SerializedDictionaryDrawer : PropertyDrawer
     {
@@ -18,6 +20,8 @@ namespace YLFramework.Editor.Foundation
         private static float DiagnosticHeight => EditorGUIUtility.singleLineHeight * 4;
         private Vector2 _diagnosticScroll;
 
+        /// <summary>创建带诊断的 UI Toolkit 属性树，并在序列化对象变化时刷新诊断和必要的行结构。</summary>
+        /// <returns>由 Inspector 承接绑定的根元素；结构变化后新控件在本方法内重新绑定同一序列化对象。</returns>
         public override VisualElement CreatePropertyGUI(SerializedProperty property)
         {
             var serialized = property.serializedObject;
@@ -30,6 +34,7 @@ namespace YLFramework.Editor.Foundation
             int previousSize = -1;
             bool previousEditable = false;
 
+            // 重新按路径取得当前属性，只有行数或编辑资格变化才重建控件，避免普通值变化打断编辑。
             void Refresh()
             {
                 var current = serialized.FindProperty(path);
@@ -80,6 +85,7 @@ namespace YLFramework.Editor.Foundation
             return root;
         }
 
+        /// <summary>在 IMGUI 中绘制固定高度诊断与原始行，多选时隐藏结构操作并限制不兼容的字段编辑。</summary>
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
             EditorGUI.BeginProperty(position, label, property);
@@ -139,6 +145,7 @@ namespace YLFramework.Editor.Foundation
             }
         }
 
+        /// <summary>计算诊断区与当前展开行的总高度，匹配单选列表和多选逐字段布局。</summary>
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
             // 高度不依赖窗口宽度；窄列与长诊断在固定区域滚动，不覆盖后续字段。
@@ -164,6 +171,7 @@ namespace YLFramework.Editor.Foundation
             return height;
         }
 
+        /// <summary>解析实际字典键类型并汇总各目标诊断，以字段存在性和行数一致性决定多选能否编辑。</summary>
         private string Describe(SerializedProperty property, out bool editable)
         {
             editable = true;
@@ -214,6 +222,7 @@ namespace YLFramework.Editor.Foundation
             return text.ToString();
         }
 
+        /// <summary>按实际键比较器诊断空行、空键和重复键；无法判别的 Unity 引用保持待确认，不删除原始行。</summary>
         private static string DescribeRows(SerializedProperty rows, Type keyType)
         {
             var issues = new StringBuilder();
@@ -278,14 +287,18 @@ namespace YLFramework.Editor.Foundation
                 : $"原始 {rows.arraySize} / 确认有效 {valid} / 确认无效 {rows.arraySize - valid - uncertain} / 待确认 {uncertain}") + issues;
         }
 
+        /// <summary>将实际键类型的默认比较器适配到装箱键，保持诊断与运行时字典的相等判定一致。</summary>
         private sealed class KeyComparer : IEqualityComparer<object>
         {
             private readonly IEqualityComparer _comparer;
+            /// <summary>保存按键类型构造的比较器，供诊断字典复用其相等和哈希规则。</summary>
             public KeyComparer(IEqualityComparer comparer)
             {
                 this._comparer = comparer;
             }
+            /// <summary>将装箱键的相等比较委托给实际键类型的比较器。</summary>
             public new bool Equals(object x, object y) => _comparer.Equals(x, y);
+            /// <summary>使用实际键类型比较器的哈希，与相等规则保持一致。</summary>
             public int GetHashCode(object obj) => _comparer.GetHashCode(obj);
         }
     }

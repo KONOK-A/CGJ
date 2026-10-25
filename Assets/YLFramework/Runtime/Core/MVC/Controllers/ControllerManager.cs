@@ -3,8 +3,10 @@ using System.Collections.Generic;
 
 namespace YLFramework.Core
 {
+    /// <summary>维护 Module 内按具体类型唯一的 Controller 注册，并在初始化失败时撤销本次归属。</summary>
     internal class ControllerManager
     {
+        /// <summary>先建立可查询的归属再调用初始化，失败时退出该对象并保留原始异常。</summary>
         internal static void AddController(Module module, Controller controller)
         {
             if (module == null)
@@ -101,6 +103,7 @@ namespace YLFramework.Core
             ExitController(module, controller);
         }
 
+        /// <summary>在归属仍有效时调用退出钩子，并在 finally 中解除匹配索引及对象归属。</summary>
         private static void ExitController(Module module, Controller controller)
         {
             controller.IsExiting = true;
@@ -206,6 +209,7 @@ namespace YLFramework.Core
             return CreateController(module, typeof(T)) as T;
         }
 
+        /// <summary>拒绝空类型及非 Controller 类型；具体可构造性由创建入口继续检查。</summary>
         private static void ValidateControllerType(Type controllerType)
         {
             if (controllerType == null)

@@ -8,6 +8,7 @@ namespace YLFramework.Binding
     /// 不会感知外部对 PlayerPrefs 的直接修改，需要同步时调用 Reload。
     /// 写入调用 PlayerPrefs.SetX，不主动调用 PlayerPrefs.Save（由业务层在合适时机统一落盘）。
     /// </summary>
+    /// <remarks>写回发生在通知入口；SetValueWithoutCallback 只改内存，ForceNotify 也会写回当前值。</remarks>
     /// <typeparam name="T">属性值类型。</typeparam>
     public abstract class PlayerPrefsProperty<T> : BindableProperty<T>
     {
@@ -53,7 +54,7 @@ namespace YLFramework.Binding
         public bool HasKey => PlayerPrefs.HasKey(Key);
 
         /// <summary>
-        /// 删除持久化键并把内存值重置为 DefaultValue（会触发一次正常的值变化回调，但不会写回）
+        /// 删除持久化键并把内存值重置为 DefaultValue；仅在比较结果为变化时通知，本次重置不会写回。
         /// </summary>
         public void Delete()
         {
@@ -84,16 +85,20 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 从 PlayerPrefs 读取值；仅由构造与 <see cref="Reload"/>/<see cref="Delete"/> 调用，不触发通知。
+        /// 从 PlayerPrefs 读取值；由构造与 <see cref="Reload"/> 调用，读取本身不触发通知。
         /// </summary>
         /// <param name="defaultValue">键不存在时的默认值。</param>
+        /// <returns>读到的值，或键不存在时的默认值。</returns>
+        /// <remarks>基类构造期间即会调用；派生实现不能依赖派生构造函数体已经执行。</remarks>
         protected abstract T Load(T defaultValue);
 
         /// <summary>
         /// 把值写入 PlayerPrefs；在值变化通知之前调用，写入异常会中断后续通知并向上传播。
         /// </summary>
+        /// <param name="value">已写入内存、待保存的当前值；保存失败不会回滚该内存值。</param>
         protected abstract void Save(T value);
 
+        /// <summary>应用读取或删除后的值，保留变化通知并跳过本轮写回。</summary>
         private void SetValueFromStorage(T value)
         {
             _skipNextSave = true;

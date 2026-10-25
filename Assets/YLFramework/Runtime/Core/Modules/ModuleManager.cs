@@ -11,6 +11,8 @@ using CoroutineStarter = YLFramework.Async.CoroutineStarter;
 namespace YLFramework.Core
 {
 
+    /// <summary>维护模块唯一注册、启动请求及统一关闭管线，协调业务对象的生命周期顺序。</summary>
+    /// <remarks>注册在启动完成前即可查询；当前模块只是默认上下文，不赋予跨模块对象的所有权。</remarks>
     public class ModuleManager
     {
 
@@ -40,10 +42,9 @@ namespace YLFramework.Core
 
 #if UNITY_EDITOR
 
+        /// <summary>在进入或结束运行前丢弃管理器引用，避免禁用 Domain Reload 时沿用旧注册表。</summary>
         private static void EditorApplicationPlayModeStateChanged(PlayModeStateChange obj)
         {
-            // Edit > Project Settings > Editor >  Enter Play Mode Settings > Reload Domain 
-            // 该选项如果禁用掉,重新运行时静态数据不会清空,可能会导致异常,所以这里置空,防止异常
             switch (obj)
             {
                 case PlayModeStateChange.ExitingEditMode:
@@ -57,6 +58,7 @@ namespace YLFramework.Core
 #endif
 
 
+        /// <summary>为内部注册表建立只读实时视图，不复制模块或转移其生命周期责任。</summary>
         private ModuleManager()
         {
             _allModules = new ReadOnlyDictionary<string, Module>(_modules);
@@ -155,10 +157,10 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询模块
+        /// 按完整类型名查询已注册模块，包含 Starting 状态；不创建或启动实例。
         /// </summary>
         /// <param name="moduleTypeFullName">模块类型名称(含命名空间)</param>
-        /// <returns></returns>
+        /// <returns>匹配的注册实例；不存在时为 null。</returns>
         public static Module GetModule(string moduleTypeFullName)
         {
 
@@ -172,10 +174,10 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 查询模块(泛型方式)
+        /// 按具体类型查询已注册模块，不创建或启动实例。
         /// </summary>
-        /// <typeparam name="T">类型</typeparam>
-        /// <returns></returns>
+        /// <typeparam name="T">模块的具体类型。</typeparam>
+        /// <returns>匹配的注册实例；不存在时为 null。</returns>
         public static T GetModule<T>() where T : Module
         {
             return GetModule(typeof(T)) as T;
@@ -184,6 +186,8 @@ namespace YLFramework.Core
         /// <summary>
         /// 按具体类型查询已注册实例；Starting可见，启动失败回滚后不可见。
         /// </summary>
+        /// <param name="moduleType">要精确匹配的模块类型。</param>
+        /// <returns>类型一致的注册实例；不存在时为 null。</returns>
         public static Module GetModule(Type moduleType)
         {
             if (moduleType == null)
@@ -215,6 +219,7 @@ namespace YLFramework.Core
             CloseModule(module, false);
         }
 
+        /// <summary>在关闭发生任何状态变更前，拒绝启动中模块及未结束的对象事务。</summary>
         private static void ValidateClose(Module module)
         {
             if (module.State == ModuleState.Starting)
@@ -225,13 +230,13 @@ namespace YLFramework.Core
             ValidateObjectTransactions(module);
         }
 
+        /// <summary>确认对象构造、初始化和退出已离开调用栈，避免模块级收尾与对象事务交叉。</summary>
         private static void ValidateObjectTransactions(Module module)
         {
             if (module.ViewTransactions != 0)
             {
                 throw new InvalidOperationException("Cannot start or close a Module during View initialization or exit.");
             }
-            // 不在B的对象级初始化/退出事务中结束模块，避免恢复到已关闭的owner或重复退出。
             if (module.CreatingModels.Count != 0 || module.CreatingControllers.Count != 0)
             {
                 throw new InvalidOperationException("Cannot start or close a Module during object construction.");
@@ -257,6 +262,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>先使在途请求失效，再退出业务对象并注销模块；完成逻辑收尾后统一报告清理错误。</summary>
         private static void CloseModule(Module module, bool allowBaseModule, List<IPendingViewRequest> deferredNotifications = null)
         {
             if (!ReferenceEquals(GetModule(module.ModuleName), module))
@@ -284,6 +290,7 @@ namespace YLFramework.Core
             var errors = new List<Exception>();
             module.ViewLifecycle = null;
             var pendingViews = new List<IPendingViewRequest>(module.PendingViews);
+            // 这里只撤销请求输入；完成通知留到注销后，避免回调在旧归属仍有效时重启模块。
             foreach (var pending in pendingViews)
             {
                 try
@@ -449,6 +456,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>取得 View 的资源查找顺序：所属模块在前，再按注册顺序加入有效基础模块项目并去重。</summary>
         internal static List<string> ViewResourceProjects(Module owner)
         {
             var projects = new List<string> { owner.ProjectName };
@@ -465,6 +473,7 @@ namespace YLFramework.Core
             return projects;
         }
 
+        /// <summary>检查已关闭模块是否仍残留对象索引，防止带着旧归属重新启动。</summary>
         private static bool HasRegisteredObjects(Module module)
         {
             if (module.OwnedViews.Count != 0)
@@ -519,8 +528,7 @@ namespace YLFramework.Core
         /// 基础模块同样回滚；身份冲突在建立本次请求前抛出异常，不清理实际拥有者。
         /// </summary>
         /// <param name="module">模块对象</param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>本次启动请求、正在执行的同一请求，或 Running 实例的已完成成功请求。</returns>
         public static StartUpModuleRequest StartUpModule(Module module)
         {
             if (module == null)
@@ -570,7 +578,7 @@ namespace YLFramework.Core
             {
                 throw new InvalidOperationException($"Closed Module still owns registered objects: {module.ModuleName}");
             }
-            // 不能让启动回滚与尚未结束的B对象事务交叉；拒绝发生在本次注册和请求之前。
+            // 启动失败可能立即回滚，须在建立请求前排除尚未结束的对象事务。
             ValidateObjectTransactions(module);
             var request = new StartUpModuleRequest(module, CurrentModule);
             // 发布记录后才执行注册、协程和任何业务回调，支持无yield的同步完成与重入。
@@ -600,6 +608,7 @@ namespace YLFramework.Core
             return request;
         }
 
+        /// <summary>提交启动状态或复用关闭管线回滚，并在释放旧启动记录后派发延迟的 View 失效通知。</summary>
         internal static void CompleteStartup(StartUpModuleRequest request, Exception error)
         {
             var module = request.Module;
@@ -619,7 +628,7 @@ namespace YLFramework.Core
                 }
                 else if (ReferenceEquals(GetModule(module.ModuleName), module))
                 {
-                    // 启动事务已展开完毕；只绕过Starting和基础模块禁令，复用D的唯一管线。
+                    // 启动调用栈已展开；只绕过 Starting 和基础模块禁令，仍使用统一关闭管线。
                     module.State = ModuleState.StartFailed;
                     try
                     {
@@ -659,6 +668,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>仅在推进启动迭代器的调用栈内设置默认模块上下文，离开后恢复仍有效的旧上下文。</summary>
         internal static bool MoveStartup(Module module, System.Collections.IEnumerator routine)
         {
             var previous = Instance._startupContext;
@@ -673,6 +683,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>检查实例仍是当前注册的 Starting 或 Running 模块，供默认上下文选择使用。</summary>
         private static bool IsCurrentCandidate(Module module)
         {
             return module != null && ReferenceEquals(GetModule(module.ModuleName), module) &&
@@ -680,11 +691,10 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 启动模块(根据类型启动)
+        /// 复用指定具体类型的注册实例启动；尚未注册时先反射构造，不允许同类型构造重入。
         /// </summary>
         /// <param name="moduleType">模块类型</param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <returns>该实例对应的启动请求。</returns>
         public static StartUpModuleRequest StartUpModule(Type moduleType)
         {
             if (Instance._isShuttingDown)
@@ -730,20 +740,20 @@ namespace YLFramework.Core
         }
 
         /// <summary>
-        /// 启动模块(泛型方式)
+        /// 复用或构造指定具体类型的模块，并交由统一启动管线处理。
         /// </summary>
         /// <typeparam name="T">模块类型</typeparam>
-        /// <returns></returns>
+        /// <returns>该实例对应的启动请求。</returns>
         public static StartUpModuleRequest StartUpModule<T>() where T : Module, new()
         {
             return StartUpModule(typeof(T));
         }
 
         /// <summary>
-        /// 启动模块(根据类名)
+        /// 解析完整类型名后启动模块；解析结果仍须满足具体 Module 类型的要求。
         /// </summary>
         /// <param name="moduleTypeFullName">模块类型名称(含命名空间)</param>
-        /// <returns></returns>
+        /// <returns>该实例对应的启动请求。</returns>
         public static StartUpModuleRequest StartUpModule(string moduleTypeFullName)
         {
             Type type = AssemblyTool.GetType(moduleTypeFullName);
@@ -753,9 +763,9 @@ namespace YLFramework.Core
 
 
         /// <summary>
-        /// 获取当前使用的模块
+        /// 选择仍有效的默认模块，依次考虑启动调用栈、当前模块、普通模块和基础模块。
         /// </summary>
-        /// <returns></returns>
+        /// <returns>可用模块；没有候选时为 null，不创建模块。</returns>
         internal static Module GetCurrentModule()
         {
             if (IsCurrentCandidate(Instance._startupContext))

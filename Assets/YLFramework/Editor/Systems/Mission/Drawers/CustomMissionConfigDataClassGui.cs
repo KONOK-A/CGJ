@@ -11,6 +11,7 @@ using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission
 {
+    /// <summary>为任务定义选择运行脚本，维护类型全名与脚本 GUID，并提供打开和定位入口。</summary>
     public class CustomMissionConfigDataClassGui : CustomPropertyGui
     {
 
@@ -19,6 +20,7 @@ namespace YLFramework.Editor.Mission
         private GUIContent _classTypeContent;
         private SerializedProperty _missionTypeGuidProperty;
 
+        /// <summary>解析并显示当前任务类型，菜单切换时同步 GUID 与全名；选择脚本后应用并保存资产。</summary>
         public override void OnPropertyGui(SerializedProperty classFullNameProperty)
         {
             _missionTypeGuidProperty = classFullNameProperty.serializedObject.FindProperty("missionTypeGuid");
@@ -111,6 +113,7 @@ namespace YLFramework.Editor.Mission
             GUILayout.EndHorizontal();
         }
 
+        /// <summary>扫描 MissionBase 派生类脚本作为候选，不检查抽象性或公共无参构造器。</summary>
         public static List<MonoScript> GetAllMissionTypes()
         {
             List<MonoScript> states = new List<MonoScript>();
@@ -143,6 +146,7 @@ namespace YLFramework.Editor.Mission
             return states;
         }
 
+        /// <summary>现有 GUID 无效时按类型全名扫描脚本，未找到替代项则原样返回 GUID。</summary>
         private static string GetGuid(string guid, string classFullName)
         {
             if (!IsValid(guid) && !string.IsNullOrEmpty(classFullName))
@@ -163,6 +167,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>判断 GUID 是否能解析到可加载资产，不核验其类型与任务脚本是否一致。</summary>
         private static bool IsValid(string guid)
         {
             string assetPath = AssetDatabase.GUIDToAssetPath(guid);
@@ -179,6 +184,7 @@ namespace YLFramework.Editor.Mission
             return true;
         }
 
+        /// <summary>解析脚本 GUID 的资产路径，并请求 Unity 打开该资产。</summary>
         public static void OpenAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -196,6 +202,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>按 GUID 定位资产，设置当前编辑器选择并高亮。</summary>
         public static void SelectAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))

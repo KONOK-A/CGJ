@@ -4,8 +4,8 @@ namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 标记需要由 IOC 容器注入的实例字段或属性，可指定注册名称。
-    /// 被标记的成员视为必需依赖：无法解析时会抛出 <see cref="IOCInjectionException"/>；
-    /// readonly 字段、无 setter 属性与 indexer 不支持注入。
+    /// 被标记的成员视为必需依赖：未注册且解析结果为空时抛出 <see cref="IOCInjectionException"/>；
+    /// 显式注册的 null 可以注入，构造解析中的错误继续传播。readonly 字段、无 setter 属性与索引器不支持注入。
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
     public class InjectAttribute : Attribute

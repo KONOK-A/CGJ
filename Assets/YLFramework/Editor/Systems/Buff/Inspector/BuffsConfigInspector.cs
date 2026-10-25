@@ -12,6 +12,7 @@ using YLFramework.Editor.Utilities;
 namespace YLFramework.Editor.Buff
 {
 
+    /// <summary>编辑 Buff 配表的显示名与数据类型绑定，并提供专用配表窗口入口。</summary>
     [CustomEditor(typeof(BuffsConfig))]
     public class BuffsConfigInspector : UnityEditor.Editor
     {
@@ -20,11 +21,13 @@ namespace YLFramework.Editor.Buff
 
         private GUIStyle _labelStyle;
 
+        /// <summary>缓存当前配表的序列化属性，供后续绘制使用。</summary>
         private void OnEnable()
         {
             _serializedProperties = serializedObject.GetAllSerializedProperty();
         }
 
+        /// <summary>仅开放显示名与类型选择，其余配表字段只读展示，并应用序列化修改。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -58,6 +61,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>显示 Buff 配表窗口并切换到指定配表，null 时不处理。</summary>
         public static void OpenBuffsConfig(BuffsConfig buffsConfig)
         {
             if (buffsConfig == null)
@@ -84,7 +88,7 @@ namespace YLFramework.Editor.Buff
 
         private GUIStyle _labelStyle2;
 
-        // 绘制数据类型
+        // 选择配表创建定义时使用的数据基类并保存脚本 GUID，另提供脚本打开与定位入口。
         private void OnGuiDataType()
         {
             BuffsConfig skillsConfig = target as BuffsConfig;
@@ -208,6 +212,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>将配置类型格式化为名称和可选的灰色命名空间。</summary>
         private string GetDisplayName(Type type)
         {
 
@@ -219,6 +224,7 @@ namespace YLFramework.Editor.Buff
             return string.Format("{0}<color=grey>({1})</color>", type.Name, type.Namespace);
         }
 
+        /// <summary>扫描 BuffConfigData 的派生脚本，重填本检查器复用的候选列表。</summary>
         private List<MonoScript> GetAllConfigDatas()
         {
             if (_configDatas == null)
@@ -256,6 +262,7 @@ namespace YLFramework.Editor.Buff
             return _configDatas;
         }
 
+        /// <summary>按 GUID 打开资产；GUID 或解析路径为空时不处理。</summary>
         public static void OpenAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -272,6 +279,7 @@ namespace YLFramework.Editor.Buff
             AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
         }
 
+        /// <summary>按 GUID 选中并高亮资产；GUID 或解析路径为空时不处理。</summary>
         public static void SelectAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))

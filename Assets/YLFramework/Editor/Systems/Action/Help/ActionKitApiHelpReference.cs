@@ -7,6 +7,7 @@ using ParameterHelp = YLFramework.Editor.Help.HelpParameter;
 
 namespace YLFramework.Editor.Actions
 {
+    /// <summary>按已核对的类型和成员元数据提供 ActionKit 帮助说明，不调用被描述的 API。</summary>
     internal static class ActionKitApiHelpReference
     {
         private const string Entry = "Action 入口与契约";
@@ -70,6 +71,8 @@ namespace YLFramework.Editor.Actions
             { "AudioSourceShortCutExtensions", "把 UnityEngine.AudioSource.Play 及 isPlaying 轮询包装为现代动作；不依赖 AudioKit，也不接管音频资源。" }
         };
 
+        /// <summary>查找已整理的类型说明；未收录类型返回 null，不凭名称推断契约。</summary>
+        /// <param name="type">待描述的非 null 类型。</param>
         internal static string TypeSummary(Type type)
         {
             if (type == null)
@@ -81,6 +84,8 @@ namespace YLFramework.Editor.Actions
             return _typeDescriptions.TryGetValue(key, out var summary) ? ActionKitApiHelpContent.FormatType(type) + "：" + summary : null;
         }
 
+        /// <summary>为类型选择帮助分组，并单列尚未核实说明的公开类型。</summary>
+        /// <param name="type">待分组的非 null 类型。</param>
         internal static string TypeGroup(Type type)
         {
             if (type == null)
@@ -121,6 +126,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>组合成员摘要、参数、返回值及限制；未接管的成员交由共享帮助层读取源码 XML。</summary>
+        /// <param name="member">待描述的非 null 类型或成员元数据。</param>
         internal static MemberHelp Describe(MemberInfo member)
         {
             if (member == null)
@@ -160,6 +167,8 @@ namespace YLFramework.Editor.Actions
             return new MemberHelp(Summary(member), ReturnDescription(member), Remarks(member), help.ToArray());
         }
 
+        /// <summary>为支持的 Action 类型生成说明表键，排除无关类型并保留嵌套层级。</summary>
+        /// <param name="type">待识别类型，可为 null。</param>
         private static string Key(Type type)
         {
             if (type == null || (type.Namespace != "YLFramework.Actions" &&
@@ -173,6 +182,8 @@ namespace YLFramework.Editor.Actions
             return type.IsNested ? Key(type.DeclaringType) + "." + name : name;
         }
 
+        /// <summary>判断类型是否使用此说明表中的现代动作生命周期模板。</summary>
+        /// <param name="type">待识别类型。</param>
         private static bool Modern(Type type)
         {
             switch (Key(type))
@@ -204,6 +215,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>判断说明表键是否对应现代动作工厂或组合扩展。</summary>
+        /// <param name="key">类型说明表键。</param>
         private static bool ModernFactory(string key)
         {
             switch (key)
@@ -227,6 +240,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>按成员类别和已整理规则选择摘要，无法匹配时不补造说明。</summary>
+        /// <param name="member">待描述的成员元数据。</param>
         private static string Summary(MemberInfo member)
         {
             var type = member.DeclaringType;
@@ -451,6 +466,8 @@ namespace YLFramework.Editor.Actions
             return null;
         }
 
+        /// <summary>将已知工厂方法名映射为操作说明。</summary>
+        /// <param name="name">工厂或扩展方法名。</param>
         private static string FactoryOperation(string name)
         {
             switch (name)
@@ -490,6 +507,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>取得指定动作类型的启动钩子说明。</summary>
+        /// <param name="key">类型说明表键。</param>
         private static string ModernStart(string key)
         {
             switch (key)
@@ -533,6 +552,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>取得指定动作类型的推进钩子说明。</summary>
+        /// <param name="key">类型说明表键。</param>
         private static string ModernExecute(string key)
         {
             switch (key)
@@ -574,6 +595,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>按类型选择重置行为说明，区分接口契约和具体实现。</summary>
+        /// <param name="key">类型说明表键。</param>
         private static string ModernReset(string key)
         {
             if (key == "IAction")
@@ -614,6 +637,8 @@ namespace YLFramework.Editor.Actions
             return "恢复 NotStart 和非暂停状态，并重置本类型执行进度；不清除 IsDeinitialized，也不替代重新 Allocate。";
         }
 
+        /// <summary>取得已核对类型的构造入口说明。</summary>
+        /// <param name="type">声明构造器的类型。</param>
         private static string ConstructorSummary(Type type)
         {
             switch (Key(type))
@@ -639,6 +664,8 @@ namespace YLFramework.Editor.Actions
             }
         }
 
+        /// <summary>取得字段、属性或枚举成员的说明，不读取其实例值。</summary>
+        /// <param name="member">待描述的存储成员元数据。</param>
         private static string StorageSummary(MemberInfo member)
         {
             var key = Key(member.DeclaringType);
@@ -782,6 +809,8 @@ namespace YLFramework.Editor.Actions
             return null;
         }
 
+        /// <summary>将缓动名称拆为曲线族与缓入缓出阶段的展示文本。</summary>
+        /// <param name="name">缓动方法名或枚举成员名。</param>
         private static string Curve(string name)
         {
             if (name == "Linear")
@@ -798,6 +827,8 @@ namespace YLFramework.Editor.Actions
             return family + "曲线（" + phase + "）";
         }
 
+        /// <summary>为已收录成员补充生命周期、所有权和实现限制说明。</summary>
+        /// <param name="member">待描述的成员元数据。</param>
         private static string Remarks(MemberInfo member)
         {
             if (member is Type)
@@ -993,6 +1024,9 @@ namespace YLFramework.Editor.Actions
             return null;
         }
 
+        /// <summary>结合声明类型、方法名和扩展参数位置选择参数说明。</summary>
+        /// <param name="member">声明该参数的成员。</param>
+        /// <param name="parameter">待描述的参数元数据。</param>
         private static string ParameterDescription(MemberInfo member, ParameterInfo parameter)
         {
             var key = Key(member.DeclaringType);
@@ -1168,6 +1202,8 @@ namespace YLFramework.Editor.Actions
             return null;
         }
 
+        /// <summary>为有返回值的方法选择结果说明；其他成员返回 null。</summary>
+        /// <param name="member">待描述的成员元数据。</param>
         private static string ReturnDescription(MemberInfo member)
         {
             if (!(member is MethodInfo method) || method.ReturnType == typeof(void))

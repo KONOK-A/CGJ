@@ -16,6 +16,7 @@ using YLFramework.Mission;
 namespace YLFramework.Editor.Mission
 {
 
+    /// <summary>保存参数对象引用，以参数名称哈希作为行 ID 的平面树节点。</summary>
 #if UNITY_6000_2_OR_NEWER
     public class ParamTreeViewItem : TreeViewItem<int>
 #else
@@ -24,8 +25,10 @@ namespace YLFramework.Editor.Mission
 
     {
 
+        /// <summary>该行对应的配表参数对象，不是参数配置的副本。</summary>
         public MissionParameter MissionParameter;
 
+        /// <summary>绑定参数引用，以名称和描述构建用于搜索的行文本。</summary>
         public ParamTreeViewItem(MissionParameter missionParameter) :
             base(MissionManager.StringToHash(missionParameter.name), 0, string.Format("{0}{1}", missionParameter.name, missionParameter.description))
         {
@@ -33,6 +36,8 @@ namespace YLFramework.Editor.Mission
         }
     }
 
+    /// <summary>任务参数平面列表，提供重排、复制、创建、删除及同步条件引用的改名。</summary>
+    /// <remarks>重排由基类维护 Undo；参数改名显式记录配表与引用条目的 Undo，其他菜单操作不共享这一保证。</remarks>
     public class ParamListTree : ReorderableTreeView<MissionParameter>
     {
 
@@ -51,9 +56,12 @@ namespace YLFramework.Editor.Mission
 
         private Dictionary<string, GUIContent> _nameContents = new Dictionary<string, GUIContent>();
 
+        /// <summary>当前列表绑定的源任务配表。</summary>
         public MissionsConfig MissionsConfig => _missionsConfig;
+        /// <summary>将名称哈希行 ID 映射回当前参数列表索引，供重排使用。</summary>
         protected override int GetItemIndex(int id) => _missionsConfig.parameters.FindIndex(data => data != null && MissionManager.StringToHash(data.name) == id);
 
+        /// <summary>绑定配表及其当前参数列表并设置行高，创建后由调用方重载。</summary>
 #if UNITY_6000_2_OR_NEWER
         public ParamListTree(TreeViewState<int> state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.parameters, state)
 #else
@@ -66,6 +74,7 @@ namespace YLFramework.Editor.Mission
             rowHeight = 25;
         }
 
+        /// <summary>跳过空参数，建立保存参数引用的平面行。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override void OnBuildRoot(TreeViewItem<int> root, IList<MissionParameter> datas)
 #else
@@ -87,6 +96,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>重载参数行并清空配表查找缓存。</summary>
         protected override void RefreshDatas()
         {
             base.RefreshDatas();
@@ -97,6 +107,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>绘制参数名称、说明和类型，播放时附加该行参数对象的当前值。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             GUI.Box(args.rowRect, string.Empty, "CN Box");
@@ -178,6 +189,7 @@ namespace YLFramework.Editor.Mission
             }
 
         }
+        /// <summary>允许多选参数行以执行批量菜单操作。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override bool CanMultiSelect(TreeViewItem<int> item)
 #else
@@ -188,6 +200,7 @@ namespace YLFramework.Editor.Mission
             return true;
         }
 
+        /// <summary>在空白处显示参数创建与粘贴菜单，避免条目右键的重复菜单。</summary>
         protected override void ContextClicked()
         {
             base.ContextClicked();
@@ -202,6 +215,7 @@ namespace YLFramework.Editor.Mission
             CreateParam(menu);
         }
 
+        /// <summary>显示选中参数的删除、创建副本、复制以及粘贴菜单。</summary>
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
@@ -275,6 +289,7 @@ namespace YLFramework.Editor.Mission
             CreateParam(menu);
         }
 
+        /// <summary>按参数类型生成带序号且未被当前配表占用的默认名称。</summary>
         private string GenerateParamName(MissionParamType type)
         {
             string name = string.Format("New {0}", type);
@@ -289,6 +304,7 @@ namespace YLFramework.Editor.Mission
             return string.Format("{0} {1}", name, count);
         }
 
+        /// <summary>通过配表查找缓存判断参数名称是否已存在。</summary>
         private bool IsContainParamName(string paramName)
         {
             if (_missionsConfig.GetMissionParam(paramName) != null)
@@ -299,6 +315,7 @@ namespace YLFramework.Editor.Mission
             return false;
         }
 
+        /// <summary>保留未占用名称，否则调整括号数字后缀以得到可用副本名。</summary>
         private string GetCopyParamName(string paramName)
         {
             if (!IsContainParamName(paramName))
@@ -336,6 +353,7 @@ namespace YLFramework.Editor.Mission
             return name;
         }
 
+        /// <summary>补齐参数类型创建项和按剪贴板标记启用的粘贴项，并弹出菜单。</summary>
         private void CreateParam(GenericMenu menu)
         {
 
@@ -381,6 +399,7 @@ namespace YLFramework.Editor.Mission
             menu.ShowAsContext();
         }
 
+        /// <summary>存在条件引用时先确认，再移除参数、标脏和重载；不删除或修复引用该参数的条件。</summary>
         private void DeleteParam(MissionParameter param)
         {
             if (param == null)
@@ -424,8 +443,8 @@ namespace YLFramework.Editor.Mission
         /// <summary>
         /// 查询引用该参数的任务
         /// </summary>
-        /// <param name="p"></param>
-        /// <returns></returns>
+        /// <param name="p">按名称匹配条件引用的参数。</param>
+        /// <returns>当前配表中条件名称匹配的任务条目列表。</returns>
         private List<MissionConfigData> GetRefMissions(MissionParameter p)
         {
             List<MissionConfigData> mission = new List<MissionConfigData>();
@@ -446,6 +465,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>创建零值参数并分配名称，追加到配表后标脏、保存、清缓存和选中新行。</summary>
         private void CreateMissionParam(MissionParamType type)
         {
             MissionParameter data = new MissionParameter();
@@ -463,6 +483,7 @@ namespace YLFramework.Editor.Mission
             SetSelection(new int[] { MissionManager.StringToHash(data.name) });
         }
 
+        /// <summary>仅复制参数配置与自定义数据，以不重名名称追加并标脏配表，不复制运行值与订阅。</summary>
         private void CopyMissionParam(MissionParameter source)
         {
             MissionParameter data = source.CloneConfiguration();
@@ -483,6 +504,8 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>将参数及当前配表中匹配的条件引用一起改名，记录同组 Undo 并保存受影响资产。</summary>
+        /// <remarks>拒绝空白或已占用名称；仅更新当前源配表，不迁移已登记的运行参数。</remarks>
         public void RenameParam(string originalName, string newName)
         {
             if (IsContainParamName(newName))
@@ -539,6 +562,7 @@ namespace YLFramework.Editor.Mission
             SetSelection(new int[] { MissionManager.StringToHash(newName) });
         }
 
+        /// <summary>通过已构建行的 ID 取得参数对象，未找到对应参数行时返回 null。</summary>
         public MissionParameter GetMissionParameter(int itemId)
         {
             ParamTreeViewItem paramTreeViewItem = FindItem(itemId, rootItem) as ParamTreeViewItem;

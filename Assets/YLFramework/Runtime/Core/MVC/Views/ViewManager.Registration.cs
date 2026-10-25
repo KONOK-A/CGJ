@@ -13,6 +13,7 @@ namespace YLFramework.Core
 
     internal partial class ViewManager
     {
+        /// <summary>先使旧扫描轮次失效，再解除更新及场景卸载监听，避免在途回调继续使用旧跟踪状态。</summary>
         private static void EndPruneRound()
         {
             _pruneRound = null;
@@ -22,6 +23,7 @@ namespace YLFramework.Core
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
         }
 
+        /// <summary>按本轮模块快照清理死对象，跳过仍在 View 事务中的模块及已经结束的扫描轮次。</summary>
         private static void PruneDestroyedSessions(object round)
         {
             // 从未激活的对象没有OnDestroy。仅扫描受管索引，正常帧不分配View快照。
@@ -140,6 +142,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>核对归属、会话及全部适用索引，并要求类型索引中恰有一个相同实例。</summary>
         private static bool HasRegistration(Module module, View view, object session)
         {
             if (!(session != null && ReferenceEquals(view.Module, module) && ReferenceEquals(view.Session, session) &&
@@ -180,6 +183,7 @@ namespace YLFramework.Core
         internal static void RemoveView(Module module, View view, object session, bool destroyed = false)
             => RemoveViewCore(module, view, session, destroyed, false, false);
 
+        /// <summary>按精确会话清理视图；实例移除事件在解绑前通知，全局移除事件与关闭钩子在撤销索引后通知，清理错误逐项汇总。</summary>
         private static void RemoveViewCore(Module module, View view, object session, bool destroyed, bool preserveInstance, bool rollback)
         {
             if (module == null || ReferenceEquals(view, null) || session == null ||
@@ -390,6 +394,7 @@ namespace YLFramework.Core
             ThrowCleanupErrors(errors);
         }
 
+        /// <summary>只撤销仍匹配的旧会话索引与引用；保留 LastSession 以识别后续通知中的重新进入。</summary>
         private static void DetachIndexes(Module module, View view, object session)
         {
             if (!ReferenceEquals(view.Session, session) || !ReferenceEquals(view.Module, module))
@@ -462,6 +467,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>沿已记录的实例归属链检查 OnOpen 保护，拒绝退役正在打开的 Panel 或其取得根。</summary>
         private static void EnsureNoOpeningPanelRetired(Module module, View root, object session)
         {
             foreach (var candidate in module.OwnedViews.Values)
@@ -541,6 +547,7 @@ namespace YLFramework.Core
             return sessions;
         }
 
+        /// <summary>先预检整批会话再逐项退出；快照携带会话身份，旧条目不能关闭后来复用的组件会话。</summary>
         private static void ClearSessions(Module module, List<KeyValuePair<View, object>> sessions)
         {
             // 批量出口先完整预检，不能在后面的受保护会话报错前先归还前面的 checkout。
@@ -567,6 +574,7 @@ namespace YLFramework.Core
             ThrowCleanupErrors(errors);
         }
 
+        /// <summary>只在发现 Unity 对象已销毁时建立死会话列表，并通过统一退出入口清除残留归属。</summary>
         private static void PruneDestroyed(Module module)
         {
             if (module == null)

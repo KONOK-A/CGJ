@@ -4,8 +4,8 @@ using UnityEngine.Audio;
 
 namespace YLFramework.Audio
 {
-    /// <summary>Inspector and UnityEvent bridge for explicit Mixer routing, parameter writes and snapshot transitions.</summary>
-    /// <remarks>Awake only applies routing. Disabling or destroying this component does not clear global routing or Mixer state.</remarks>
+    /// <summary>连接 Inspector 与 UnityEvent 的显式 Mixer 控制组件，提供路由应用、参数写入和快照过渡。</summary>
+    /// <remarks>Awake 只按配置应用路由；停用或销毁本组件不会清除全局路由及 Mixer 状态。</remarks>
     public sealed class AudioMixerController : MonoBehaviour
     {
         [Tooltip("Routing configuration and Mixer used for explicit parameter and snapshot operations.")]
@@ -23,12 +23,14 @@ namespace YLFramework.Audio
         [Tooltip("One finite, non-negative weight per snapshot, with a positive total. Forwarded to Unity without normalization.")]
         [SerializeField] private float[] weights;
 
+        /// <summary>新 Editor 组件默认不在 Awake 改全局路由，并提供半秒的显式过渡时长。</summary>
         private void Reset()
         {
             applyOnAwake = false;
             transitionDuration = .5f;
         }
 
+        /// <summary>显式启用且配置存在时只应用路由，不写参数或启动快照过渡。</summary>
         private void Awake()
         {
             if (applyOnAwake && config)
@@ -37,7 +39,7 @@ namespace YLFramework.Audio
             }
         }
 
-        /// <summary>Applies the complete configuration to category routing without writing Mixer parameters.</summary>
+        /// <summary>将完整配置应用到分类路由，不写 Mixer 参数；配置参数错误记录到组件日志。</summary>
         public void Apply()
         {
             if (!config)
@@ -55,13 +57,14 @@ namespace YLFramework.Audio
             }
         }
 
-        /// <summary>Clears category default routing only; explicit playback routes and Mixer parameters remain unchanged.</summary>
+        /// <summary>仅清除分类默认路由，保留请求显式路由和 Mixer 参数。</summary>
         public void ClearRouting()
         {
             AudioKit.ClearMixerRouting();
         }
 
-        /// <summary>Writes the configured exposed parameter. Invoke on the main thread in Start or later.</summary>
+        /// <summary>写入配置的暴露参数；应在主线程 Start 或更晚调用，原生拒绝和参数错误记录到日志。</summary>
+        /// <param name="value">要写入的有限参数值，不执行音量单位换算。</param>
         public void SetParameter(float value)
         {
             var mixer = GetMixer(nameof(SetParameter));
@@ -83,7 +86,8 @@ namespace YLFramework.Audio
             }
         }
 
-        /// <summary>Writes normalized [0,1] volume to the configured dB parameter in Start or later, independently of Settings.</summary>
+        /// <summary>在 Start 或更晚将 [0,1] 线性音量写入配置的分贝参数，不改变 AudioKit.Settings。</summary>
+        /// <param name="linearVolume">有限的归一化线性音量；零映射至 -80 dB，不保证绝对静音。</param>
         public void SetVolume(float linearVolume)
         {
             var mixer = GetMixer(nameof(SetVolume));
@@ -105,7 +109,7 @@ namespace YLFramework.Audio
             }
         }
 
-        /// <summary>Releases explicit control of the configured parameter without clearing routing.</summary>
+        /// <summary>解除对配置参数的显式控制，不清除输出路由。</summary>
         public void ClearParameter()
         {
             var mixer = GetMixer(nameof(ClearParameter));
@@ -127,7 +131,7 @@ namespace YLFramework.Audio
             }
         }
 
-        /// <summary>Explicitly transitions to the configured snapshot without releasing parameter overrides.</summary>
+        /// <summary>显式过渡到配置快照，不解除已写入的参数覆盖。</summary>
         public void TransitionToSnapshot()
         {
             var mixer = GetMixer(nameof(TransitionToSnapshot));
@@ -151,7 +155,7 @@ namespace YLFramework.Audio
             }
         }
 
-        /// <summary>Explicitly transitions to the configured snapshot mixture without scheduling or changing the arrays.</summary>
+        /// <summary>显式提交配置快照的加权混合过渡，不排队调度，也不修改配置数组。</summary>
         public void TransitionToSnapshots()
         {
             var mixer = GetMixer(nameof(TransitionToSnapshots));
@@ -170,6 +174,7 @@ namespace YLFramework.Audio
             }
         }
 
+        /// <summary>取得配置中的有效 Mixer，缺失时按当前操作记录错误并返回 null。</summary>
         private AudioMixer GetMixer(string operation)
         {
             if (!config)
@@ -186,6 +191,7 @@ namespace YLFramework.Audio
             return mixer;
         }
 
+        /// <summary>将操作名与错误内容关联到本组件，便于定位 Inspector 或事件绑定问题。</summary>
         private void LogError(string operation, string message)
         {
             Debug.LogError($"{nameof(AudioMixerController)}.{operation}: {message}", this);

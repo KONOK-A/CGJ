@@ -16,6 +16,7 @@ using YLFramework.Buff;
 
 namespace YLFramework.Editor.Buff
 {
+    /// <summary>以可重排引用列表编辑 Buff 包含的效果定义，不把效果资产内嵌为运行状态。</summary>
     public class CustomBuffConfigDataEffectsGui : CustomPropertyGui
     {
 
@@ -29,6 +30,7 @@ namespace YLFramework.Editor.Buff
         private GUIStyle _styleName;
 
 
+        /// <summary>绘制效果引用列表的折叠区，并复用绑定到当前属性的 ReorderableList。</summary>
         public override void OnPropertyGui(SerializedProperty effectsProperty)
         {
 
@@ -55,6 +57,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>绘制效果 ID、名称、业务类型、数据分类与描述的列标题。</summary>
         private void DrawHeaderCallback(Rect rect)
         {
             float w = (rect.width - 15) / 6;
@@ -83,6 +86,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>展示单个效果引用，并提供替换引用或跳转效果编辑窗口的按钮。</summary>
         private void DrawElementCallback(Rect rect, int index, bool isActive, bool isFocused)
         {
 
@@ -186,6 +190,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>优先返回效果类型的 EffectName，未标注时返回类型全名。</summary>
         private string GetEffectData(EffectData effect)
         {
 

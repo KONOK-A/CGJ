@@ -31,8 +31,10 @@ namespace YLFramework.Actions
         // 完成与取消都通过独立的槽对象转发：槽先断开与动作的引用，晚到的协程完成就不会影响已复用或已取消的动作。
         private sealed class CompletionSlot
         {
+            /// <summary>仍可接收完成通知的动作；断开后忽略迟到通知。</summary>
             public CoroutineAction Target;
 
+            /// <summary>撤销宿主取消登记，断开完成槽并将仍绑定的动作标记为正常完成。</summary>
             public void Finish()
             {
                 var target = Target;
@@ -53,13 +55,17 @@ namespace YLFramework.Actions
                 target.Status = ActionStatus.Finished;
             }
 
+            /// <summary>取消仍绑定的动作，由其清理逻辑停止所属协程。</summary>
             public void Cancel() => Target?.Deinit();
         }
 
+        /// <summary>仅供对象池创建协程动作，枚举器工厂在 Allocate 时绑定。</summary>
         private CoroutineAction()
         {
         }
 
+        /// <summary>分配协程动作并保存工厂，不在分配时创建枚举器或启动协程。</summary>
+        /// <param name="coroutineGetter">每次启动时取得枚举器的函数。</param>
         public static CoroutineAction Allocate(Func<IEnumerator> coroutineGetter)
         {
             var coroutineAction = _pool.Allocate();
@@ -67,10 +73,12 @@ namespace YLFramework.Actions
             return coroutineAction;
         }
 
+        /// <inheritdoc />
         public bool IsPaused
         {
             get; set;
         }
+        /// <summary>清除工厂并停止所属协程，安排延迟回收；停止失败时延迟丢弃动作。</summary>
         public void Deinit()
         {
             if (!IsDeinitialized)
@@ -90,6 +98,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>停止旧协程并重置执行状态，保留工厂供下一轮启动。</summary>
         public void Reset()
         {
             StopRunningCoroutine();
@@ -97,9 +106,9 @@ namespace YLFramework.Actions
             Status = ActionStatus.NotStart;
         }
 
+        /// <summary>先断开旧完成回调，再停止本动作的协程，避免晚到的完成影响复用对象。</summary>
         private void StopRunningCoroutine()
         {
-            // 先断开旧完成回调，再停止本动作的协程，避免晚到的完成影响复用对象。
             if (_completion != null)
             {
                 if (_host)
@@ -120,18 +129,22 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <inheritdoc />
         public bool IsDeinitialized
         {
             get; set;
         }
+        /// <inheritdoc />
         public ulong ActionId
         {
             get; set;
         }
+        /// <inheritdoc />
         public ActionStatus Status
         {
             get; set;
         }
+        /// <summary>取得全局宿主，登记本轮取消回调并启动工厂产生的协程。</summary>
         public void OnStart()
         {
             var completion = new CompletionSlot { Target = this };
@@ -170,10 +183,13 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>不主动推进枚举器，协程由 Unity 在全局宿主上推进。</summary>
+        /// <param name="dt">本次时间增量，协程动作不使用。</param>
         public void OnExecute(float dt)
         {
         }
 
+        /// <summary>不追加结束处理，正常结束时已由完成槽断开本轮绑定。</summary>
         public void OnFinish()
         {
         }

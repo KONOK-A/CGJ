@@ -6,8 +6,10 @@ using UnityEngine;
 namespace YLFramework.Audio
 {
     // 缓存只持有真实后端租约；等待者/播放保活与闲置计时不依赖 Source 池。
+    /// <summary>按 Provider 实例和完整键共享在途取得与 Clip 保活，使用者归还后再决定闲置缓存或释放。</summary>
     internal sealed class AudioClipCache : IDisposable
     {
+        /// <summary>以 Provider 引用身份和完整资源键比较的缓存索引，不按 Clip 对象合并责任。</summary>
         private readonly struct Key : IEquatable<Key>
         {
             internal readonly AudioClipAddress Address;
@@ -15,10 +17,14 @@ namespace YLFramework.Audio
             {
                 Address = address;
             }
+            /// <inheritdoc />
             public bool Equals(Key other) => ReferenceEquals(Address.Provider, other.Address.Provider) && Address.Key == other.Address.Key;
+            /// <inheritdoc />
             public override bool Equals(object obj) => obj is Key other && Equals(other);
+            /// <inheritdoc />
             public override int GetHashCode() => RuntimeHelpers.GetHashCode(Address.Provider) * 397 ^ Address.Key.GetHashCode();
         }
+        /// <summary>一份后端取得记录；Users 包含等待者预留及已交付租约的未归还责任，归零后才考虑闲置淘汰。</summary>
         private sealed class Entry
         {
             internal Key Key;
@@ -30,15 +36,18 @@ namespace YLFramework.Audio
             internal double IdleAt;
             internal readonly List<Waiter> Waiters = new List<Waiter>();
         }
+        /// <summary>已交付 Clip 租约对应的一份缓存使用责任。</summary>
         private sealed class Use : IDisposable
         {
             private AudioClipCache _cache;
             private readonly Entry _entry;
+            /// <summary>绑定已有用户计数，留待外层 Clip 租约归还时结算。</summary>
             internal Use(AudioClipCache cache, Entry entry)
             {
                 _cache = cache;
                 _entry = entry;
             }
+            /// <summary>先撤销自身身份，再恰一次归还条目使用计数。</summary>
             public void Dispose()
             {
                 var cache = _cache;
@@ -46,12 +55,14 @@ namespace YLFramework.Audio
                 cache?.Return(_entry);
             }
         }
+        /// <summary>一次可逻辑取消的异步等待，成功时把保留的用户计数移交给 Clip 租约。</summary>
         private sealed class Waiter : IDisposable
         {
             private AudioClipCache _cache;
             private readonly Entry _entry;
             private Action<AudioClipLease, Exception> _completed;
             internal readonly Action<float> Progress;
+            /// <summary>记录此等待者的完成与进度接收方，不启动额外的后端加载。</summary>
             internal Waiter(AudioClipCache cache, Entry entry, Action<AudioClipLease, Exception> completed, Action<float> progress)
             {
                 _cache = cache;
@@ -59,6 +70,7 @@ namespace YLFramework.Audio
                 _completed = completed;
                 Progress = progress;
             }
+            /// <summary>先摘除等待者，再交付独立使用租约或错误；回调抛错时归还已交付的租约。</summary>
             internal void Deliver()
             {
                 if (_cache == null)
@@ -88,6 +100,7 @@ namespace YLFramework.Audio
                     throw;
                 }
             }
+            /// <summary>撤销本等待者并归还预留计数，不物理取消共享加载。</summary>
             public void Dispose()
             {
                 if (_cache == null)
@@ -104,6 +117,7 @@ namespace YLFramework.Audio
         }
         private readonly Dictionary<Key, Entry> _entries = new Dictionary<Key, Entry>();
         private bool _isClosed;
+        /// <summary>同步复用已完成条目或发起后端取得；同键仍在异步加载时明确拒绝同步读取。</summary>
         internal AudioClipLease Load(AudioClipAddress address)
         {
             var key = new Key(address);
@@ -145,6 +159,7 @@ namespace YLFramework.Audio
                 throw;
             }
         }
+        /// <summary>为同键共享条目增加独立等待者，首次请求才启动 Provider；允许同步完成。</summary>
         internal IDisposable LoadAsync(AudioClipAddress address, Action<AudioClipLease, Exception> completed, Action<float> progress)
         {
             var key = new Key(address);
@@ -179,6 +194,7 @@ namespace YLFramework.Audio
 
             return waiter;
         }
+        /// <summary>将加载进度限于 [0,1] 并通知等待者快照，关闭或已完成的条目不再投递。</summary>
         private void Report(Entry entry, float value)
         {
             if (_isClosed || entry.IsDone)
@@ -192,6 +208,7 @@ namespace YLFramework.Audio
                 waiter.Progress?.Invoke(entry.Progress);
             }
         }
+        /// <summary>记录后端结果并交付当前等待者；迟到或重复结果只按原条目责任归还。</summary>
         private void Complete(Entry entry, AudioClipLease lease, Exception error)
         {
             if (entry.IsDone)
@@ -225,7 +242,9 @@ namespace YLFramework.Audio
                 RetireOrCache(entry);
             }
         }
+        /// <summary>把已经计入 Users 的一份责任包装为新租约，不重复增加使用计数。</summary>
         private AudioClipLease HandOff(Entry entry) => new AudioClipLease(entry.Resource.Clip, new Use(this, entry));
+        /// <summary>复用前检查后端租约仍可交付，并将失效原因保存为条目错误。</summary>
         private static void ValidateResource(Entry entry)
         {
             if (entry.Error != null)
@@ -247,6 +266,7 @@ namespace YLFramework.Audio
                 entry.Error = error;
             }
         }
+        /// <summary>归还一份等待或使用责任，最后一份归还时记录闲置起点并尝试退役。</summary>
         private void Return(Entry entry)
         {
             entry.Users--;
@@ -259,6 +279,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>仅将可缓存的成功后端责任保留为闲置条目，其余归还后端。</summary>
         private void RetireOrCache(Entry entry)
         {
             if (_isClosed || entry.Error != null || !entry.Key.Address.Provider.CanCache || AudioKit.ClipCacheCapacity == 0 || AudioKit.ClipCacheIdleSeconds == 0)
@@ -270,6 +291,7 @@ namespace YLFramework.Audio
                 Tick(Time.realtimeSinceStartupAsDouble);
             }
         }
+        /// <summary>只移除无人使用的原条目并归还其后端租约，不触碰重入创建的同键条目。</summary>
         private void Remove(Entry entry)
         {
             if (entry.Users != 0)
@@ -284,6 +306,7 @@ namespace YLFramework.Audio
 
             entry.Resource?.ReleaseSafely();
         }
+        /// <summary>按闲置时长和容量淘汰最早闲置的条目，不淘汰仍有等待者或使用者的资源。</summary>
         internal void Tick(double now)
         {
             if (_isClosed || _entries.Count == 0)
@@ -326,6 +349,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>显式归还当前全部闲置且已完成的条目。</summary>
         internal void ClearIdle()
         {
             foreach (var entry in new List<Entry>(_entries.Values))
@@ -336,6 +360,7 @@ namespace YLFramework.Audio
                 }
             }
         }
+        /// <summary>关闭缓存并归还闲置资源；在用与在途条目仍由各自责任完成归还。</summary>
         public void Dispose()
         {
             if (_isClosed)

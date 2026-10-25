@@ -10,7 +10,8 @@ namespace YLFramework.Actions
     /// </summary>
     /// <remarks>
     /// 创建动作不会自动执行，需调用 Start、StartCurrentScene 或 StartGlobal。
-    /// 动作完成或取消后由执行器清理并回收，不应继续使用旧动作或控制器引用。
+    /// 标准执行器在动作完成或取消后负责清理回收，不应继续使用旧动作或控制器引用。
+    /// 仅创建或手动 Execute 的动作不由执行器接管，调用方仍需负责 Deinit。
     /// 全局宿主及消息仅供运行时主线程使用。
     /// </remarks>
     public partial class ActionKit

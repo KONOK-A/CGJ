@@ -24,10 +24,14 @@ namespace YLFramework.Editor.Resource
         private Rect _projectPopupAnchor;
         private Rect _moreMenuAnchor;
         private Rect _morePopupAnchor;
+        /// <summary>窗口序列化的布局和选择状态，不承载构建或运行时资源数据。</summary>
         internal ResourceWorkbenchLayout Layout => layout ??= new ResourceWorkbenchLayout();
+        /// <summary>委托视图切换任务页，不执行对应页的操作。</summary>
         internal void NavigateTask(int task) => _resServiceView?.NavigateTask(task);
+        /// <summary>显示诊断中的入门导航。</summary>
         internal void ShowGuide() => _resServiceView?.ShowGuide();
 
+        /// <summary>打开或聚焦工作台，并在当前选择是资源项目时尝试绑定该项目。</summary>
         [MenuItem("YLFramework/Resource/Workbench %#r")]
         public static void OpenResServiceWindow()
         {
@@ -41,6 +45,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>校验并切换工作台项目；视图负责取消旧队列和失效预览，不保存项目。</summary>
         public void SetProject(ResourceProject value)
         {
             if (value)
@@ -74,6 +79,7 @@ namespace YLFramework.Editor.Resource
             Repaint();
         }
 
+        /// <summary>重建窗口视图、恢复选择并订阅刷新与诊断更新事件。</summary>
         private void OnEnable()
         {
             titleContent = new GUIContent("YL Resource");
@@ -98,6 +104,7 @@ namespace YLFramework.Editor.Resource
             EditorApplication.playModeStateChanged += OnPlayState;
         }
 
+        /// <summary>从资产数据库重新列出资源项目，不解析其构建内容或写入定义。</summary>
         private void RefreshProjects()
         {
             _projects.Clear();
@@ -106,6 +113,7 @@ namespace YLFramework.Editor.Resource
                 .Where(x => x).OrderBy(x => x.displayName ?? x.projectId, StringComparer.Ordinal));
         }
 
+        /// <summary>以保留的 GUID 重新绑定配方，丢失时保留选择身份以便明确报错。</summary>
         private void RebindRecipe()
         {
             if (!string.IsNullOrEmpty(selectedRecipeGuid))
@@ -115,6 +123,7 @@ namespace YLFramework.Editor.Resource
 
             _resServiceView?.SetRecipe(selectedRecipe, selectedRecipeGuid);
         }
+        /// <summary>在资产、Undo 或平台变化后更新选择引用并使预览失效，不重新构建。</summary>
         private void RefreshView()
         {
             RefreshProjects();
@@ -122,8 +131,11 @@ namespace YLFramework.Editor.Resource
             _resServiceView?.Invalidate();
             Repaint();
         }
+        /// <summary>推进可见诊断页的分段查询和定时采样。</summary>
         private void TickDiagnostics() => _resServiceView?.TickDiagnostics();
+        /// <summary>窗口隐藏时暂停诊断，不将隐藏等同于取消合法的写操作队列。</summary>
         private void OnBecameInvisible() => _resServiceView?.PauseDiagnostics();
+        /// <summary>运行状态转换时取消尚未开始的操作、暂停诊断并使旧预览失效。</summary>
         private void OnPlayState(PlayModeStateChange _)
         {
             _resServiceView?.OnEditorTransition();
@@ -131,6 +143,7 @@ namespace YLFramework.Editor.Resource
             Repaint();
         }
 
+        /// <summary>解除本窗口的事件订阅并释放视图；不保存场景或销毁借用的源资产。</summary>
         public void OnDisable()
         {
             EditorApplication.projectChanged -= RefreshView;
@@ -143,6 +156,7 @@ namespace YLFramework.Editor.Resource
             _resServiceView = null;
         }
 
+        /// <summary>绘制项目操作栏和任务视图，将用户动作交给视图及正式服务处理。</summary>
         private void OnGUI()
         {
             if (_resServiceView == null)
@@ -209,6 +223,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按当前编辑状态提供项目保存、设置和只读定位菜单。</summary>
         private void DrawProjectActions()
         {
             using (new EditorGUI.DisabledScope(!_resServiceView.CanEdit))
@@ -246,6 +261,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>通过序列化属性编辑项目草稿并提示目录问题；落盘仍需显式保存。</summary>
         internal void DrawSettings(float width)
         {
             GUILayout.Space(8);
@@ -316,6 +332,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndScrollView();
         }
 
+        /// <summary>请求用户选择新配置路径，再委托正式入口创建独立项目身份。</summary>
         private void CreateProject()
         {
             if (_resServiceView == null || _resServiceView.IsBusy || !GUI.enabled)
@@ -340,8 +357,10 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>清除选择操作留下的窗口错误提示，不修改执行报告。</summary>
         internal void ClearSelectionError() => _selectionError = null;
 
+        /// <summary>尝试切换项目，将失败原因留在窗口而不静默选择替代项目。</summary>
         private void TrySelect(ResourceProject value)
         {
             try

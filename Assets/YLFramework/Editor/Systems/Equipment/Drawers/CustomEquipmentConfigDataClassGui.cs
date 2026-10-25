@@ -6,8 +6,10 @@ using YLFramework.Attributes;
 using YLFramework.Equipment;
 namespace YLFramework.Editor.Equipment
 {
+    /// <summary>为 Script 模式选择普通装备类，维护类型全名、脚本 GUID 并展示绑定诊断。</summary>
     internal sealed class CustomEquipmentConfigDataClassGui : CustomPropertyGui
     {
+        /// <summary>仅在 Script 模式列出可构造装备类，按类型全名排序并提供脚本打开入口。</summary>
         public override void OnPropertyGui(SerializedProperty property)
         {
             var mode = property.serializedObject.FindProperty("equipmentType");

@@ -13,6 +13,7 @@ using YLFramework.Mission;
 namespace YLFramework.Editor.Mission
 {
 
+    /// <summary>任务配表资产 Inspector，编辑显示名与数据类型限制，并提供专用窗口入口。</summary>
     [CustomEditor(typeof(MissionsConfig))]
     public class MissionConfigInspector : UnityEditor.Editor
     {
@@ -21,6 +22,7 @@ namespace YLFramework.Editor.Mission
 
         //private SerializedProperty m_Script = null;
 
+        /// <summary>缓存当前配表的序列化属性，供 Inspector 逐项绘制。</summary>
         private void OnEnable()
         {
             _serializedProperties = serializedObject.GetAllSerializedProperty();
@@ -28,6 +30,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>只允许常规字段中的显示名编辑，另外绘制类型绑定并应用序列化修改。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -64,6 +67,7 @@ namespace YLFramework.Editor.Mission
 
         }
 
+        /// <summary>显示任务配表窗口并绑定指定源配表；空引用不处理。</summary>
         public static void OpenMissionsConfig(MissionsConfig missionsConfig)
         {
             if (missionsConfig == null)
@@ -88,7 +92,7 @@ namespace YLFramework.Editor.Mission
 
         private GUIStyle _labelStyle;
 
-        // 绘制数据类型
+        /// <summary>显示并设置数据类型脚本 GUID，菜单修改会标脏、保存；不转换配表中已有条目。</summary>
         private void OnGuiDataType()
         {
             MissionsConfig skillsConfig = target as MissionsConfig;
@@ -212,6 +216,7 @@ namespace YLFramework.Editor.Mission
 
         }
 
+        /// <summary>生成带灰色命名空间附注的数据类型显示名称。</summary>
         private string GetDisplayName(Type type)
         {
 
@@ -223,6 +228,7 @@ namespace YLFramework.Editor.Mission
             return string.Format("{0}<color=grey>({1})</color>", type.Name, type.Namespace);
         }
 
+        /// <summary>重新扫描 MissionConfigData 派生类脚本作为候选，不包含基础类型，也不排除抽象类。</summary>
         private List<MonoScript> GetAllConfigDatas()
         {
             if (_configDatas == null)
@@ -260,6 +266,7 @@ namespace YLFramework.Editor.Mission
             return _configDatas;
         }
 
+        /// <summary>通过有效 GUID 解析路径并请求 Unity 打开对应资产。</summary>
         public static void OpenAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -276,6 +283,7 @@ namespace YLFramework.Editor.Mission
             AssetDatabase.OpenAsset(AssetDatabase.LoadAssetAtPath(assetPath, typeof(UnityEngine.Object)));
         }
 
+        /// <summary>按 GUID 取得资产，设置编辑器选择并高亮定位。</summary>
         public static void SelectAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))

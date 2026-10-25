@@ -9,6 +9,7 @@ namespace YLFramework.Singletons
     /// 默认按类型名从 Resources 加载预制体，可通过 InstanceWithLoader 替换加载方式。
     /// InstanceWithLoader 属于单次 Play Session 的运行期配置，进入 Play 时会恢复为默认加载方式。
     /// </summary>
+    /// <typeparam name="T">从场景或预制体实例上取得的单例组件类型。</typeparam>
     public class PrefabSingletonProperty<T> where T : MonoBehaviour
     {
         private static readonly Func<string, GameObject> _defaultLoader = Resources.Load<GameObject>;
@@ -23,6 +24,7 @@ namespace YLFramework.Singletons
         private static bool _hasWarnedCreationFailure;
         private static bool _isCreating;
 
+        /// <summary>登记预制体单例缓存及加载配置的新 Play 会话重置。</summary>
         static PrefabSingletonProperty()
         {
             SingletonSessionState.RegisterSessionReset(ResetSessionState);
@@ -32,7 +34,7 @@ namespace YLFramework.Singletons
         /// 临时替换预制体加载方式并返回实例：配置仅对本次 Play 会话有效，进入下一次 Play 会恢复默认 Resources 加载。
         /// </summary>
         /// <param name="loader">预制体加载委托，参数为类型名；为 null 时创建会失败并输出一次警告。</param>
-        /// <returns>创建出的单例实例；创建失败时返回 null 并输出一次警告。</returns>
+        /// <returns>已有缓存或本次取得的组件；预制体为空或缺少目标组件时警告一次，加载器异常直接传播。</returns>
         public static T InstanceWithLoader(Func<string, GameObject> loader)
         {
             PrefabLoader = loader;
@@ -41,8 +43,9 @@ namespace YLFramework.Singletons
 
         /// <summary>
         /// 单例实例；首次访问时先查找场景，找不到则按 <see cref="PrefabLoader"/> 加载预制体并实例化
-        /// （默认按类型名从 Resources 加载），实例化后 DontDestroyOnLoad；退出流程中返回 null。
-        /// 创建失败（场景无实例且加载器返回空）时返回 null 并输出一次警告；同帧内刚被 Dispose 的实例会被跳过。
+        /// （默认按类型名从 Resources 加载），实例化后 DontDestroyOnLoad；退出流程中仅返回已有缓存，不再查找或创建。
+        /// 场景无实例且加载器返回空或预制体缺少目标组件时，返回 null 并警告一次；加载器异常直接传播。
+        /// 同帧内刚被 Dispose 的实例会被跳过。
         /// 加载器内部重入 Instance 时不会递归创建。
         /// </summary>
         public static T Instance
@@ -53,7 +56,6 @@ namespace YLFramework.Singletons
                 {
                     if (SingletonSessionState.IsApplicationQuitting)
                     {
-                        //退出流程中不再实例化预制体
                         return null;
                     }
 
@@ -109,6 +111,7 @@ namespace YLFramework.Singletons
             Object.Destroy(instance.gameObject);
         }
 
+        /// <summary>按 InstanceID 顺序采用场景中的活动组件，跳过尚未实际销毁的已处置实例。</summary>
         private static T FindSceneInstance()
         {
             foreach (var candidate in Object.FindObjectsByType<T>(FindObjectsSortMode.InstanceID))
@@ -129,9 +132,9 @@ namespace YLFramework.Singletons
             return null;
         }
 
+        /// <summary>以重入保护加载并克隆预制体，取得目标组件并常驻；组件缺失时销毁克隆。</summary>
         private static T CreateFromPrefab()
         {
-            //loader 内重入 Instance 时不再递归创建
             if (_isCreating)
             {
                 return null;
@@ -167,6 +170,7 @@ namespace YLFramework.Singletons
             }
         }
 
+        /// <summary>在当前连续创建失败期间仅输出一次警告，成功取得实例后允许重新报告。</summary>
         private static void WarnCreationFailed()
         {
             if (_hasWarnedCreationFailure)
@@ -180,6 +184,7 @@ namespace YLFramework.Singletons
                 $"默认按类型名从 Resources 加载 \"{typeof(T).Name}\"，请确认该预制体存在，或使用 InstanceWithLoader 提供加载方式。");
         }
 
+        /// <summary>清空缓存、待销毁引用和创建标记，并恢复新 Play 会话的默认加载方式。</summary>
         private static void ResetSessionState()
         {
             _instance = null;

@@ -8,6 +8,7 @@ using YLFramework.Editor.Utilities;
 
 namespace YLFramework.Editor.Localization
 {
+    /// <summary>编辑显式选中的本地化根、语言顺序及条目，不因打开窗口而登记运行时配置。</summary>
     public class LocalizationConfigsWindow : EditorWindow
     {
         private const string SelectedRootKey = "YLFramework.Localization.Editor.SelectedRoot";
@@ -22,9 +23,11 @@ namespace YLFramework.Editor.Localization
         private MultiLanguageType _newType;
         private string _failure;
 
+        /// <summary>打开本地化作者窗口，由启用流程恢复最近选中的根。</summary>
         [MenuItem("YLFramework/Localization/多语言配置")]
         public static void Open() => GetWindow<LocalizationConfigsWindow>("YL Localization").Show();
 
+        /// <summary>打开窗口并绑定指定根，不扫描或接管其他配置资产。</summary>
         public static void Open(MultiLanguageConfigs config)
         {
             var window = GetWindow<LocalizationConfigsWindow>("YL Localization");
@@ -32,6 +35,7 @@ namespace YLFramework.Editor.Localization
             window.Show();
         }
 
+        /// <summary>恢复根偏好并建立语言树，订阅 Undo 重绘以反映作者修改。</summary>
         private void OnEnable()
         {
             if (!root)
@@ -43,6 +47,7 @@ namespace YLFramework.Editor.Localization
             Undo.undoRedoPerformed += Repaint;
         }
 
+        /// <summary>释放语言树的订阅并移除窗口重绘回调，不自动保存语言资产。</summary>
         private void OnDisable()
         {
             _tree?.Dispose();
@@ -50,6 +55,7 @@ namespace YLFramework.Editor.Localization
             Undo.undoRedoPerformed -= Repaint;
         }
 
+        /// <summary>释放旧树后切换显式根，清除条目选择并记住根 GUID，再建立新语言树。</summary>
         private void Bind(MultiLanguageConfigs config)
         {
             _tree?.Dispose();
@@ -71,6 +77,7 @@ namespace YLFramework.Editor.Localization
             _tree.Reload();
         }
 
+        /// <summary>绘制根选择、创建、校验、显式保存和双栏语言编辑，并展示目标配置错误。</summary>
         private void OnGUI()
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
@@ -172,6 +179,7 @@ namespace YLFramework.Editor.Localization
             }
         }
 
+        /// <summary>绘制跨语言条目命令及选中语言的序列化字段，应用字段修改后失效缓存并通知刷新。</summary>
         private void DrawEntries()
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -232,6 +240,7 @@ namespace YLFramework.Editor.Localization
             }
         }
 
+        /// <summary>列出尚可创建的语言，禁用已存在项及跳过 Unknown，选择后创建资产并重建树。</summary>
         private void ShowLanguages()
         {
             var menu = new GenericMenu();
@@ -261,6 +270,7 @@ namespace YLFramework.Editor.Localization
             menu.ShowAsContext();
         }
 
+        /// <summary>执行作者命令，将异常保留在窗口并记录日志，随后请求重绘。</summary>
         private void Run(Action action)
         {
             try
@@ -276,15 +286,18 @@ namespace YLFramework.Editor.Localization
             Repaint();
         }
 
+        /// <summary>按根列表顺序展示语言，拖动重排的 Undo 和订阅释放沿用通用树实现。</summary>
         private sealed class LanguageTree : ReorderableTreeView<LanguageConfig>
         {
             private readonly MultiLanguageConfigs _owner;
             private readonly Action<LanguageConfig> _select;
+            /// <summary>绑定根的实时语言列表和选择回调，跟随列表替换及 Undo 后的数据。</summary>
             internal LanguageTree(MultiLanguageConfigs owner, TreeViewState state, Action<LanguageConfig> select) : base(owner, () => owner.Languages, state)
             {
                 this._owner = owner;
                 this._select = select;
             }
+            /// <summary>按语言列表槽位建立树行，显示语言和名称并保留缺失引用行。</summary>
             protected override void OnBuildRoot(TreeViewItem root, IList<LanguageConfig> data)
             {
                 for (var i = 0; i < data.Count; i++)
@@ -292,6 +305,7 @@ namespace YLFramework.Editor.Localization
                     root.AddChild(new TreeViewItem(i + 1, 0, data[i] ? data[i].language + " / " + data[i].displayName : "(Missing)"));
                 }
             }
+            /// <summary>将首个有效选中槽位对应的语言传给窗口，不在空选时修改当前目标。</summary>
             protected override void SelectionChanged(IList<int> ids)
             {
                 if (ids.Count > 0 && ids[0] > 0 && ids[0] <= _owner.Languages.Count)
@@ -302,9 +316,11 @@ namespace YLFramework.Editor.Localization
         }
     }
 
+    /// <summary>本地化根的检查器，保留默认字段编辑并提供作者窗口入口和结构诊断。</summary>
     [CustomEditor(typeof(MultiLanguageConfigs))]
     internal class MultiLanguageConfigsInspector : UnityEditor.Editor
     {
+        /// <summary>绘制默认根字段、作者窗口按钮及当前根校验错误，不自动修复或保存。</summary>
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
@@ -324,9 +340,11 @@ namespace YLFramework.Editor.Localization
         }
     }
 
+    /// <summary>本地化显示绑定的检查器，在默认字段外提供无需切换活动状态的刷新入口。</summary>
     [CustomEditor(typeof(LocalizeBase), true)]
     internal class LocalizeInspector : UnityEditor.Editor
     {
+        /// <summary>绘制绑定字段及直接刷新按钮，并提示反射成员保留与图片责任边界。</summary>
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();

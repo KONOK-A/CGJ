@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace YLFramework.Audio
 {
-    // Request-owned value snapshot; Unity resources remain borrowed references.
+    /// <summary>由单次请求持有的配置值快照；其中 Unity 资源仍是借用引用，不复制或接管资源。</summary>
     internal struct AudioPlaybackOptions
     {
         internal bool Loop;
@@ -18,7 +18,7 @@ namespace YLFramework.Audio
         internal int Priority;
         internal bool AutoPauseWhenTimeScaleZero;
 
-        // The zero value is only a cleared record, never valid playback defaults.
+        // 零值只用于清空记录，不能当作有效播放默认值，例如音高不能为零。
         internal static AudioPlaybackOptions Defaults => new AudioPlaybackOptions
         {
             Volume = 1f,
@@ -36,6 +36,7 @@ namespace YLFramework.Audio
                 return options;
             }
         }
+        /// <summary>复制可变选项，未提供时按入口选择普通默认值或音乐循环默认值。</summary>
         internal static AudioPlaybackOptions Capture(AudioSoundOptions options, bool music = false)
         {
             if (options == null)
@@ -58,6 +59,7 @@ namespace YLFramework.Audio
                 AutoPauseWhenTimeScaleZero = options.AutoPauseWhenTimeScaleZero
             };
         }
+        /// <summary>统一校验路由、包络及请求参数，仅空间播放校验距离与衰减模式。</summary>
         internal void Validate(bool spatial)
         {
             OutputRoute.Validate();
@@ -102,6 +104,7 @@ namespace YLFramework.Audio
                 throw new ArgumentOutOfRangeException(nameof(RolloffMode));
             }
         }
+        /// <summary>补充校验自动淡变对 Clip 采样数据的要求。</summary>
         internal void ValidateClip(AudioClip clip) => AutoFade.ValidateClip(clip);
     }
 }

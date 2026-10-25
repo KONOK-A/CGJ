@@ -7,8 +7,10 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>展示调用方已读取的发布版本快照；索引当前项不表示应用正在使用的版本。</summary>
     internal sealed class ResourceReleaseTable : TreeView
     {
+        /// <summary>保存精确发布身份及本次索引比较结果的显示行。</summary>
         internal sealed class Row : TreeViewItem
         {
             internal ResourceRelease Release;
@@ -20,6 +22,7 @@ namespace YLFramework.Editor.Resource
         private Row[] _rows = Array.Empty<Row>();
         private readonly Dictionary<int, Row> _ids = new();
         internal Row Selected => GetSelection().Count == 1 && _ids.TryGetValue(GetSelection()[0], out var row) ? row : null;
+        /// <summary>建立版本表列与排序刷新行为。</summary>
         internal ResourceReleaseTable() : base(new TreeViewState(), Header())
         {
             rowHeight = ResourceWorkbenchGui.RowHeight;
@@ -29,6 +32,7 @@ namespace YLFramework.Editor.Resource
             multiColumnHeader.sortingChanged += _ => Reload();
             Reload();
         }
+        /// <summary>定义版本身份、索引关系和交付统计列，默认只展开常用列。</summary>
         private static MultiColumnHeader Header()
         {
             var names = new[] { "版本摘要", "资源兼容标识（App）", "发布索引", "Bundle数", "交付逻辑字节", "Unity" };
@@ -47,6 +51,7 @@ namespace YLFramework.Editor.Resource
                 visibleColumns = new[] { 0, 1, 2 }
             });
         }
+        /// <summary>替换版本快照并按完整摘要保留选择；未知或过期索引关系由调用方明确传入。</summary>
         internal void SetData(IReadOnlyList<ResourceRelease> releases, string currentDigest)
         {
             var old = Selected?.Identity.CatalogDigest;
@@ -79,6 +84,7 @@ namespace YLFramework.Editor.Resource
             SetSelection(retained == null ? Array.Empty<int>() : new[] { retained.id });
             Reload();
         }
+        /// <summary>按完整版本摘要选择并滚动定位，不按截断显示值匹配。</summary>
         internal void Select(string digest)
         {
             var row = _rows.FirstOrDefault(x => x.Identity.CatalogDigest == digest);
@@ -87,6 +93,7 @@ namespace YLFramework.Editor.Resource
                 SetSelection(new[] { row.id }, TreeViewSelectionOptions.RevealAndFrame);
             }
         }
+        /// <summary>为已登记版本快照建立平铺树根。</summary>
         protected override TreeViewItem BuildRoot()
         {
             var root = new TreeViewItem(0, -1, "已登记版本");
@@ -98,6 +105,7 @@ namespace YLFramework.Editor.Resource
             root.children ??= new List<TreeViewItem>();
             return root;
         }
+        /// <summary>筛选版本行并按列排序，Bundle 数与交付字节使用数值而非文本排序。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
         {
             var filtered = _rows.Where(x => string.IsNullOrEmpty(searchString) || x.Search.IndexOf(searchString, StringComparison.OrdinalIgnoreCase) >= 0);
@@ -117,6 +125,7 @@ namespace YLFramework.Editor.Resource
             }
             return filtered.Cast<TreeViewItem>().ToList();
         }
+        /// <summary>绘制可见版本列，并通过提示保留完整技术身份。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             var row = (Row)args.item;

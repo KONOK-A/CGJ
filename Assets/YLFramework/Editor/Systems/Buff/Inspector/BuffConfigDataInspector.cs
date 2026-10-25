@@ -13,12 +13,14 @@ using YLFramework.Editor.Utilities;
 namespace YLFramework.Editor.Buff
 {
 
+    /// <summary>普通 Inspector 只读展示 Buff 定义，配表窗口通过专用入口启用字段绘制器。</summary>
     [CustomEditor(typeof(BuffConfigData), true)]
     public class BuffConfigDataInspector : UnityEditor.Editor
     {
 
         private static BuffConfigDataInspector _instance;
 
+        /// <summary>供配表窗口复用的内嵌检查器实例，不绑定普通 Inspector 的 target。</summary>
         public static BuffConfigDataInspector Instance
         {
             get
@@ -42,6 +44,7 @@ namespace YLFramework.Editor.Buff
 
         //private SerializedProperty script = null;
 
+        /// <summary>在普通 Inspector 中只读绘制定义，修改通过配表窗口进行。</summary>
         public override void OnInspectorGUI()
         {
             EditorGUI.BeginDisabledGroup(true);
@@ -51,6 +54,7 @@ namespace YLFramework.Editor.Buff
             EditorGUI.EndDisabledGroup();
         }
 
+        /// <summary>为配表窗口绑定单个定义并应用序列化编辑，同步选择和查询缓存。</summary>
         internal void OnInspectorGUI(BuffConfigData data, BuffConfigsWindow window, BuffsConfig currentBuffConfig)
         {
 
@@ -131,6 +135,7 @@ namespace YLFramework.Editor.Buff
 
 
         private Dictionary<string, CustomPropertyGui> _drawers = new();
+        /// <summary>为一次资产选择创建独立的字段绘制器，避免保留上个资产的序列化属性。</summary>
         private static Dictionary<string, CustomPropertyGui> CreateDrawers() => new()
         {
             ["id"] = new CustomBuffConfigDataIdGui(),
@@ -141,6 +146,7 @@ namespace YLFramework.Editor.Buff
         };
 
         private Dictionary<SerializedProperty, Dictionary<Type, Attribute>> _attributes = new Dictionary<SerializedProperty, Dictionary<Type, Attribute>>();
+        /// <summary>选择变化时释放旧包装与缓存，再建立新定义的序列化属性列表。</summary>
         internal void BindSelection(BuffConfigData data)
         {
             if (_currentBuffConfigData == data && _currentSerializedObject != null)
@@ -159,6 +165,7 @@ namespace YLFramework.Editor.Buff
             _currentSerializeProperty = _currentSerializedObject.GetAllSerializedProperty();
             _drawers = CreateDrawers();
         }
+        /// <summary>释放当前序列化包装，并清空属性、特性与绘制器缓存。</summary>
         internal void ReleaseSelection()
         {
             _currentSerializedObject?.Dispose();
@@ -168,8 +175,10 @@ namespace YLFramework.Editor.Buff
             _attributes.Clear();
             _drawers.Clear();
         }
+        /// <summary>检查器停用时解除当前资产绑定。</summary>
         private void OnDisable() => ReleaseSelection();
 
+        /// <summary>读取并缓存属性对应字段的指定特性，未标注时也缓存空结果。</summary>
         private T GetPropertyCustomAttribute<T>(SerializedProperty property) where T : Attribute
         {
             if (!_attributes.ContainsKey(property))

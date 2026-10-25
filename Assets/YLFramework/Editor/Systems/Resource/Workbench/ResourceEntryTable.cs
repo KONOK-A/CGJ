@@ -9,8 +9,10 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>展示选择定义或解析目录的资源表，以项目和条目身份维护选择，不靠排序后的行号编辑。</summary>
     internal sealed class ResourceEntryTable : TreeView
     {
+        /// <summary>单行的来源身份、可选解析条目和预计算显示内容。</summary>
         internal sealed class Row : TreeViewItem
         {
             internal string Guid;
@@ -52,7 +54,9 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>使用独立默认布局创建资源表。</summary>
         internal ResourceEntryTable() : this(new ResourceWorkbenchLayout()) { }
+        /// <summary>沿用调用方列布局并建立表格刷新与排序行为。</summary>
         internal ResourceEntryTable(ResourceWorkbenchLayout layout) : base(new TreeViewState(), Header(layout))
         {
             rowHeight = ResourceWorkbenchGui.RowHeight;
@@ -64,6 +68,7 @@ namespace YLFramework.Editor.Resource
             Reload();
         }
 
+        /// <summary>创建资源列，并在结构兼容时恢复原列宽、可见性和排序状态。</summary>
         private static MultiColumnHeader Header(ResourceWorkbenchLayout layout)
         {
             var names = new[] { "名称", "类型 / 目录", "地址", "定义状态", "Group", "完整路径" };
@@ -89,6 +94,7 @@ namespace YLFramework.Editor.Resource
             return new MultiColumnHeader(state);
         }
 
+        /// <summary>从原始选择定义建立行，失效草稿仍可见，目录仅显示定义而不在此展开。</summary>
         internal void SetDefinitions(ResourceProject project, int group)
         {
             SetProject(project);
@@ -129,6 +135,7 @@ namespace YLFramework.Editor.Resource
             UpdateRows(next.ToArray());
         }
 
+        /// <summary>以解析后的主资产和子资产建立只读行，禁止把这些行映射为可编辑选择项。</summary>
         internal void SetResolved(ResourceProject project, IEnumerable<ResourceCatalogEntry> entries, string group)
         {
             SetProject(project);
@@ -143,6 +150,7 @@ namespace YLFramework.Editor.Resource
             }).ToArray());
         }
 
+        /// <summary>项目 GUID 变化时清除临时行身份与选择，防止跨项目复用行号。</summary>
         private void SetProject(ResourceProject project)
         {
             var guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(project));
@@ -156,6 +164,7 @@ namespace YLFramework.Editor.Resource
             SetSelection(Array.Empty<int>());
         }
 
+        /// <summary>为同一项目中的稳定行键分配 ID，并预计算单元格、搜索文本和图标提示。</summary>
         private Row MakeRow(string key, string guid, string group, string path, string address, string type, string status)
         {
             if (!_ids.TryGetValue(key, out var id))
@@ -180,6 +189,7 @@ namespace YLFramework.Editor.Resource
             };
         }
 
+        /// <summary>替换行快照后重建索引，仅保留仍存在的选择，搜索隐藏项不会因此丢失。</summary>
         private void UpdateRows(Row[] values)
         {
             _rows = values;
@@ -194,6 +204,7 @@ namespace YLFramework.Editor.Resource
             SetSelection(selection);
         }
 
+        /// <summary>将完整 UI 选择按当前组和唯一 GUID 重解为定义索引；身份变化时拒绝整批操作。</summary>
         internal int[] GetSelectedIndices(ResourceProject project, int group)
         {
             if (_isResolved || group < 0 || group >= project.groups.Count)
@@ -221,6 +232,7 @@ namespace YLFramework.Editor.Resource
             return result.OrderBy(x => x).ToArray();
         }
 
+        /// <summary>捕获唯一选择定义的项目、组、内容和地址身份；解析模式不保存行选择。</summary>
         internal ResourceWorkbenchRowState[] CaptureSelection(ResourceProject project)
         {
             if (_isResolved)
@@ -255,6 +267,7 @@ namespace YLFramework.Editor.Resource
             return saved.ToArray();
         }
 
+        /// <summary>仅恢复全部身份仍一致的定义行，并返回失效而未恢复的选择数。</summary>
         internal int RestoreSelection(ResourceProject project, ResourceWorkbenchRowState[] saved)
         {
             var selection = new List<int>();
@@ -278,6 +291,7 @@ namespace YLFramework.Editor.Resource
             return (saved?.Length ?? 0) - selection.Count;
         }
 
+        /// <summary>将当前行快照挂到不可见根节点，空表也提供有效子集合。</summary>
         protected override TreeViewItem BuildRoot()
         {
             var root = new TreeViewItem(0, -1, "Root");
@@ -290,6 +304,7 @@ namespace YLFramework.Editor.Resource
             return root;
         }
 
+        /// <summary>按搜索和列排序生成可见行，同时记录可见 ID 以区分隐藏选择。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
         {
             var filtered = _rows.Where(x => string.IsNullOrEmpty(searchString) || x.Search.IndexOf(searchString, StringComparison.OrdinalIgnoreCase) >= 0);
@@ -311,6 +326,7 @@ namespace YLFramework.Editor.Resource
             return result;
         }
 
+        /// <summary>只绘制当前可见列的预计算内容，复用原路径和地址提示。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             var row = (Row)args.item;
@@ -323,7 +339,9 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>通知宿主更新详情和持久化 UI 选择。</summary>
         protected override void SelectionChanged(IList<int> selectedIds) => SelectionUpdated?.Invoke();
+        /// <summary>将仍存在的双击行交回宿主定位源资产。</summary>
         protected override void DoubleClickedItem(int id)
         {
             if (_byId.TryGetValue(id, out var row))
@@ -331,6 +349,7 @@ namespace YLFramework.Editor.Resource
                 Locate?.Invoke(row);
             }
         }
+        /// <summary>右键未选中行时先更新选择，再由宿主提供上下文动作。</summary>
         protected override void ContextClickedItem(int id)
         {
             if (!IsSelected(id))

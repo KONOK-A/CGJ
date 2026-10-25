@@ -4,9 +4,11 @@ using YLFramework.DataAssets;
 
 namespace YLFramework.Editor.DataAssets
 {
+    /// <summary>配置条目检查器，只允许编辑由条目声明父根实际拥有的资产。</summary>
     [CustomEditor(typeof(ScriptableObjectData), true)]
     public sealed class ScriptableObjectDataInspector : UnityEditor.Editor
     {
+        /// <summary>显示只读父根，校验所有权后编辑身份与序列化字段，并使相关根索引失效。</summary>
         public override void OnInspectorGUI()
         {
             var data = (ScriptableObjectData)target;

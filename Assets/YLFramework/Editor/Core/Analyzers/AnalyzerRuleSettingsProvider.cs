@@ -14,11 +14,14 @@ using CompilationAssembly = UnityEditor.Compilation.Assembly;
 
 namespace YLFramework.Editor.Core.Analyzers
 {
+    /// <summary>展示分析器接入证据并编辑业务叶子规则集的 Project Settings 页面。</summary>
+    /// <remarks>本地覆盖、编译图与编译活动分别观察，均不被当作诊断规则已实际执行的证明。</remarks>
     internal sealed class AnalyzerRuleSettingsProvider : SettingsProvider
     {
         internal const string SettingsPath = "Project/YLFramework/Analyzers";
         internal const string MenuPath = "YLFramework/Core/分析器规则";
         private const string DllName = "YLFramework.Analyzers.dll";
+        // 编辑意图与磁盘读取快照、待应用预览分开保存；再次编辑规则会使旧预览失效。
         private readonly Dictionary<string, string> _changes = new Dictionary<string, string>(StringComparer.Ordinal);
         private CompilationAssembly[] _assemblies = Array.Empty<CompilationAssembly>();
         private string[] _assemblyLabels = Array.Empty<string>();
@@ -32,6 +35,7 @@ namespace YLFramework.Editor.Core.Analyzers
         private bool _compileErrors;
         private Vector2 _scroll;
         private int _dllCount;
+        // null 表示缺少可核实的证据，不能按 false 或接入成功展示。
         private bool? _hasLabel;
         private bool? _platformsDisabled;
         private bool? _explicitReference;
@@ -39,6 +43,7 @@ namespace YLFramework.Editor.Core.Analyzers
         private string _dllDetails;
         private string _readError;
 
+        /// <summary>配置设置页入口、标题与搜索关键词，不在构造时读取或修改规则文件。</summary>
         private AnalyzerRuleSettingsProvider() : base(SettingsPath, SettingsScope.Project)
         {
             label = "Analyzers";
@@ -46,12 +51,17 @@ namespace YLFramework.Editor.Core.Analyzers
                 .Concat(new[] { "YLFramework", "分析器", "ruleset", "Warning", "Error", "Inject", "Panel", "Audio" }));
         }
 
+        /// <summary>供 Unity 设置页发现机制创建页面实例。</summary>
         [SettingsProvider]
         internal static SettingsProvider CreateProvider() => new AnalyzerRuleSettingsProvider();
 
+        /// <summary>从框架菜单定位到分析器规则设置页。</summary>
         [MenuItem(MenuPath)]
         private static void Open() => ProjectSettingTools.OpenProjectSettings(SettingsPath);
 
+        /// <summary>重新订阅当前页面所需的编译事件，并刷新程序集与配置快照。</summary>
+        /// <param name="searchContext">Unity 传入的设置搜索上下文。</param>
+        /// <param name="rootElement">Unity 提供的根节点；本页使用 OnGUI 绘制。</param>
         public override void OnActivate(string searchContext, VisualElement rootElement)
         {
             OnDeactivate();
@@ -61,6 +71,7 @@ namespace YLFramework.Editor.Core.Analyzers
             Refresh();
         }
 
+        /// <summary>解除本页面的编译事件订阅；重复调用不会累积监听。</summary>
         public override void OnDeactivate()
         {
             CompilationPipeline.compilationStarted -= CompilationStarted;
@@ -68,6 +79,8 @@ namespace YLFramework.Editor.Core.Analyzers
             CompilationPipeline.compilationFinished -= CompilationFinished;
         }
 
+        /// <summary>绘制接入状态、本地覆盖与显式预览/应用入口，不因重绘自动写入配置。</summary>
+        /// <param name="searchContext">Unity 传入的设置搜索文本；本页不据此改变规则集合。</param>
         public override void OnGUI(string searchContext)
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
@@ -159,6 +172,7 @@ namespace YLFramework.Editor.Core.Analyzers
             EditorGUILayout.EndScrollView();
         }
 
+        /// <summary>编辑单 ID 的待应用意图；保留已有非常用级别，修改后作废旧预览。</summary>
         private void DrawRule(AnalyzerRuleInfo rule)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -193,6 +207,7 @@ namespace YLFramework.Editor.Core.Analyzers
             EditorGUILayout.EndVertical();
         }
 
+        /// <summary>重新读取引用 Runtime 的编译图，尽量保留目标程序集，再加载其配置与接入信息。</summary>
         private void Refresh()
         {
             _root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
@@ -211,6 +226,7 @@ namespace YLFramework.Editor.Core.Analyzers
             LoadSelection();
         }
 
+        /// <summary>丢弃上一目标的编辑状态，只读加载当前目标的规则集和可配置边界。</summary>
         private void LoadSelection()
         {
             _changes.Clear();
@@ -229,6 +245,7 @@ namespace YLFramework.Editor.Core.Analyzers
             RefreshConnection();
         }
 
+        /// <summary>只读检查唯一 DLL、导入设置和当前编译图；无法判定的项目保留未知状态。</summary>
         private void RefreshConnection()
         {
             _dllCount = 0;
@@ -293,6 +310,7 @@ namespace YLFramework.Editor.Core.Analyzers
             }
         }
 
+        /// <summary>确认 Error 门禁后应用既有预览，再导入规则文件并请求编译；不宣称规则已执行。</summary>
         private void ApplyPreview()
         {
             if (_changes.Any(change => change.Value == "Error") && !EditorUtility.DisplayDialog("启用 Error 门禁",
@@ -320,9 +338,11 @@ namespace YLFramework.Editor.Core.Analyzers
             }
         }
 
+        /// <summary>刷新或切换目标前确认可丢弃尚未应用的编辑意图。</summary>
         private bool ConfirmDiscard() => _changes.Count == 0 || EditorUtility.DisplayDialog("尚未应用的规则修改",
             "刷新或切换目标会丢弃尚未应用的修改。继续？", "丢弃并继续", "取消");
 
+        /// <summary>开始观察新一轮编译活动，重置错误标记并刷新页面。</summary>
         private void CompilationStarted(object context)
         {
             _compileErrors = false;
@@ -330,9 +350,11 @@ namespace YLFramework.Editor.Core.Analyzers
             Repaint();
         }
 
+        /// <summary>汇总本轮任意程序集的编译错误，不把零诊断等同于规则执行成功。</summary>
         private void AssemblyFinished(string path, CompilerMessage[] messages)
             => _compileErrors |= messages.Any(message => message.type == CompilerMessageType.Error);
 
+        /// <summary>更新本轮编译观察结果，并重新读取 DLL 与编译图接入证据。</summary>
         private void CompilationFinished(object context)
         {
             _activity = _compileErrors ? "编译失败；实际规则执行未核实。" : "编译完成；零诊断也不能证明规则已执行，实际生效未核实。";
@@ -340,6 +362,7 @@ namespace YLFramework.Editor.Core.Analyzers
             Repaint();
         }
 
+        /// <summary>将已知或未知的接入证据组合成状态说明，与实际规则执行结论保持区分。</summary>
         internal static string DescribeConnection(int dllCount, bool? label, bool? platforms, bool? explicitReference,
             bool? included, bool compiling, bool failed)
         {
@@ -383,6 +406,7 @@ namespace YLFramework.Editor.Core.Analyzers
             return reason + "；实际规则执行未核实，保存成功或零诊断不是执行证明。";
         }
 
+        /// <summary>限定直接引用 Runtime 且包含 Assets 业务源码的可配置目标；返回 null 表示未发现范围阻断。</summary>
         internal static string ConfigurationBlock(string root, string name, string definition, bool referencesRuntime, IEnumerable<string> sources)
         {
             if (!referencesRuntime)
@@ -409,6 +433,7 @@ namespace YLFramework.Editor.Core.Analyzers
             return null;
         }
 
+        /// <summary>将编译图中的相对路径统一解析为工程根下的完整路径。</summary>
         private static string FullPath(string root, string path) => Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(root, path));
     }
 }

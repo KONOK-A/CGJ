@@ -6,6 +6,7 @@ using UnityEngine;
 namespace YLFramework.StateMachine
 {
 
+    /// <summary>管理按名启动的跨场景状态机宿主及名称哈希缓存，不承载单层执行内核。</summary>
     public class FsmControllerExtension
     {
         #region 单例
@@ -29,6 +30,7 @@ namespace YLFramework.StateMachine
         }
 
 
+        /// <summary>每轮运行清空静态登记和哈希缓存，并重新绑定应用退出标记。</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetSession()
         {
@@ -40,8 +42,10 @@ namespace YLFramework.StateMachine
             Application.quitting += OnQuitting;
         }
 
+        /// <summary>应用退出后禁止静态入口再创建状态机宿主。</summary>
         private static void OnQuitting() => _isQuitting = true;
 
+        /// <summary>仅供内部按需建立本轮静态宿主登记表。</summary>
         private FsmControllerExtension()
         {
         }
@@ -80,12 +84,12 @@ namespace YLFramework.StateMachine
         #region 静态方法
 
         /// <summary>
-        /// 启动状态(适用于没有具体游戏物体的状态管理,例如:游戏状态)
+        /// 创建按名登记的跨场景宿主，适合没有业务 GameObject 的状态管理；实际初始化仍由组件 Start 执行。
         /// </summary>
         /// <param name="fsmName">状态机名称</param>
         /// <param name="fsm">状态配置文件</param>
         /// <param name="userData">自定义参数或数据</param>
-        /// <returns></returns>
+        /// <returns>新宿主；非运行期、退出中、参数无效或名称已占用时返回 null。</returns>
         public static FsmController StartupFsm(string fsmName, RuntimeFsmController fsm, object userData = null)
         {
             if (_isQuitting || !Application.isPlaying || !YLFramework.Foundation.ApplicationTool.IsPlaying)
@@ -113,10 +117,10 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 查询通过FSMController.StartupFSM启动的状态机
+        /// 查询由静态启动入口登记的存活宿主，不搜索场景中直接挂载的控制器。
         /// </summary>
         /// <param name="fsmName">状态机名称</param>
-        /// <returns></returns>
+        /// <returns>对应宿主；名称无效、未登记或对象已销毁时返回 null。</returns>
         public static FsmController GetFsm(string fsmName)
         {
             if (string.IsNullOrEmpty(fsmName))
@@ -137,7 +141,7 @@ namespace YLFramework.StateMachine
         }
 
         /// <summary>
-        /// 移除通过FSMController.StartupFSM启动的状态机
+        /// 先移除按名登记，再请求销毁宿主 GameObject；实例清理由组件销毁回调执行。
         /// </summary>
         /// <param name="fsmName">状态机名称</param>
         public static void RemoveFsm(string fsmName)
@@ -160,6 +164,8 @@ namespace YLFramework.StateMachine
             }
         }
 
+        /// <summary>在控制器销毁时按对象身份移除残余登记，不创建新的静态管理实例。</summary>
+        /// <param name="controller">已进入销毁流程的控制器。</param>
         internal static void Unregister(FsmController controller)
         {
             if (_instance == null)
@@ -192,6 +198,9 @@ namespace YLFramework.StateMachine
         private static Dictionary<int, string> _hashStrings = new Dictionary<int, string>();
 
 
+        /// <summary>使用 Animator 的名称哈希算法并缓存结果；反查仅保留同哈希首次登记的名称。</summary>
+        /// <param name="eventName">非 null 的状态或参数名称。</param>
+        /// <returns>名称对应的整数哈希。</returns>
         public static int StringToHash(string eventName)
         {
             if (_stringHashes.ContainsKey(eventName))
@@ -210,6 +219,9 @@ namespace YLFramework.StateMachine
             return _stringHashes[eventName];
         }
 
+        /// <summary>反查本轮已缓存的名称，仅供诊断，不保证哈希碰撞时一一对应。</summary>
+        /// <param name="hash">已计算的名称哈希。</param>
+        /// <returns>首次登记的名称；未登记时为空字符串。</returns>
         internal static string HashToString(int hash)
         {
             if (_hashStrings.ContainsKey(hash))

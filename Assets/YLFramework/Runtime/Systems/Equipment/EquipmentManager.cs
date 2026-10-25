@@ -14,15 +14,19 @@ namespace YLFramework.Equipment
     /// <summary>主线程装备入口。创建结果由本域回收，直接 Equip 的外部对象只借用。</summary>
     public static class EquipmentManager
     {
+        /// <summary>以引用身份区分宿主或装备，避免业务实现的值相等改变归属判定。</summary>
         private sealed class Identity<T> : IEqualityComparer<T> where T : class
         {
             internal static readonly Identity<T> Instance = new();
 
+            /// <summary>判断两个参数是否为同一对象引用。</summary>
             public bool Equals(T a, T b) => ReferenceEquals(a, b);
 
+            /// <summary>取得不受业务重写影响的引用哈希。</summary>
             public int GetHashCode(T value) => RuntimeHelpers.GetHashCode(value);
         }
 
+        /// <summary>记录一次配表登记及管理器持有的可选资源租约。</summary>
         private sealed class Config
         {
             internal EquipmentsConfig Root;
@@ -31,6 +35,7 @@ namespace YLFramework.Equipment
             internal bool IsClosing;
         }
 
+        /// <summary>关联装备实例、定义来源、挂接状态与归还责任，不把这些运行状态写入共享定义。</summary>
         private sealed class Record
         {
             internal IEquipment Value;
@@ -69,6 +74,7 @@ namespace YLFramework.Equipment
         private static bool _isQuitting;
         private static bool _aggregateReturns;
 
+        /// <summary>接入执行会话重置与应用退出，分别维护退出门禁后清理装备。</summary>
         static EquipmentManager()
         {
             SingletonSessionState.RegisterSessionReset(() =>
@@ -83,8 +89,10 @@ namespace YLFramework.Equipment
             };
         }
 
+        /// <summary>同时检查普通引用与 Unity 原生对象的存活状态。</summary>
         private static bool IsAlive(object value) => value != null && (!(value is UnityEngine.Object obj) || obj);
 
+        /// <summary>拒绝关闭流程中或运行退出后的新登记、创建与装备请求。</summary>
         private static void Admit()
         {
             if (_isStopping || _isQuitting && Application.isPlaying)
@@ -93,6 +101,7 @@ namespace YLFramework.Equipment
             }
         }
 
+        /// <summary>执行单项清理并收集异常，使后续独立清理仍可继续。</summary>
         private static void Attempt(List<Exception> errors, Action action)
         {
             try
@@ -105,6 +114,7 @@ namespace YLFramework.Equipment
             }
         }
 
+        /// <summary>按调用要求汇总错误，单个非聚合错误保留原始异常堆栈。</summary>
         private static void ThrowErrors(List<Exception> errors, bool aggregate = false)
         {
             if (errors.Count == 0)
@@ -120,6 +130,7 @@ namespace YLFramework.Equipment
             ExceptionDispatchInfo.Capture(errors[0]).Throw();
         }
 
+        /// <summary>追踪嵌套操作深度，在最外层退出时执行延迟归还并合并操作与清理错误。</summary>
         private static T Run<T>(Func<T> operation)
         {
             _depth++;
@@ -145,21 +156,25 @@ namespace YLFramework.Equipment
             return result;
         }
 
+        /// <summary>使无返回值操作沿用统一的嵌套与归还边界。</summary>
         private static void Run(Action operation) => Run(() =>
         {
             operation();
             return 0;
         });
 
+        /// <summary>确认记录仍是该实例当前登记的生命周期记录。</summary>
         private static bool IsCurrent(Record record) =>
             _records.TryGetValue(record.Value, out var current) && ReferenceEquals(current, record);
 
+        /// <summary>按登记来源、定义根或条目引用识别装备是否依赖指定配表。</summary>
         private static bool DependsOn(Record record, Config config) =>
             ReferenceEquals(record.Config, config) ||
             ReferenceEquals(record.DefinitionRoot, config.Root) ||
             !ReferenceEquals(record.Definition, null) && config.Root &&
             config.Root.Equipments.Any(data => ReferenceEquals(data, record.Definition));
 
+        /// <summary>记录外部借用实例当前的定义来源；自有实例保持创建时捕获的来源。</summary>
         private static void CaptureDefinition(Record record)
         {
             if (record.IsOwned)
@@ -171,11 +186,14 @@ namespace YLFramework.Equipment
             record.DefinitionRoot = record.Definition ? record.Definition.parent : null;
         }
 
+        /// <summary>判断记录依赖的定义是否正随配表退出，防止回调中重新挂接。</summary>
         private static bool IsDefinitionClosing(Record record) =>
             record.Config != null && record.Config.IsClosing || _retiredConfigs.Any(config => DependsOn(record, config));
 
+        /// <summary>校验后登记共享配表；直接传入的资产由调用方保活，不转移资产所有权。</summary>
         public static void AddConfig(EquipmentsConfig config) => Run(() => AddConfigCore(config));
 
+        /// <summary>检查配表名称、全局 ID 与创建配置，全部通过后才发布登记。</summary>
         private static void AddConfigCore(EquipmentsConfig root)
         {
             Admit();
@@ -218,6 +236,9 @@ namespace YLFramework.Equipment
             _configs.Add(root.name, new Config { Root = root, Name = root.name });
         }
 
+        /// <summary>同步取得并登记装备配表，保留一份租约直到配表关闭且相关实例收尾。</summary>
+        /// <param name="resources">已初始化的资源系统。</param>
+        /// <param name="address">装备配表的正式资源地址。</param>
         public static void LoadConfig(ResourceSystem resources, ResourceAddress address) => Run(() =>
         {
             Admit();
@@ -247,11 +268,14 @@ namespace YLFramework.Equipment
             }
         });
 
+        /// <summary>按登记时的资产名称查找配表，未命中或资产已销毁时返回 null。</summary>
         public static EquipmentsConfig GetConfig(string name) =>
             name != null && _configs.TryGetValue(name, out var config) && config.Root ? config.Root : null;
 
+        /// <summary>查询已登记配表中的共享装备定义，不创建实例；未找到时返回 null。</summary>
         public static EquipmentConfigData GetEquipmentInfo(int id) => Find(id, out _);
 
+        /// <summary>从有效的已登记配表中查找 ID，并返回其登记记录。</summary>
         private static EquipmentConfigData Find(int id, out Config owner)
         {
             foreach (var config in _configs.Values)
@@ -275,8 +299,11 @@ namespace YLFramework.Equipment
             return null;
         }
 
+        /// <summary>按登记名称撤销配表并收尾依赖装备，名称未命中时不处理。</summary>
         public static void RemoveConfig(string name) => RemoveConfig(GetConfig(name));
 
+        /// <summary>撤销配表并卸下依赖实例，自有实例归还、外部实例仅解除挂接。</summary>
+        /// <remarks>清理错误汇总抛出，已执行的通知和业务变化不回滚。</remarks>
         public static void RemoveConfig(EquipmentsConfig root) => Run(() =>
         {
             var config = _configs.Values.FirstOrDefault(candidate => ReferenceEquals(candidate.Root, root));
@@ -305,6 +332,7 @@ namespace YLFramework.Equipment
             ThrowErrors(errors, true);
         });
 
+        /// <summary>检查 Asset 地址格式或 Script 构造条件，不预先加载 Prefab 检查组件。</summary>
         private static Type Validate(EquipmentConfigData data)
         {
             if (data.equipmentType == EquipmentType.Asset)
@@ -324,6 +352,9 @@ namespace YLFramework.Equipment
             return type;
         }
 
+        /// <summary>取得未挂接的自有装备并调用 OnLoaded；不使用时须归还，不能继续使用已归还引用。</summary>
+        /// <param name="equipmentId">已登记的装备定义 ID；Asset 模式要求当前 ResourceSystem 已初始化。</param>
+        /// <returns>引用共享定义的运行实例；创建、组件检查或生命周期失败时抛出异常。</returns>
         public static IEquipment CreateEquipment(int equipmentId) => Run(() =>
         {
             Admit();
@@ -377,6 +408,7 @@ namespace YLFramework.Equipment
 
                 record.Value.Equipper = null;
                 record.Value.EquipmentData = data;
+                // 在进入 OnLoaded 前记为已加载，使初始化回调失败时仍能尝试 OnUnloaded 清理。
                 record.IsLoaded = true;
                 record.Value.OnLoaded();
                 if (config.IsClosing || record.IsReleaseRequested || _isStopping || !IsAlive(record.Value))
@@ -404,6 +436,10 @@ namespace YLFramework.Equipment
             }
         });
 
+        /// <summary>在宿主许可后挂接装备；外部传入且非本管理器创建的实例只借用，不触发加载或卸载钩子。</summary>
+        /// <param name="equipper">有效且持有稳定、已初始化装备列表的宿主。</param>
+        /// <param name="equipment">有效且未归还的装备实例；同一引用不能同时属于两个宿主。</param>
+        /// <returns>回调后仍有效的挂接结果；无效输入、过渡重入或回调异常会抛错，而非返回状态。</returns>
         public static EquipState Equip(IEquippable equipper, IEquipment equipment) => Run(() =>
         {
             Admit();
@@ -490,6 +526,7 @@ namespace YLFramework.Equipment
                     return EquipState.CannotEquip;
                 }
 
+                // 先标记通知已开始，OnEquip 抛错或重入卸下时也能配对尝试 OnUnequip，而非假定业务效果已回滚。
                 record.IsNotified = true;
                 equipment.OnEquip();
                 return record.IsAttached && !record.IsReleaseRequested && !record.IsEquipCancelled
@@ -512,6 +549,10 @@ namespace YLFramework.Equipment
             }
         });
 
+        /// <summary>创建自有装备并尝试挂接；非成功结果会归还该实例，返回 null。</summary>
+        /// <param name="equipper">接收装备的宿主。</param>
+        /// <param name="equipmentId">已登记的装备定义 ID。</param>
+        /// <returns>成功挂接的实例；许可拒绝或回调取消时返回 null，异常在清理后继续抛出。</returns>
         public static IEquipment CreateAndEquip(IEquippable equipper, int equipmentId) => Run(() =>
         {
             var equipment = CreateEquipment(equipmentId);
@@ -533,6 +574,9 @@ namespace YLFramework.Equipment
             return null;
         });
 
+        /// <summary>卸下已登记实例，并按选项请求归还；未登记或 null 的实例不处理。</summary>
+        /// <param name="equipment">要卸下的运行实例。</param>
+        /// <param name="destroy">是否归还自有实例；false 保留它以便再次装备，外部借用实例始终只卸下。</param>
         public static void Unequip(IEquipment equipment, bool destroy = true) => Run(() =>
         {
             if (equipment != null && _records.TryGetValue(equipment, out var record))
@@ -541,6 +585,7 @@ namespace YLFramework.Equipment
             }
         });
 
+        /// <summary>解除当前挂接、配对装备通知，并根据所有权安排延迟归还。</summary>
         private static void UnequipCore(Record record, bool destroy)
         {
             if (!IsCurrent(record))
@@ -551,6 +596,7 @@ namespace YLFramework.Equipment
             var errors = new List<Exception>();
             if (record.IsAttached)
             {
+                // 先撤销内部挂接和列表引用以阻止重复卸下；OnUnequip 仍可读旧 Equipper，随后才清除该属性。
                 record.IsAttached = false;
                 record.List?.RemoveAll(value => ReferenceEquals(value, record.Value));
                 var wasNotified = record.IsNotified;
@@ -596,6 +642,7 @@ namespace YLFramework.Equipment
             ThrowErrors(errors);
         }
 
+        /// <summary>外部借用实例不再挂接且不处于通知中时，撤销管理记录而不归还或销毁对象。</summary>
         private static void ForgetBorrowed(Record record)
         {
             if (!record.IsOwned && !record.IsAttached && !record.IsEquipping && !record.IsUnequipping && IsCurrent(record))
@@ -604,6 +651,7 @@ namespace YLFramework.Equipment
             }
         }
 
+        /// <summary>卸下并归还本管理器创建的实例；已归还引用不重复处理，有效外部对象会被拒绝。</summary>
         public static void DestroyEquipment(IEquipment equipment) => Run(() =>
         {
             if (equipment == null)
@@ -625,6 +673,9 @@ namespace YLFramework.Equipment
             throw new InvalidOperationException("Cannot destroy equipment owned by an external caller.");
         });
 
+        /// <summary>按挂接版本快照卸下宿主的已登记装备，继续处理其余项后汇总异常。</summary>
+        /// <param name="equipper">待处理的宿主，null 时不处理。</param>
+        /// <param name="destroy">是否一并归还自有实例；外部借用实例只卸下。</param>
         public static void UnequipAll(IEquippable equipper, bool destroy = true) => Run(() =>
         {
             if (equipper == null)
@@ -655,6 +706,8 @@ namespace YLFramework.Equipment
             ThrowErrors(errors, true);
         });
 
+        /// <summary>取消宿主正在进行的装备请求并卸下当前装备，在本轮延迟收尾结束前拒绝再次向它装备。</summary>
+        /// <remarks>自有且已挂接的实例会安排归还，外部实例不转移销毁责任；本方法不会销毁宿主。</remarks>
         public static void CloseHost(IEquippable equipper) => Run(() =>
         {
             if (equipper == null || !_closingHosts.Add(equipper))
@@ -692,6 +745,7 @@ namespace YLFramework.Equipment
             ThrowErrors(errors, true);
         });
 
+        /// <summary>撤销全部配表并收尾装备、对象池及所持租约；逐项清理后汇总错误，不回滚业务副作用。</summary>
         public static void Shutdown() => Run(() =>
         {
             if (_isStopping)
@@ -724,7 +778,7 @@ namespace YLFramework.Equipment
             ThrowErrors(errors, true);
         });
 
-        // 所有外层回调退出后才真正归还，防止旧回调继续访问已被下一次创建复用的实例。
+        /// <summary>所有外层回调退出后才真正归还，防止旧回调继续访问已被下一次创建复用的实例。</summary>
         private static void Flush()
         {
             _isFlushing = true;

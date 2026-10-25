@@ -31,6 +31,7 @@ namespace YLFramework.Editor.Resource
             return ResourceReferenceOutput.Publish(directory, GenerateCatalogs(catalogs, @namespace));
         }
 
+        /// <summary>验证明确 Catalog 集合及已加载类型的命名冲突，按稳定顺序生成源码文本，不写文件。</summary>
         internal static string GenerateCatalogs(IEnumerable<ResourceCatalogDocument> catalogs, string @namespace)
         {
             if (catalogs == null)
@@ -140,6 +141,7 @@ namespace YLFramework.Editor.Resource
             return text.Append("}\n").ToString();
         }
 
+        /// <summary>将资源名称转换为固定文化的合法 C# 标识符，保留常量原值不变。</summary>
         private static string Identifier(string value, CSharpCodeProvider provider)
         {
             if (string.IsNullOrWhiteSpace(value) || !value.Any(char.IsLetterOrDigit) || value.Any(char.IsControl))

@@ -15,32 +15,40 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>确切本地发布的身份与操作统计；不持有目录锁，使用时仍需重新验证文件。</summary>
     public sealed class ResourceRelease
     {
+        /// <summary>项目和平台对应的自有发布根目录。</summary>
         public string RootPath
         {
             get;
         }
+        /// <summary>以 CatalogDigest 命名的确切版本目录，不是当前版本指针。</summary>
         public string DirectoryPath
         {
             get;
         }
+        /// <summary>该发布已验证的正式 Catalog 文档。</summary>
         public ResourceCatalogDocument Catalog
         {
             get;
         }
+        /// <summary>本次发布是否命中相同当前版本而未再切换 Index；只读获取不记录此状态。</summary>
         public bool IsRepeat
         {
             get;
         }
+        /// <summary>本次新暂存的交付文件字节数，不包含 Catalog 和完成记录；只读获取时为零。</summary>
         public long CopiedBytes
         {
             get;
         }
+        /// <summary>本次发布记录的总耗时，单位毫秒；只读获取时没有该次测量。</summary>
         public double ElapsedMilliseconds
         {
             get; internal set;
         }
+        /// <summary>本次向暂存目录复制交付文件的耗时，单位毫秒。</summary>
         public double CopyMilliseconds
         {
             get; internal set;
@@ -54,6 +62,7 @@ namespace YLFramework.Editor.Resource
         {
             get;
         }
+        /// <summary>绑定确切发布根、Catalog 与可选归属 GUID，不据此取得文件写入权。</summary>
         internal ResourceRelease(string root, ResourceCatalogDocument catalog, bool repeat = false, long copied = 0, string projectGuid = null)
         {
             RootPath = root;
@@ -86,36 +95,60 @@ namespace YLFramework.Editor.Resource
             Culture = CultureInfo.InvariantCulture
         };
 
+        /// <summary>发布根的持久归属及明确登记的版本集合，不依靠目录扫描推断所有权。</summary>
         private sealed class Owner
         {
+            /// <summary>发布归属记录格式版本。</summary>
             public int Version = 1;
+            /// <summary>登记时的完整工程根路径。</summary>
             public string ProjectRoot;
+            /// <summary>所属项目配置的持久 GUID。</summary>
             public string ProjectGuid;
+            /// <summary>所属项目的技术标识。</summary>
             public string ProjectId;
+            /// <summary>归属的平台名称。</summary>
             public string Platform;
+            /// <summary>明确登记的 Catalog 摘要集合，可包含已安装但尚未成为当前索引的完整版本。</summary>
             public string[] KnownVersions = Array.Empty<string>();
         }
+        /// <summary>单次发布的原索引、目标索引和私有暂存文件清单，供按实际提交点恢复。</summary>
         private sealed class Journal
         {
+            /// <summary>发布日志格式版本。</summary>
             public int Version = 1;
+            /// <summary>本次尝试所属项目配置的 GUID。</summary>
             public string ProjectGuid;
+            /// <summary>本次尝试所属项目的技术标识。</summary>
             public string ProjectId;
+            /// <summary>本次尝试的平台名称。</summary>
             public string Platform;
+            /// <summary>随机尝试身份，也是私有暂存子目录名。</summary>
             public string Attempt;
+            /// <summary>提交前确切 Index；首次发布时可为 null。</summary>
             public JObject From;
+            /// <summary>本次明确请求提交的目标 Index。</summary>
             public JObject To;
+            /// <summary>暂存中允许出现及恢复时可清理的有限文件名集合。</summary>
             public string[] Files;
         }
+        /// <summary>版本目录完成记录，将项目归属与 Catalog、BuildId 绑定，不是密码学签名。</summary>
         private sealed class Complete
         {
+            /// <summary>完成记录格式版本。</summary>
             public int Version = 1;
+            /// <summary>版本所属项目配置的 GUID。</summary>
             public string ProjectGuid;
+            /// <summary>版本所属项目的技术标识。</summary>
             public string ProjectId;
+            /// <summary>版本的平台名称。</summary>
             public string Platform;
+            /// <summary>Catalog 规范构建身份。</summary>
             public string BuildId;
+            /// <summary>完整 Catalog 字节摘要及版本目录身份。</summary>
             public string CatalogDigest;
         }
 
+        /// <summary>记录允许执行发布的 Editor 主线程身份。</summary>
         static ResourcePublisher() => _mainThread = Thread.CurrentThread.ManagedThreadId;
 
         /// <summary>只返回预期输出，不创建或认领目录。</summary>
@@ -129,6 +162,7 @@ namespace YLFramework.Editor.Resource
             return Root(result.Map.ProjectId, result.Platform);
         }
 
+        /// <summary>只读检查预期发布根及当前已登记版本，不认领目录或恢复未完成发布。</summary>
         internal static string Preflight(ResourceProject project, BuildTarget target)
         {
             ValidateEditor();
@@ -249,6 +283,7 @@ namespace YLFramework.Editor.Resource
                 new ResourceRelease(root, VerifyComplete(Path.Combine(root, digest), owner, null), projectGuid: owner.ProjectGuid)).ToList().AsReadOnly();
         }
 
+        /// <summary>复验明确发布的原始归属与完整版本，可同时核对独立复制目录，不信任内存引用本身。</summary>
         internal static ResourceCatalogDocument VerifyExportInput(ResourceRelease release, string copiedDirectory = null)
         {
             ValidateEditor();
@@ -285,13 +320,19 @@ namespace YLFramework.Editor.Resource
         public static ResourceRelease Publish(ResourceBuildResult result, string appContentCompatibilityId, CancellationToken cancellation = default) =>
             Execute(result, appContentCompatibilityId, cancellation, null);
 
+        /// <summary>使用调用方拥有的密钥来源复验加密交付后发布，结果不保存 provider 或密钥，Index 提交边界同普通发布。</summary>
         public static ResourceRelease PublishWithContentKey(ResourceBuildResult result, string appContentCompatibilityId,
             IResourceContentKeyProvider provider, CancellationToken cancellation = default) =>
             ExecuteWithContentKey(result, appContentCompatibilityId, cancellation, null, provider);
 
+        /// <summary>通过共用发布实现执行不附带内容密钥来源的明确构建结果。</summary>
         internal static ResourceRelease Execute(ResourceBuildResult result, string app, CancellationToken cancellation, Action<string> checkpoint) =>
             ExecuteWithContentKey(result, app, cancellation, checkpoint, null);
 
+        /// <summary>
+        /// 同时锁定工作区与发布根，验证交付后安装完整新版本，最后提交 Index；不改写已安装版本。
+        /// 失败保留日志供显式恢复，已安装但未索引的版本也保留；提交后抛错不能证明发布未生效。
+        /// </summary>
         internal static ResourceRelease ExecuteWithContentKey(ResourceBuildResult result, string app, CancellationToken cancellation,
             Action<string> checkpoint, IResourceContentKeyProvider provider)
         {
@@ -511,6 +552,7 @@ namespace YLFramework.Editor.Resource
             return new ResourceRelease(root, catalog, projectGuid: owner.ProjectGuid);
         }
 
+        /// <summary>在锁内以实际 Index 匹配日志 From 或 To，仅清理该次登记的私有暂存和日志，不回退已安装版本。</summary>
         private static void RecoverLocked(string root, Owner owner)
         {
             ValidateRoot(root, owner);
@@ -555,6 +597,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>取得排他发布锁并重验归属，只认领本次新建且无未知内容的根，返回句柄由调用方释放。</summary>
         private static FileStream Acquire(string root, ref Owner owner, string guid, string project, string platform)
         {
             var creating = owner == null;
@@ -591,6 +634,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>只读核对完整工程、项目与平台归属及目录闭包，根不存在返回 null，未知输出拒绝接管。</summary>
         private static Owner ReadOwner(string root, string guid, string project, string platform)
         {
             ResourceBuildOperation.RejectLinks(root);
@@ -625,6 +669,7 @@ namespace YLFramework.Editor.Resource
             return owner;
         }
 
+        /// <summary>核对现场归属与日志未变，拒绝未登记根内容及暂存文件，并检查已登记版本结构。</summary>
         private static void ValidateRoot(string root, Owner owner, Journal expectedJournal = null)
         {
             ResourceBuildOperation.RejectLinks(root);
@@ -682,6 +727,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>读取并验证有界发布日志、索引身份和安全文件名，不从未知暂存推测可恢复范围。</summary>
         private static Journal ReadJournal(string root, Owner owner)
         {
             var path = Path.Combine(root, JournalFile);
@@ -727,9 +773,11 @@ namespace YLFramework.Editor.Resource
             return journal;
         }
 
+        /// <summary>读取当前确切 Index 并核对项目及平台，缺失时返回 null。</summary>
         private static ResourceReleaseIndex ReadIndex(string root, Owner owner) => !File.Exists(Path.Combine(root, IndexFile)) ? null :
             JournalIndex(Parse(ReadBounded(Path.Combine(root, IndexFile))), owner);
 
+        /// <summary>将规范 JSON 解析为与当前归属匹配的 Index，允许首次发布的空基线。</summary>
         private static ResourceReleaseIndex JournalIndex(JObject data, Owner owner)
         {
             if (data == null)
@@ -740,9 +788,11 @@ namespace YLFramework.Editor.Resource
             return ResourceReleaseIndex.Read(Canonical(data), owner.ProjectId, owner.Platform,
                 (string)data["UnityCompatibility"], (string)data["AppContentCompatibilityId"]);
         }
+        /// <summary>比较 Index 的完整规范字节，不仅比较 Catalog 摘要。</summary>
         private static bool SameIndex(ResourceReleaseIndex left, ResourceReleaseIndex right) => left == null ? right == null :
             right != null && left.Write().SequenceEqual(right.Write());
 
+        /// <summary>要求索引指向明确登记的版本，再验证完整版本与 Index 的身份一致。</summary>
         private static ResourceCatalogDocument VerifyVersion(string root, Owner owner, ResourceReleaseIndex index)
         {
             if (!owner.KnownVersions.Contains(index.CatalogDigest, StringComparer.Ordinal))
@@ -753,6 +803,7 @@ namespace YLFramework.Editor.Resource
             return VerifyComplete(Path.Combine(root, index.CatalogDigest), owner, index);
         }
 
+        /// <summary>验证完成记录、Catalog 摘要、目录身份和文件闭包，可按调用点选择是否重算交付文件哈希。</summary>
         private static ResourceCatalogDocument VerifyComplete(string directory, Owner owner, ResourceReleaseIndex expected, bool hashFiles = true)
         {
             ResourceBuildOperation.RejectLinks(directory);
@@ -792,8 +843,10 @@ namespace YLFramework.Editor.Resource
             return catalog;
         }
 
+        /// <summary>枚举 Catalog 声明的 Bundle 与支持文件，不含 Catalog 或完成记录自身。</summary>
         private static IEnumerable<ResourceCatalogFile> AllFiles(ResourceCatalogDocument catalog) => catalog.Bundles.Cast<ResourceCatalogFile>().Concat(catalog.SupportFiles);
 
+        /// <summary>要求版本文件集精确闭合且 Catalog 未变，需要时逐文件验证长度和全部字节摘要。</summary>
         private static void VerifyFiles(string directory, ResourceCatalogDocument catalog, bool complete, bool hashFiles = true)
         {
             var expected = AllFiles(catalog).Select(x => x.RelativeFile).Append(CatalogFile).ToList();
@@ -829,6 +882,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>用明确密钥复验所有二进制交付与原始构建字节一致，支持工作区名或发布物理名。</summary>
         private static void VerifyContent(string directory, ResourceCatalogDocument catalog, ResourceBuildResult result, byte[] key,
             CancellationToken cancellation, bool workspaceNames = false)
         {
@@ -842,6 +896,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>同时持有读回 Bundle 及可能被原生继续读取的输入，先卸载 Bundle 再释放流。</summary>
         private sealed class NativeReadback
         {
             internal AssetBundle Bundle;
@@ -851,6 +906,7 @@ namespace YLFramework.Editor.Resource
         // 卸载/释放异常时保留原owner，不让GC或下一次验证猜测native已停止读取。
         private static readonly List<NativeReadback> _retainedReadbacks = new();
 
+        /// <summary>对照 Catalog 与构建布局原生读回发布字节，拒绝外部已加载 Bundle，并保留无法安全释放的所有者。</summary>
         private static void VerifyNative(string directory, ResourceCatalogDocument catalog, ResourceBuildResult result, CancellationToken cancellation, byte[] key)
         {
             if (_retainedReadbacks.Count != 0)
@@ -997,6 +1053,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>逆序卸载本次 Bundle 后释放其输入，汇总读取或清理失败，保留清理失败的原所有者。</summary>
         private static Exception ReleaseNativeReadbacks(List<NativeReadback> loaded)
         {
             List<Exception> failures = null;
@@ -1028,6 +1085,7 @@ namespace YLFramework.Editor.Resource
             return failures == null ? null : failures.Count == 1 ? failures[0] : new AggregateException("Native readback inputs or cleanup failed.", failures);
         }
 
+        /// <summary>校验项目名、平台和路径长度后定位发布根，不创建或认领目录。</summary>
         private static string Root(string project, string platform)
         {
             ResourceAddress.ValidateId(project, nameof(project));
@@ -1046,6 +1104,7 @@ namespace YLFramework.Editor.Resource
 
             return root;
         }
+        /// <summary>要求非播放、编译或导入中的稳定 Editor 主线程。</summary>
         private static void ValidateEditor()
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThread || EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling || EditorApplication.isUpdating)
@@ -1053,6 +1112,7 @@ namespace YLFramework.Editor.Resource
                 throw new InvalidOperationException("Publication requires a settled Editor main thread outside Play mode.");
             }
         }
+        /// <summary>要求持久摘要或尝试 token 使用指定长度的小写十六进制。</summary>
         private static void Hex(string value, int count)
         {
             if (value == null || value.Length != count || value.Any(x => !(x >= '0' && x <= '9' || x >= 'a' && x <= 'f')))
@@ -1060,6 +1120,7 @@ namespace YLFramework.Editor.Resource
                 throw new InvalidDataException("Invalid canonical publication identity/token.");
             }
         }
+        /// <summary>读取存在且未超出 Catalog 大小上限的发布元数据。</summary>
         private static byte[] ReadBounded(string path)
         {
             if (!File.Exists(path) || new FileInfo(path).Length > ResourceCatalogCodec.MaximumBytes)
@@ -1069,6 +1130,7 @@ namespace YLFramework.Editor.Resource
 
             return File.ReadAllBytes(path);
         }
+        /// <summary>严格解析有界 UTF-8 规范 JSON，拒绝重复字段、尾随内容及非规范字节。</summary>
         private static JObject Parse(byte[] bytes)
         {
             try
@@ -1098,6 +1160,7 @@ namespace YLFramework.Editor.Resource
                 throw new InvalidDataException("Invalid publication metadata.", error);
             }
         }
+        /// <summary>要求元数据字段集合精确匹配后反序列化，拒绝未知字段或字段类型错误。</summary>
         private static T ReadMetadata<T>(string path, string fields)
         {
             var data = Parse(ReadBounded(path));
@@ -1115,7 +1178,9 @@ namespace YLFramework.Editor.Resource
                 throw new InvalidDataException("Invalid publication metadata field types.", error);
             }
         }
+        /// <summary>按固定 JSON 设置将归属或日志对象转为规范字节。</summary>
         private static byte[] Metadata(object value) => Canonical(JObject.FromObject(value, JsonSerializer.Create(_jsonSettings)));
+        /// <summary>递归排序对象属性并用固定转义规则输出有界 UTF-8 字节，保留数组顺序。</summary>
         private static byte[] Canonical(JToken value)
         {
             JToken Order(JToken token) => token switch
@@ -1142,12 +1207,14 @@ namespace YLFramework.Editor.Resource
 
             return bytes;
         }
+        /// <summary>独占新建文件并刷新到磁盘，不覆盖已有文件。</summary>
         private static void WriteNew(string path, byte[] bytes)
         {
             using var stream = File.Open(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             stream.Write(bytes, 0, bytes.Length);
             stream.Flush(true);
         }
+        /// <summary>经同目录暂存提交单个元数据文件，不把多份发布文件视为同一原子操作。</summary>
         private static void AtomicWrite(string root, string name, byte[] bytes, CancellationToken cancellation = default)
             => AtomicWriteCore(root, name, bytes, cancellation, null, null);
 

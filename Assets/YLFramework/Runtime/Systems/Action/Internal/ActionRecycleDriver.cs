@@ -7,9 +7,10 @@ namespace YLFramework.Actions
     // 每次 Update 处理动作的延迟回收，不承载通用全局服务。
     internal sealed class ActionRecycleDriver : MonoSingletonHost<ActionRecycleDriver>
     {
+        /// <summary>将自建回收驱动器挂到框架 Action 模块根节点下。</summary>
         protected override Transform HostParent => YLFrameworkRoot.Instance.GetModuleRoot("Action");
 
-        // 测试与会话清理入口：先把待回收项清空（保证旧池对象不跨会话滞留），再清空单例缓存引用。
+        // 测试与会话清理入口：尝试处理待回收项，即使失败也清空单例缓存引用。
         internal static void ResetSession()
         {
             try
@@ -33,6 +34,7 @@ namespace YLFramework.Actions
             _ = Instance;
         }
 
+        /// <summary>处理本轮已排队的回收项，回收异常向 Unity 调用栈传播。</summary>
         private void Update()
         {
             ActionQueue.Drain();
@@ -48,13 +50,14 @@ namespace YLFramework.Actions
             ResetHostReference();
         }
 
+        /// <summary>标记宿主退出并处理回收队列，不再等待后续 Update。</summary>
         protected override void OnApplicationQuit()
         {
             base.OnApplicationQuit();
-            // 退出时不能再等 Update，立即清空一次回收队列。
             ActionQueue.Drain();
         }
 
+        /// <summary>当前驱动器释放时兜底处理队列，非当前实例不接管回收工作。</summary>
         protected override void OnHostRelease()
         {
             if (!IsCurrentHost)

@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace YLFramework.Extensions
 {
+    /// <summary>
+    /// 基于 Ray 的原点和方向计算距离与最近点，按具体方法区分无限直线和射线半轴。
+    /// </summary>
     public static class RayExtensions
     {
         /// <summary>
@@ -106,6 +109,7 @@ namespace YLFramework.Extensions
             return PointDistance(ray, point, true);
         }
 
+        /// <summary>按直线或半轴投影计算点距，零方向退化为到原点的距离。</summary>
         private static float PointDistance(Ray ray, Vector3 point, bool halfLine)
         {
             double dx = (double)point.x - ray.origin.x;
@@ -125,9 +129,11 @@ namespace YLFramework.Extensions
             return FiniteParameter(Math.Sqrt(dx * dx + dy * dy + dz * dz));
         }
 
+        /// <summary>以 double 计算点积，避免先以 float 进行分量乘法造成溢出或精度损失。</summary>
         private static double Dot(Vector3 a, Vector3 b) =>
             (double)a.x * b.x + (double)a.y * b.y + (double)a.z * b.z;
 
+        /// <summary>将可表示的有限 double 转为 float，否则抛出 ArgumentException。</summary>
         private static float FiniteParameter(double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value) || Math.Abs(value) > float.MaxValue)

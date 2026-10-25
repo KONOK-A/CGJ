@@ -71,16 +71,22 @@ namespace YLFramework.Events
     /// 注册时按 Unity 原生 payload 校验，错误类型或非法 EventType 在修改前抛出异常。
     /// 组件拥有代码通道，销毁时永久关闭这些通道（不修改 Inspector 中的 UnityEvent）。
     /// </summary>
+    /// <remarks>
+    /// 每条消息先同步分发代码通道，再调用对应 UnityEvent；代码回调抛异常时，后续代码监听和本次 UnityEvent 均不会执行。
+    /// 不提供跨监听异常隔离；销毁清理依赖 Unity 实际发送 OnDestroy，从未激活的宿主仍需调用方显式清理。
+    /// </remarks>
     public class EventListener : MonoBehaviour, IMouseEvent
     {
-        // 为了避免枚举类作为字典 Key 的性能问题（Enum 未实现 IEquatable），使用自定义比较器避免装箱
+        /// <summary>为事件字典提供 EventType 的强类型相等比较和整数哈希。</summary>
         private class EventTypeEnumComparer : Singleton<EventTypeEnumComparer>, IEqualityComparer<EventType>
         {
+            /// <summary>直接比较两个事件枚举值，避免转换为 Enum 后比较。</summary>
             public bool Equals(EventType x, EventType y)
             {
                 return x == y;
             }
 
+            /// <summary>以事件枚举的整数值作为字典哈希。</summary>
             public int GetHashCode(EventType obj)
             {
                 return (int)obj;
@@ -101,6 +107,7 @@ namespace YLFramework.Events
         /// 注册一个指定 EventType 的事件监听，返回用于注销本次注册的句柄。
         /// 参数声明类型必须精确匹配 Unity 原生 payload；空回调返回空句柄，不分配事件。
         /// 不随 Disable 自动清理；需要该边界时显式绑定返回的句柄。
+        /// 重复委托独立注册，返回的句柄只取消本次注册。
         /// </summary>
         /// <typeparam name="T">事件参数类型。</typeparam>
         /// <param name="eventType">事件类型。</param>
@@ -129,6 +136,7 @@ namespace YLFramework.Events
             return newEvent.Register(action);
         }
 
+        /// <summary>按事件种类核对精确的 Unity 参数类型，拒绝非法枚举值或不匹配的泛型声明。</summary>
         private static void ValidatePayload<T>(EventType eventType)
         {
             Type payloadType;
@@ -174,7 +182,7 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注销指定 EventType 上的一个监听。
+        /// 移除指定 EventType 上最后一个匹配的普通委托子序列，不撤回已开始的分发快照。
         /// </summary>
         /// <typeparam name="T">事件参数类型。</typeparam>
         /// <param name="eventType">事件类型。</param>
@@ -209,9 +217,9 @@ namespace YLFramework.Events
         }
 
         /// <summary>
-        /// 注销当前监听的所有代码事件。
+        /// 关闭并移除当前全部代码通道，截断其在途快照；清理全部尝试后再统一报告异常。
         /// </summary>
-        /// <param name="clearUnityEvents">是否同时清空在编辑器面板中设置的 UnityEvent。</param>
+        /// <param name="clearUnityEvents">是否同时将 UnityEvent 字段置空；仅影响当前实例内存，不改写序列化资源。</param>
         public void UnregisterAll(bool clearUnityEvents = false)
         {
             // 组件私有通道直接结束 owner，不把其寿命绑定到全局事件池。
@@ -324,10 +332,10 @@ namespace YLFramework.Events
             get => physicsLayerMask; set => physicsLayerMask = value;
         }
 
+        /// <summary>标记组件已销毁，尝试关闭自有代码通道，并在 Unity 消息边界记录清理异常。</summary>
         private void OnDestroy()
         {
             _isDestroyed = true;
-            // 终结组件自有代码通道；Inspector 中的 UnityEvent 不受影响
             try
             {
                 UnregisterAll();
@@ -338,6 +346,7 @@ namespace YLFramework.Events
             }
         }
 
+        /// <summary>仅向已存在且参数匹配的代码通道同步发布，不为未监听的消息建立通道。</summary>
         private void TriggerEvent<T>(EventType eventType, T eventData)
         {
             if (!_eventInfoDict.TryGetValue(eventType, out var easyEvent))
@@ -413,6 +422,7 @@ namespace YLFramework.Events
 
         #region 碰撞事件
 
+        /// <summary>按对方层筛选 3D 碰撞进入消息，通过后交给代码通道和 Inspector 事件。</summary>
         private void OnCollisionEnter(Collision collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -424,6 +434,7 @@ namespace YLFramework.Events
             collisionEnter?.Invoke(collision);
         }
 
+        /// <summary>按对方层筛选 3D 持续碰撞消息，通过后转发原始碰撞数据。</summary>
         private void OnCollisionStay(Collision collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -435,6 +446,7 @@ namespace YLFramework.Events
             collisionStay?.Invoke(collision);
         }
 
+        /// <summary>按对方当前层筛选 3D 碰撞离开消息，不补发被过滤的离开通知。</summary>
         private void OnCollisionExit(Collision collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -446,6 +458,7 @@ namespace YLFramework.Events
             collisionExit?.Invoke(collision);
         }
 
+        /// <summary>按对方层筛选 2D 碰撞进入消息，通过后交给代码通道和 Inspector 事件。</summary>
         private void OnCollisionEnter2D(Collision2D collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -457,6 +470,7 @@ namespace YLFramework.Events
             collisionEnter2D?.Invoke(collision);
         }
 
+        /// <summary>按对方层筛选 2D 持续碰撞消息，通过后转发原始碰撞数据。</summary>
         private void OnCollisionStay2D(Collision2D collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -468,6 +482,7 @@ namespace YLFramework.Events
             collisionStay2D?.Invoke(collision);
         }
 
+        /// <summary>按对方当前层筛选 2D 碰撞离开消息，不补发被过滤的离开通知。</summary>
         private void OnCollisionExit2D(Collision2D collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -483,6 +498,7 @@ namespace YLFramework.Events
 
         #region 触发事件
 
+        /// <summary>按对方层筛选 3D 触发进入消息，通过后转发对方碰撞体。</summary>
         private void OnTriggerEnter(Collider other)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer))
@@ -494,6 +510,7 @@ namespace YLFramework.Events
             triggerEnter?.Invoke(other);
         }
 
+        /// <summary>按对方层筛选 3D 持续触发消息，通过后转发对方碰撞体。</summary>
         private void OnTriggerStay(Collider other)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer))
@@ -505,6 +522,7 @@ namespace YLFramework.Events
             triggerStay?.Invoke(other);
         }
 
+        /// <summary>按对方当前层筛选 3D 触发离开消息，不补发被过滤的离开通知。</summary>
         private void OnTriggerExit(Collider other)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(other.gameObject.layer))
@@ -516,6 +534,7 @@ namespace YLFramework.Events
             triggerExit?.Invoke(other);
         }
 
+        /// <summary>按对方层筛选 2D 触发进入消息，通过后转发对方碰撞体。</summary>
         private void OnTriggerEnter2D(Collider2D collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -527,6 +546,7 @@ namespace YLFramework.Events
             triggerEnter2D?.Invoke(collision);
         }
 
+        /// <summary>按对方层筛选 2D 持续触发消息，通过后转发对方碰撞体。</summary>
         private void OnTriggerStay2D(Collider2D collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))
@@ -538,6 +558,7 @@ namespace YLFramework.Events
             triggerStay2D?.Invoke(collision);
         }
 
+        /// <summary>按对方当前层筛选 2D 触发离开消息，不补发被过滤的离开通知。</summary>
         private void OnTriggerExit2D(Collider2D collision)
         {
             if (physicsLayerMask.value != Physics.AllLayers && !physicsLayerMask.Contains(collision.gameObject.layer))

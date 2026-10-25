@@ -13,6 +13,8 @@ using YLFramework.Mission;
 namespace YLFramework.Editor.Mission
 {
 
+    /// <summary>按任务 ID 构建可搜索、重排的平面列表，并提供条目创建、复制、粘贴与删除菜单。</summary>
+    /// <remarks>列表重排的 Undo 由基类记录，窗口负责释放树的订阅；资产创建和文件删除不因此获得统一 Undo。</remarks>
     public class MissionListTree : ReorderableTreeView<MissionConfigData>
     {
         private const string MissionCopyFlag = "YLFramework.Mission.Objects.v1:";
@@ -29,9 +31,12 @@ namespace YLFramework.Editor.Mission
 
         private GUIStyle _nameStyle;
 
+        /// <summary>当前树绑定的源任务配表。</summary>
         public MissionsConfig MissionsConfig => _missionsConfig;
+        /// <summary>将任务行 ID 映射到当前序列化列表槽位，供基类重排使用。</summary>
         protected override int GetItemIndex(int id) => _missionsConfig.missions.FindIndex(data => data && data.id == id);
 
+        /// <summary>绑定配表及其当前任务列表，设置行高；创建后由调用方 Reload。</summary>
 #if UNITY_6000_2_OR_NEWER
         public MissionListTree(TreeViewState<int> state, MissionsConfig missionsConfig) : base(missionsConfig, () => missionsConfig.missions, state)
 #else
@@ -44,6 +49,7 @@ namespace YLFramework.Editor.Mission
             rowHeight = 25;
         }
 
+        /// <summary>跳过空条目，以任务 ID 建立平面行，并将名称、ID 与说明用于搜索。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override void OnBuildRoot(TreeViewItem<int> root, IList<MissionConfigData> datas)
 #else
@@ -68,6 +74,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>重载行并清除配表的任务和参数查找缓存。</summary>
         protected override void RefreshDatas()
         {
             base.RefreshDatas();
@@ -79,6 +86,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>按行 ID 查询任务定义，绘制图标、带说明的名称及 ID。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
             MissionConfigData info = _missionsConfig.GetMissionConfigData(args.item.id);
@@ -111,6 +119,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>复用按任务 ID 缓存的内容，将描述作为名称附注与悬停说明。</summary>
         private GUIContent GetMissionName(MissionConfigData info)
         {
             if (!_nameContents.ContainsKey(info.id))
@@ -132,6 +141,7 @@ namespace YLFramework.Editor.Mission
             return _nameContents[info.id];
         }
 
+        /// <summary>允许选择多个任务行以执行批量菜单操作。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override bool CanMultiSelect(TreeViewItem<int> item)
 #else
@@ -142,6 +152,7 @@ namespace YLFramework.Editor.Mission
             return true;
         }
 
+        /// <summary>空白处右键显示创建与粘贴菜单，避免同次条目右键重复弹出菜单。</summary>
         protected override void ContextClicked()
         {
             base.ContextClicked();
@@ -156,6 +167,7 @@ namespace YLFramework.Editor.Mission
             CreateMission(menu);
         }
 
+        /// <summary>为当前选择显示删除、复制、副本创建和粘贴菜单。</summary>
         protected override void ContextClickedItem(int id)
         {
             base.ContextClickedItem(id);
@@ -203,6 +215,7 @@ namespace YLFramework.Editor.Mission
             CreateMission(menu);
         }
 
+        /// <summary>沿用基类的行构建及搜索行为。</summary>
 #if UNITY_6000_2_OR_NEWER
         protected override IList<TreeViewItem<int>> BuildRows(TreeViewItem<int> root)
 #else
@@ -213,6 +226,7 @@ namespace YLFramework.Editor.Mission
             return base.BuildRows(root);
         }
 
+        /// <summary>依据剪贴板标记和配表数据类型限制补齐粘贴、创建菜单并显示。</summary>
         private void CreateMission(GenericMenu menu)
         {
 
@@ -228,7 +242,7 @@ namespace YLFramework.Editor.Mission
 
             menu.AddSeparator(string.Empty);
 
-            //  查找项目中所有继承自
+            // 候选来自脚本扫描，并受当前配表的数据基类约束。
             List<Type> buffs = GetAllMissionTypes(_missionsConfig.GetDataType());
 
             foreach (var item in buffs)
@@ -260,6 +274,7 @@ namespace YLFramework.Editor.Mission
             menu.ShowAsContext();
         }
 
+        /// <summary>把已保存的选中资产身份写入剪贴板，不在复制时序列化任务内容。</summary>
         private void CopySelection()
         {
             var objects = new List<string>();
@@ -274,6 +289,8 @@ namespace YLFramework.Editor.Mission
             GUIUtility.systemCopyBuffer = MissionCopyFlag + JsonConvert.SerializeObject(objects);
         }
 
+        /// <summary>解析全部剪贴板身份后，按粘贴时的源内容逐个创建副本，保存配表并重载选择。</summary>
+        /// <remarks>先校验对象身份不等于创建过程原子化；后续复制失败时不会撤销已创建的副本。</remarks>
         private void PasteSelection()
         {
             var text = GUIUtility.systemCopyBuffer;
@@ -306,6 +323,7 @@ namespace YLFramework.Editor.Mission
             Reload();
         }
 
+        /// <summary>经资产所有权边界移除任务条目，清理配表缓存并重载列表。</summary>
         private void DeleteMission(int id)
         {
             if (_missionsConfig == null)
@@ -324,6 +342,7 @@ namespace YLFramework.Editor.Mission
             Reload();
         }
 
+        /// <summary>复制任务数据，分配新 ID 与当前配表归属，再生成不重名的显示名称并标脏。</summary>
         private int CopyMission(MissionConfigData buff)
         {
             MissionConfigData data = GameObject.Instantiate(buff);
@@ -335,6 +354,7 @@ namespace YLFramework.Editor.Mission
             return id;
         }
 
+        /// <summary>保留未占用名称，否则递增括号内数字后缀直至名称可用。</summary>
         private string GetMissionName(string missionName)
         {
 
@@ -373,6 +393,7 @@ namespace YLFramework.Editor.Mission
             return name;
         }
 
+        /// <summary>按名称相等比较检查当前配表中的任务是否已经使用该名称。</summary>
         private bool IsContainsMissionName(string missionName)
         {
             MissionsConfig config = _missionsConfig;
@@ -388,6 +409,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>返回指定数据基类及脚本扫描到的派生类型，不过滤抽象类或保证运行任务类型有效。</summary>
         public static List<Type> GetAllMissionTypes(Type parent)
         {
             List<Type> states = new List<Type>();

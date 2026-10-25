@@ -199,6 +199,7 @@ namespace YLFramework.Grids
             ResizeInternal(width, height, addValueGetter);
         }
 
+        /// <summary>在新数组中保留交集并填充新增格子，全部准备完成后再替换网格与尺寸。</summary>
         private void ResizeInternal(int width, int height, Func<int, int, T> addValueGetter)
         {
             ValidateSize(width, height);
@@ -295,6 +296,7 @@ namespace YLFramework.Grids
             }
         }
 
+        /// <summary>拒绝负尺寸或总格子数超出 int 上限的请求，实际数组分配仍受可用内存限制。</summary>
         private static void ValidateSize(int width, int height)
         {
             if (width < 0)

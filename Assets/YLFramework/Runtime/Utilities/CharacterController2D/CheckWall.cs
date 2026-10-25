@@ -5,6 +5,7 @@ using UnityEngine;
 
 namespace YLFramework.Character2D
 {
+    /// <summary>根据接触法线筛选墙面，并按右侧优先的双向形状投射复核触墙状态。</summary>
     internal class CheckWall
     {
         private ContactPoint2D[] _contacts = null;
@@ -17,10 +18,15 @@ namespace YLFramework.Character2D
 
         private float _lastUpdateWallInfoTime;
 
-        private float _timeInterval = 1.0f / 10.0f; // 每秒最多检测30次
+        private float _timeInterval = 1.0f / 10.0f; // 每秒最多检测 10 次
 
         private int _contactsCount;
 
+        /// <summary>借用接触数组判断墙面，必要时刷新投射状态，并在回调使角色失效时终止。</summary>
+        /// <param name="contacts">角色复用的接触缓冲区，不复制其内容。</param>
+        /// <param name="characher">接收触墙状态和命中信息的角色。</param>
+        /// <param name="count">本次有效接触数量。</param>
+        /// <param name="wallAngle">法线相对世界水平轴的夹角阈值。</param>
         internal void Check(ContactPoint2D[] contacts, CharacterController2D characher, int count, float wallAngle)
         {
             this._contacts = contacts;
@@ -34,7 +40,6 @@ namespace YLFramework.Character2D
 
             bool isWallByContacts = IsWallByContacts(count, out wallIndex);
 
-            // 检测墙面
             if (isWallByContacts != characher.IsTouchingWall)
             {
                 CheckWallTouch();
@@ -51,6 +56,9 @@ namespace YLFramework.Character2D
             }
         }
 
+        /// <summary>按近水平法线筛选墙面，箱体和胶囊还要求法线近似垂直于对方局部向上轴。</summary>
+        /// <param name="count">接触缓冲区中有效元素的数量。</param>
+        /// <param name="index">最接近水平轴的候选接触索引；返回 false 时不代表有效墙面。</param>
         private bool IsWallByContacts(int count, out int index)
         {
             bool isWall = false;
@@ -97,6 +105,8 @@ namespace YLFramework.Character2D
             return isWall;
         }
 
+        /// <summary>触墙接触点或法线已明显变化时，按刷新间隔请求重新投射。</summary>
+        /// <param name="index">接触筛选得到的候选索引，当前实现不使用此参数。</param>
         private void UpdateWallInfo(int index)
         {
             if (!_character.IsTouchingWall)
@@ -111,10 +121,9 @@ namespace YLFramework.Character2D
 
             for (int i = 0; i < _contactsCount; i++)
             {
-                // 只要有一个点 和 当前法线比较接近 就不需要更新
+                // 任一接触点的位置和法线都接近缓存时，继续保留原命中信息。
                 bool d = Vector3.Distance(_contacts[i].point, _character.WallInfo.point) < 0.1f;
                 bool a = Vector3.Angle(_contacts[i].normal, _character.WallInfo.normal) < 3;
-                // 认为法线区别不大 不需要更新
                 if (d && a)
                 {
                     return;
@@ -126,6 +135,7 @@ namespace YLFramework.Character2D
         }
 
 
+        /// <summary>限频投射右侧形状，未触墙且角色仍有效时再投射左侧形状。</summary>
         private void CheckWallTouch()
         {
             if (!_character.ChecksWalls)
@@ -149,7 +159,7 @@ namespace YLFramework.Character2D
 
             Vector2 dir = _character.Right.transform.right;
 
-            // 如果缩放值小于0 翻转方向
+            // 投射轴随碰撞体旋转，X 轴负缩放时再反向，以匹配该侧的世界方向。
             if (_character.Right.transform.lossyScale.x < 0)
             {
                 dir = -dir;
@@ -185,7 +195,6 @@ namespace YLFramework.Character2D
 
             dir = -_character.Left.transform.right;
 
-            // 如果缩放值小于0 翻转方向
             if (_character.Left.transform.lossyScale.x < 0)
             {
                 dir = -dir;
@@ -207,6 +216,8 @@ namespace YLFramework.Character2D
             CaculateIsWallTouch(count);
         }
 
+        /// <summary>排除自身层级、触发器和不合格法线后，使用首个墙面命中更新触墙状态。</summary>
+        /// <param name="count">角色 Hits 缓冲区中本次有效命中的数量。</param>
         private void CaculateIsWallTouch(int count)
         {
             bool touching = false;

@@ -13,9 +13,11 @@ using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>脚本选择树的一行，持有已导入脚本资产及按需解析的类型。</summary>
     public class FsmStateTreeViewItem : TreeViewItem
     {
 
+        /// <summary>此行代表的脚本资产。</summary>
         public MonoScript MonoScript
         {
             get; private set;
@@ -24,6 +26,7 @@ namespace YLFramework.Editor.StateMachine
 
         private Type _type = null;
 
+        /// <summary>由脚本解析并缓存的类型；脚本尚未编译为类型时可为空。</summary>
         public Type Type
         {
             get
@@ -38,6 +41,11 @@ namespace YLFramework.Editor.StateMachine
             }
         }
 
+        /// <summary>将树行身份及显示名称与脚本资产绑定。</summary>
+        /// <param name="id">树内唯一行标识。</param>
+        /// <param name="depth">行的层级深度。</param>
+        /// <param name="displayName">脚本类型的显示名称。</param>
+        /// <param name="script">此行代表的脚本资产。</param>
         public FsmStateTreeViewItem(int id, int depth, string displayName, MonoScript script) : base(id, depth, displayName)
         {
             MonoScript = script;
@@ -49,10 +57,10 @@ namespace YLFramework.Editor.StateMachine
     }
 
 
+    /// <summary>列出可构造的普通状态脚本，单击后按 GUID 绑定到目标节点。</summary>
     public class FsmStateListTree : TreeView
     {
 
-        // Fix编码
         #region 字段
 
         private RuntimeFsmController _controller;
@@ -71,6 +79,8 @@ namespace YLFramework.Editor.StateMachine
 
 
         #region 重写方法
+        /// <summary>从已导入的合法状态脚本建立平铺树根，类型解析失败的脚本不显示。</summary>
+        /// <returns>包含候选脚本行的隐藏根节点。</returns>
         protected override TreeViewItem BuildRoot()
         {
 
@@ -98,11 +108,16 @@ namespace YLFramework.Editor.StateMachine
             return root;
         }
 
+        /// <summary>使用基础 TreeView 的行构建与搜索过滤行为。</summary>
+        /// <param name="root">已建立的脚本树根。</param>
+        /// <returns>当前可显示的行列表。</returns>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
         {
             return base.BuildRows(root);
         }
 
+        /// <summary>记录配置 Undo 后尝试添加脚本绑定；失败显示通知，成功标脏并关闭弹窗。</summary>
+        /// <param name="id">单击的脚本行标识。</param>
         protected override void SingleClickedItem(int id)
         {
             base.SingleClickedItem(id);
@@ -122,11 +137,12 @@ namespace YLFramework.Editor.StateMachine
                     return;
                 }
             }
-            // 保存
             _controller.Save();
             _editorWindow.Close();
         }
 
+        /// <summary>绘制脚本图标、类型名和命名空间，并将鼠标悬停行设为当前选择。</summary>
+        /// <param name="args">当前行的绘制参数。</param>
         protected override void RowGUI(RowGUIArgs args)
         {
             //base.RowGUI(args);
@@ -174,11 +190,16 @@ namespace YLFramework.Editor.StateMachine
         //    base.ContextClicked();
         //}
 
+        /// <summary>沿用基础树的选择变化处理，绑定操作仅在单击入口执行。</summary>
+        /// <param name="selectedIds">当前选中的行标识。</param>
         protected override void SelectionChanged(IList<int> selectedIds)
         {
             base.SelectionChanged(selectedIds);
         }
 
+        /// <summary>禁止多选，使一次点击只绑定一个状态脚本。</summary>
+        /// <param name="item">待判断的树行。</param>
+        /// <returns>始终为 false。</returns>
         protected override bool CanMultiSelect(TreeViewItem item)
         {
             return false;
@@ -187,6 +208,11 @@ namespace YLFramework.Editor.StateMachine
         #endregion
 
         #region 方法
+        /// <summary>建立脚本选择树并绑定目标节点与弹窗。</summary>
+        /// <param name="state">树的展开、搜索及选择状态。</param>
+        /// <param name="controller">拥有目标节点的配置。</param>
+        /// <param name="nodeData">接收脚本绑定的节点。</param>
+        /// <param name="editorWindow">用于显示失败通知及关闭的弹窗。</param>
         public FsmStateListTree(TreeViewState state, RuntimeFsmController controller, FsmStateNodeData nodeData, FsmSelectStateWindow editorWindow) : base(state)
         {
             this._controller = controller;

@@ -11,6 +11,7 @@ using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission
 {
+    /// <summary>在任务窗口内编辑配表中的参数元素，维护序列化选择和自定义数据列表缓存。</summary>
     public class MissionParameterInspector
     {
 
@@ -28,6 +29,7 @@ namespace YLFramework.Editor.Mission
 
 
 
+        /// <summary>定位配表内参数元素，绘制配置并应用序列化修改；参数改名交由参数树同步引用。</summary>
         public static void OnInspectorGUI(MissionsConfig missionsConfig, MissionParameter missionParameter, ParamListTree paramListTree)
         {
             if (missionParameter == null)
@@ -105,6 +107,7 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>用延迟输入编辑参数名称，选择索引变化后的首秒内不提交改名。</summary>
         private static void OnInspectorId(SerializedProperty data)
         {
             GUILayout.Space(10);
@@ -122,6 +125,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>按当前序列化自定义数据字段创建并绘制可重排列表。</summary>
         private static void OnInspectorCustomData(SerializedProperty data)
         {
             GUILayout.Space(10);
@@ -139,6 +143,7 @@ namespace YLFramework.Editor.Mission
             _reorderableList.DoLayoutList();
         }
 
+        /// <summary>确认元素索引有效后绘制一项自定义数据。</summary>
         private static void ElementCallbackDelegate(Rect rect, int index, bool isActive, bool isFocused)
         {
             if (index < 0 || index >= _reorderableList.serializedProperty.arraySize)
@@ -152,6 +157,7 @@ namespace YLFramework.Editor.Mission
 
         }
 
+        /// <summary>释放配表 SerializedObject，并清空参数选择、树引用和重排列表。</summary>
         internal static void ReleaseSelection()
         {
             _serializedObject?.Dispose();

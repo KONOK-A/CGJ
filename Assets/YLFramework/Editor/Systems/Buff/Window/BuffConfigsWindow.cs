@@ -11,9 +11,11 @@ using YLFramework.Editor.Utilities;
 
 namespace YLFramework.Editor.Buff
 {
+    /// <summary>以左侧 Buff 定义列表和右侧单项编辑区维护配表，记住最近选择的配表 GUID。</summary>
     public class BuffConfigsWindow : SplitWindow
     {
 
+        /// <summary>打开 Buff 与效果窗口，并将焦点放到 Buff 配表窗口。</summary>
         [MenuItem("Window/YLFramework/BuffSystem/Buff", false, 11)]
         static void Open()
         {
@@ -55,6 +57,7 @@ namespace YLFramework.Editor.Buff
         private float _lastRepaintCount = 0;
 
         private int _currentId;
+        /// <summary>切换条目时累计的绘制次数，用于隔离延迟输入框尚未提交的旧值。</summary>
         public int idChangeCount;
 
         #endregion
@@ -80,12 +83,14 @@ namespace YLFramework.Editor.Buff
 
         #region 生命周期
 
+        /// <summary>设置 Buff 配表窗口的标题。</summary>
         private void Awake()
         {
             titleContent = new GUIContent("Buff配置窗口", "Buff配置窗口");
 
         }
 
+        /// <summary>按编辑器更新次数限频重绘窗口。</summary>
         private void Update()
         {
             _lastRepaintCount++;
@@ -98,6 +103,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>尝试恢复配表选择，无可用配表时展示创建入口，否则绘制分栏。</summary>
         protected override void OnGUI()
         {
 
@@ -123,6 +129,7 @@ namespace YLFramework.Editor.Buff
 
         #region 方法
 
+        /// <summary>优先恢复已存 GUID，失败时选择项目内找到的首个 Buff 配表。</summary>
         internal BuffsConfig GetCurrentConfig()
         {
             if (!string.IsNullOrEmpty(SelectGuid))
@@ -147,6 +154,7 @@ namespace YLFramework.Editor.Buff
             return allConfigs[0];
         }
 
+        /// <summary>显示无配表提示与立即创建按钮。</summary>
         private void EmptyGui()
         {
 
@@ -168,6 +176,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>在左侧分栏区域内绘制配表选择、搜索与定义树。</summary>
         protected override void DrawGuiLeft(Rect rect)
         {
             base.DrawGuiLeft(rect);
@@ -178,6 +187,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>在右侧分栏区域内绘制当前条目的编辑或选择提示。</summary>
         protected override void DrawGuiRight(Rect rect)
         {
             base.DrawGuiRight(rect);
@@ -186,6 +196,7 @@ namespace YLFramework.Editor.Buff
             GUILayout.EndArea();
         }
 
+        /// <summary>维护搜索、配表切换与树视图，配表变化后释放旧树的订阅与拖拽状态。</summary>
         private void DrawLeft(Rect rect)
         {
             if (_currentBuffConfigContent == null)
@@ -274,6 +285,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>仅在单选且配表非空时进入编辑，其余情况显示空白或多选提示。</summary>
         private void DrawRight()
         {
             // 判断是否为空
@@ -320,6 +332,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>隔离条目切换期间的延迟输入，再把当前定义交给内嵌检查器。</summary>
         private void DrawData()
         {
             int id = BuffListState.selectedIDs[0];
@@ -347,6 +360,7 @@ namespace YLFramework.Editor.Buff
             BuffConfigDataInspector.Instance.OnInspectorGUI(data, this, CurrentBuffConfig);
         }
 
+        /// <summary>判断当前配表是否缺失或没有任何有效定义。</summary>
         internal bool IsEmpty()
         {
             if (CurrentBuffConfig == null)
@@ -366,6 +380,7 @@ namespace YLFramework.Editor.Buff
             return true;
         }
 
+        /// <summary>按 Buff ID 设置树选择；树尚未建立时延迟到编辑器下一次回调尝试。</summary>
         public void SetSelection(int id)
         {
             if (BuffListTree != null)
@@ -388,6 +403,7 @@ namespace YLFramework.Editor.Buff
 
         }
 
+        /// <summary>释放旧树、切换当前配表并记住 GUID，不保存或复制配表内容。</summary>
         public void SetCurrentConfigs(BuffsConfig item)
         {
             BuffListTree?.Dispose();
@@ -402,6 +418,7 @@ namespace YLFramework.Editor.Buff
             SelectGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(item));
         }
 
+        /// <summary>窗口停用时释放树的订阅与拖拽状态，并解除内嵌检查器的资产绑定。</summary>
         private void OnDisable()
         {
             BuffListTree?.Dispose();
@@ -414,6 +431,7 @@ namespace YLFramework.Editor.Buff
 
         #region 创建
 
+        /// <summary>要求用户选择 Assets 内目录，并创建使用新起始基数的 Buff 配表资产。</summary>
         private void CreateNew()
         {
             string path = EditorUtility.OpenFolderPanel("请选择文件夹", Application.dataPath, string.Empty);
@@ -444,6 +462,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>在现有配表的最大起始基数上增加一千，不扫描实际条目 ID。</summary>
         private int InitIdStart()
         {
             int maxIdStart = 0;

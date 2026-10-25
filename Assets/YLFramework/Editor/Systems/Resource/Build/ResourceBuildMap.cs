@@ -15,46 +15,57 @@ namespace YLFramework.Editor.Resource
     /// <summary>本次解析的有限来源副本；不持有可编辑Project/规则，也不进入Catalog或持久身份。</summary>
     public sealed class ResourceBuildSource
     {
+        /// <summary>来源项目配置的 Unity GUID。</summary>
         public string ProjectGuid
         {
             get;
         }
+        /// <summary>来源项目的技术标识。</summary>
         public string ProjectId
         {
             get;
         }
+        /// <summary>产生此次选择的 Group 标识。</summary>
         public string GroupId
         {
             get;
         }
+        /// <summary>解析时来源 Group 的分包意图。</summary>
         public ResourcePacking Packing
         {
             get;
         }
+        /// <summary>所选文件、文件夹或自动图集输出的 GUID。</summary>
         public string SelectionGuid
         {
             get;
         }
+        /// <summary>解析时选择项对应的源路径，不是单个展开资产的必然路径。</summary>
         public string SelectionPath
         {
             get;
         }
+        /// <summary>选择项的地址覆写，未设置时为空字符串。</summary>
         public string SelectionAddress
         {
             get;
         }
+        /// <summary>选择项别名的只读副本。</summary>
         public IReadOnlyList<string> Aliases
         {
             get;
         }
+        /// <summary>选择项扩展名筛选的只读副本。</summary>
         public IReadOnlyList<string> Extensions
         {
             get;
         }
+        /// <summary>自动图集来源的配置 GUID；普通选择时为 null。</summary>
         public string AtlasConfigurationGuid
         {
             get;
         }
+        /// <summary>自动图集来源的稳定规则 Id；普通选择时为 null。</summary>
         public string AtlasRuleId
         {
             get;
@@ -68,6 +79,7 @@ namespace YLFramework.Editor.Resource
             get;
         }
 
+        /// <summary>复制选择或图集规则的来源信息，供报告展示及后续定位复验。</summary>
         internal ResourceBuildSource(ResourceProject project, string projectGuid, ResourceGroup group,
             ResourceSelection selection, string path, ResourceAtlasChange generated)
         {
@@ -90,41 +102,52 @@ namespace YLFramework.Editor.Resource
     /// <summary>Editor 主资产身份和加载描述。子资产的正式描述与持久化 Catalog 不在此定义。</summary>
     public sealed class ResourceBuildAsset
     {
+        /// <summary>主资产源文件的 Unity GUID。</summary>
         public string Guid
         {
             get;
         }
+        /// <summary>主资产在源文件内的持久 localId。</summary>
         public long LocalId
         {
             get;
         }
+        /// <summary>GUID 与 localId 组合的规范主资产身份，不随加载地址变化。</summary>
         public string AssetId => Guid + "_" + LocalId;
+        /// <summary>Unity 构建和原生加载使用的源文件路径。</summary>
         public string SourcePath
         {
             get;
         }
+        /// <summary>应用消费的主逻辑地址。</summary>
         public ResourceAddress Address
         {
             get;
         }
+        /// <summary>同一主资产的额外逻辑地址，按地址路径排序。</summary>
         public IReadOnlyList<ResourceAddress> Aliases
         {
             get;
         }
+        /// <summary>预期运行时资产类型，已转换 Unity 特有的编辑类型。</summary>
         public Type AssetType
         {
             get;
         }
+        /// <summary>依赖布局和环归并完成后分配的原生 Bundle 名称。</summary>
         public string BundleName
         {
             get; internal set;
         }
+        /// <summary>产生本主资产的显式选择或图集规则来源。</summary>
         public ResourceBuildSource Source
         {
             get;
         }
+        /// <summary>是否为通过场景路径消费的 Scene 资产。</summary>
         public bool IsScene => AssetType == typeof(SceneAsset);
 
+        /// <summary>从 Unity 主资产解析持久身份、编译类型和逻辑地址。</summary>
         internal ResourceBuildAsset(string path, ResourceAddress address, IEnumerable<string> aliases, ResourceBuildSource source)
         {
             Source = source;
@@ -143,12 +166,18 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>最终 Bundle 的布局来源，不代表运行时加载顺序。</summary>
     public enum ResourceBundlePlacement
     {
+        /// <summary>按 Group 合包，场景与普通资产仍隔离。</summary>
         Group,
+        /// <summary>由逐主资产分包产生。</summary>
         PerAsset,
+        /// <summary>由多个初始 Bundle 共用的依赖组成。</summary>
         SharedDependencies,
+        /// <summary>独立承载场景 Bundle 的非场景私有依赖。</summary>
         SceneDependencies,
+        /// <summary>为消除 Bundle 依赖环而合并产生。</summary>
         CycleMerge
     }
 
@@ -158,18 +187,22 @@ namespace YLFramework.Editor.Resource
         private readonly string[] _paths;
         private readonly string[] _dependencies;
         private readonly string[] _dependents;
+        /// <summary>包含项目命名空间的稳定原生 Bundle 名称。</summary>
         public string Name
         {
             get;
         }
+        /// <summary>是否仅包含场景文件，场景与普通资产不得混包。</summary>
         public bool IsScene
         {
             get;
         }
+        /// <summary>是否承载多包共享依赖，环归并后保留该标记。</summary>
         public bool IsShared
         {
             get;
         }
+        /// <summary>最终布局的归类原因。</summary>
         public ResourceBundlePlacement Placement
         {
             get;
@@ -179,10 +212,14 @@ namespace YLFramework.Editor.Resource
         {
             get;
         }
+        /// <summary>本包独占的源文件路径副本。</summary>
         public string[] AssetPaths => (string[])_paths.Clone();
+        /// <summary>本包直接依赖的 Bundle 名称副本。</summary>
         public string[] Dependencies => (string[])_dependencies.Clone();
+        /// <summary>直接依赖本包的 Bundle 名称副本。</summary>
         public string[] Dependents => (string[])_dependents.Clone();
 
+        /// <summary>复制最终文件归属和图边，验证场景隔离并统计源文件字节。</summary>
         internal ResourceBuildBundle(string name, IEnumerable<string> assets, IEnumerable<string> edges, IEnumerable<string> incoming,
             bool shared, ResourceBundlePlacement placement)
         {
@@ -202,47 +239,58 @@ namespace YLFramework.Editor.Resource
         }
     }
 
-    /// <summary>从已保存的自有 Project 生成稳定显式 BuildMap；不修改任何源资源或 Importer。</summary>
+    /// <summary>从自有 Project 解析稳定显式 BuildMap；不修改任何源资源或 Importer，未保存定义会另行标记。</summary>
     public sealed class ResourceBuildMap
     {
         private const int Limit = 16384;
+        /// <summary>项目配置的持久 Unity GUID。</summary>
         public string ProjectGuid
         {
             get;
         }
+        /// <summary>此次分包采用的项目技术标识。</summary>
         public string ProjectId
         {
             get;
         }
+        /// <summary>项目标识摘要的短 token，用于 Bundle 名称而非替代完整归属校验。</summary>
         public string ProjectToken
         {
             get;
         }
+        /// <summary>本次解析的来源目录身份及地址前缀快照。</summary>
         public IReadOnlyList<ResourceProjectPaths.DirectoryEntry> SourceDirectories
         {
             get;
         }
+        /// <summary>按序排列的来源目录路径，不表示目录内所有文件都会入包。</summary>
         public IReadOnlyList<string> AssetRoots
         {
             get;
         }
+        /// <summary>分包快照创建时的 UTC 时间，不参与持久内容身份。</summary>
         public DateTime CreatedAtUtc { get; } = DateTime.UtcNow;
+        /// <summary>解析时项目或自动图集配置是否存在尚未保存的编辑。</summary>
         public bool ContainsUnsavedDefinitions
         {
             get;
         }
+        /// <summary>解析时 Editor 的活动构建平台。</summary>
         public string Platform
         {
             get;
         }
+        /// <summary>显式选择及规则接入的主资产，按逻辑地址排序，不含隐式依赖和子资产条目。</summary>
         public IReadOnlyList<ResourceBuildAsset> Assets
         {
             get;
         }
+        /// <summary>消除可合并依赖环后的最终 Bundle 布局。</summary>
         public IReadOnlyList<ResourceBuildBundle> Bundles
         {
             get;
         }
+        /// <summary>Group 标识到规范主资产身份的映射，不直接映射 Bundle 或图集内 Sprite。</summary>
         public IReadOnlyDictionary<string, IReadOnlyList<string>> Groups
         {
             get;
@@ -252,6 +300,7 @@ namespace YLFramework.Editor.Resource
         {
             get;
         }
+        /// <summary>环归并所减少的 Bundle 数量，不是环的数量。</summary>
         public int MergedBundleCount
         {
             get;
@@ -261,6 +310,7 @@ namespace YLFramework.Editor.Resource
             get;
         }
 
+        /// <summary>封装最终归属与双向依赖快照，并复用 Catalog 约束检查有界无环依赖。</summary>
         private ResourceBuildMap(ResourceProject project, string guid, ResourceProjectPaths paths, List<ResourceBuildAsset> assets,
             Dictionary<string, IReadOnlyList<string>> groups, Dictionary<string, string[]> graph,
             HashSet<string> fingerprintPaths, Dictionary<string, string> assignments, HashSet<string> shared,
@@ -311,6 +361,10 @@ namespace YLFramework.Editor.Resource
                 Bundles.Select(x => new ResourceDependencyNode(x.Name, x.Dependencies)));
         }
 
+        /// <summary>
+        /// 展开选择和已有效生成的图集，检查地址冲突并为依赖建立唯一文件归属。
+        /// 来源范围只授予输入准入；此处不冻结完整文件字节，也不创建工作区或更新待生成图集。
+        /// </summary>
         public static ResourceBuildMap Create(ResourceProject project)
         {
             if (!project)
@@ -543,6 +597,7 @@ namespace YLFramework.Editor.Resource
             return new ResourceBuildMap(project, guid, directories, assets, groups, graph, fingerprints, assignments, shared, avoided, merged);
         }
 
+        /// <summary>收集有界资产依赖图与指纹输入；代码仅参与指纹，不作为 Bundle 内容。</summary>
         private static Dictionary<string, string[]> CollectDependencies(ResourceProjectPaths directories, IEnumerable<string> generatedPaths, string atlasDirectory,
             IEnumerable<string> selected, HashSet<string> fingerprints, HashSet<string> editorAssemblies)
         {
@@ -622,6 +677,7 @@ namespace YLFramework.Editor.Resource
             return result;
         }
 
+        /// <summary>将资产依赖投影为去重的跨 Bundle 直接依赖边。</summary>
         private static Dictionary<string, HashSet<string>> BundleEdges(Dictionary<string, string> assignments, Dictionary<string, string[]> graph)
         {
             var edges = assignments.Values.Distinct().ToDictionary(x => x, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
@@ -640,6 +696,7 @@ namespace YLFramework.Editor.Resource
             return edges;
         }
 
+        /// <summary>合并 Bundle 强连通分量以消除环，若合并会混入场景和普通资产则拒绝。</summary>
         private static int MergeCycles(string prefix, Dictionary<string, string> assignments, Dictionary<string, string[]> graph, HashSet<string> shared)
         {
             var edges = BundleEdges(assignments, graph);
@@ -736,6 +793,7 @@ namespace YLFramework.Editor.Resource
             return merged;
         }
 
+        /// <summary>验证稳定资源标识，并将参数错误转换为构建定义错误。</summary>
         private static void ValidateId(string id)
         {
             try
@@ -748,6 +806,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>将精确 Unity GUID 解析为现存资产路径，拒绝缺失身份。</summary>
         private static string ResolveGuid(string guid)
         {
             if (guid == null || guid.Length != 32 || guid.Any(x => !Uri.IsHexDigit(x)))
@@ -764,9 +823,13 @@ namespace YLFramework.Editor.Resource
             return path;
         }
 
+        /// <summary>忽略大小写判断严格子路径，不把根目录自身计入。</summary>
         private static bool Within(string root, string path) => path.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase);
+        /// <summary>识别无需登记为项目来源的 Unity 内置资源路径。</summary>
         private static bool IsBuiltIn(string path) => path == "Resources/unity_builtin_extra" || path == "Library/unity default resources";
+        /// <summary>识别只参与输入指纹、不直接入包的代码及程序集文件。</summary>
         private static bool IsCode(string path) => new[] { ".cs", ".dll", ".asmdef", ".asmref" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+        /// <summary>排除目录、代码和仅编辑器资产，保留具有合法运行时产物的 Unity 编辑类型。</summary>
         private static bool CanBundle(string path, HashSet<string> editorAssemblies)
         {
             if (AssetDatabase.IsValidFolder(path) || IsCode(path) || path.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -785,13 +848,16 @@ namespace YLFramework.Editor.Resource
         internal static Type BuildType(Type source) => source == typeof(UnityEditor.Animations.AnimatorController) ? typeof(RuntimeAnimatorController) :
             source == typeof(UnityEditor.Animations.BlendTree) ? typeof(Motion) : source;
 
+        /// <summary>以 Unity 工程根解析绝对路径，不创建目录或授予路径准入。</summary>
         internal static string Absolute(string path) => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Application.dataPath), path));
+        /// <summary>截取 UTF-8 文本 SHA-256 的前 128 位作为稳定路径或名称 token。</summary>
         internal static string Token(string value)
         {
             using var sha = SHA256.Create();
             return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(value))).Replace("-", "").ToLowerInvariant().Substring(0, 32);
         }
 
+        /// <summary>将最终布局转换为 Unity 显式构建输入，不依赖源 Importer 的 Bundle 标记。</summary>
         internal AssetBundleBuild[] UnityBuilds() => Bundles.Select(x => new AssetBundleBuild { assetBundleName = x.Name, assetNames = x.AssetPaths }).ToArray();
     }
 }

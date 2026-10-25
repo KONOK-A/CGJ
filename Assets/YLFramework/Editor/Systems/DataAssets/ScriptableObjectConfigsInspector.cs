@@ -5,9 +5,11 @@ using YLFramework.DataAssets;
 
 namespace YLFramework.Editor.DataAssets
 {
+    /// <summary>配置根检查器，展示类型绑定、数据诊断、作者窗口及目标资产保存入口。</summary>
     [CustomEditor(typeof(ScriptableObjectConfigs), true)]
     public sealed class ScriptableObjectConfigsInspector : UnityEditor.Editor
     {
+        /// <summary>编辑根显示字段与类型约束，并提供显式保存及本机工作簿定位入口。</summary>
         public override void OnInspectorGUI()
         {
             var root = (ScriptableObjectConfigs)target;
@@ -58,6 +60,7 @@ namespace YLFramework.Editor.DataAssets
             }
         }
 
+        /// <summary>显示根诊断及条目定位按钮，解除引用须由作者明确点击并通过槽位快照校验。</summary>
         public static void DrawDiagnostics(ScriptableObjectConfigs root)
         {
             foreach (var issue in ScriptableObjectConfigsController.Validate(root))
@@ -79,6 +82,7 @@ namespace YLFramework.Editor.DataAssets
             }
         }
 
+        /// <summary>将配置根的资产打开操作转交作者窗口，其他资产仍由默认处理器处理。</summary>
         [UnityEditor.Callbacks.OnOpenAsset]
         private static bool OnOpenAsset(int instanceId, int line)
         {

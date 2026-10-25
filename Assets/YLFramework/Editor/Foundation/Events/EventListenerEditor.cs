@@ -41,12 +41,14 @@ namespace YLFramework.Editor.Foundation
         private bool _isExpanded;
         private int _tab;
 
+        /// <summary>从 Editor 会话状态恢复折叠和页签选择，不将界面状态写入组件或资源。</summary>
         private void OnEnable()
         {
             _isExpanded = SessionState.GetBool(ExpandedKey, true);
             _tab = Mathf.Clamp(SessionState.GetInt(TabKey, 0), 0, _tabs.Length - 1);
         }
 
+        /// <summary>按页签绘制事件及其余可见字段，通过 SerializedObject 更新和应用序列化修改。</summary>
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -71,6 +73,8 @@ namespace YLFramework.Editor.Foundation
             serializedObject.ApplyModifiedProperties();
         }
 
+        /// <summary>枚举非事件区的顶层可见属性，保留物理层过滤及派生组件的序列化字段。</summary>
+        /// <returns>独立的属性副本；调用方负责在绘制后释放每个副本，内部遍历器由本方法释放。</returns>
         private IEnumerable<SerializedProperty> AdditionalProperties()
         {
             using (var iterator = serializedObject.GetIterator())

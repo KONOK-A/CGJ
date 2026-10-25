@@ -31,8 +31,10 @@ namespace YLFramework.Resource
             get; private set;
         }
         internal float Progress => _length <= 0 ? 0 : (float)(_sink?.Written ?? _part?.Length ?? 0) / _length;
+        /// <summary>当前无嵌套等待对象；推进者按主线程 tick 继续轮询。</summary>
         public object Current => null;
 
+        /// <summary>绑定来源根内的有界 GET、可选摘要及分片责任，尚不发送请求。</summary>
         internal ResourceTransfer(ResourceRemoteSource source, Uri uri, long length = 0, string digest = null, long maximum = ResourceReleaseSignature.MaximumBytes,
             ArtifactStore.DownloadPart part = null, bool deferPartVerification = false)
         {
@@ -49,6 +51,8 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>推进请求、超时和有界重试，按传输模式执行响应检查并在失败时抛出错误。</summary>
+        /// <remarks>分片 hash 可按配置延后到内容 IO；传输结束本身不证明版本可挂载或已获签名授权。</remarks>
         public bool MoveNext()
         {
             if (_isDone)
@@ -111,6 +115,7 @@ namespace YLFramework.Resource
                 _part.Reset();
                 return Failure(new ResourceRangeException(), true);
             }
+            // HTTP 错误只为连接中断、408、429 及 5xx 开放重试；完整性错误不因此获得重试资格。
             if (_request.result != UnityWebRequest.Result.Success || _request.responseCode != 200 && _request.responseCode != 206)
             {
                 return Failure(new IOException("Release GET failed (HTTP " + _request.responseCode + ", " + _request.result + ")."),
@@ -165,6 +170,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 仅在本地分片具备强 ETag 时请求 Range/If-Range；禁用重定向并要求 identity 字节表示。
         private void Start()
         {
             _attempt++;
@@ -197,6 +203,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 关闭当前尝试，再按退避、抖动及有界 Retry-After 排定重试；耗尽次数则终止。
         private bool Failure(Exception error, bool retry)
         {
             var delay = Math.Min(8, .25 * Math.Pow(2, _attempt - 1)) + _random.NextDouble() * .1;
@@ -220,6 +227,7 @@ namespace YLFramework.Resource
             return true;
         }
 
+        // 撤销尚未完成的私有请求并关闭接收流，释放本次尝试的 UWR 资源。
         private void Close()
         {
             try
@@ -239,13 +247,16 @@ namespace YLFramework.Resource
                 _sink = null;
             }
         }
+        /// <summary>终止推进并同步关闭当前私有请求与写入流，不删除已归属的可重用分片。</summary>
         public void Dispose()
         {
             _isDone = true;
             Close();
         }
+        /// <summary>不支持复位已绑定的传输；调用会抛出 NotSupportedException。</summary>
         public void Reset() => throw new NotSupportedException();
 
+        /// <summary>在响应头确认后将有界数据写入内存或分片，保存回调中产生的 IO 错误。</summary>
         private sealed class Sink : DownloadHandlerScript
         {
             private readonly UnityWebRequest _request;
@@ -272,6 +283,7 @@ namespace YLFramework.Resource
                 get; private set;
             }
 
+            /// <summary>保存本次响应合同，并为非分片传输分配私有内存接收区。</summary>
             internal Sink(UnityWebRequest request, long expected, long maximum, long offset, string validator, ArtifactStore.DownloadPart part, Stopwatch clock)
                 : base(new byte[64 * 1024])
             {
@@ -290,6 +302,7 @@ namespace YLFramework.Resource
                 LastData = clock.Elapsed.TotalSeconds;
             }
 
+            /// <summary>首次写入前确认完整响应或续传合同，再打开对应偏移的接收流。</summary>
             internal void ValidateHeaders()
             {
                 if (_hasValidatedHeaders)
@@ -309,6 +322,9 @@ namespace YLFramework.Resource
                 _hasValidatedHeaders = true;
             }
 
+            /// <summary>接收并限制响应字节；非成功状态仅有界丢弃，写入失败则保存错误并停止接收。</summary>
+            /// <param name="data">Unity 提供的本次数据缓冲。</param>
+            /// <param name="dataLength">本次缓冲中的有效字节数。</param>
             protected override bool ReceiveData(byte[] data, int dataLength)
             {
                 try
@@ -336,7 +352,9 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>复制内存模式已收到的响应体；分片模式不使用此入口。</summary>
             internal byte[] Bytes() => _memory.ToArray();
+            /// <summary>持久刷新并关闭文件接收流，内存响应保留到传输读取。</summary>
             internal void Close()
             {
                 if (_output == null || ReferenceEquals(_output, _memory))

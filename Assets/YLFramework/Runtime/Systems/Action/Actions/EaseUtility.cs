@@ -6,37 +6,69 @@ namespace YLFramework.Actions
     /// <summary>可选的缓动曲线；保留现有成员名和数值，Count 表示曲线数量。</summary>
     public enum EaseType
     {
+        /// <summary>线性插值，进度钳制到 0 到 1。</summary>
         Linear,
+        /// <summary>先在起点回退、再在终点超出的缓入缓出曲线。</summary>
         InOutBack,
+        /// <summary>起点附近先回退再加速的缓入曲线。</summary>
         InBack,
+        /// <summary>超出终点后回落的缓出曲线。</summary>
         OutBack,
+        /// <summary>组合前后半程弹跳的缓入缓出曲线。</summary>
         InOutBounce,
+        /// <summary>终点附近多次弹跳的缓出曲线。</summary>
         OutBounce,
+        /// <summary>沿用现有反向弹跳公式的曲线，不保证精确落在端点。</summary>
         InBounce,
+        /// <summary>圆弧形状的缓入缓出曲线。</summary>
         InOutCircle,
+        /// <summary>圆弧形状的缓出曲线。</summary>
         OutCircle,
+        /// <summary>圆弧形状的缓入曲线。</summary>
         InCircle,
+        /// <summary>三次幂形状的缓入缓出曲线。</summary>
         InOutCubic,
+        /// <summary>三次幂形状的缓出曲线。</summary>
         OutCubic,
+        /// <summary>三次幂形状的缓入曲线。</summary>
         InCubic,
+        /// <summary>前后半程均可超出端点的弹性缓入缓出曲线。</summary>
         InOutElastic,
+        /// <summary>在终点附近振荡并收敛的弹性缓出曲线。</summary>
         OutElastic,
+        /// <summary>在起点附近振荡后加速的弹性缓入曲线。</summary>
         InElastic,
+        /// <summary>指数形状的缓入缓出曲线，沿用未精确归一到端点的公式。</summary>
         InOutExpo,
+        /// <summary>指数形状的缓出曲线，终点仍保留公式中的微小偏差。</summary>
         OutExpo,
+        /// <summary>指数形状的缓入曲线，起点仍保留公式中的微小偏差。</summary>
         InExpo,
+        /// <summary>二次幂形状的缓入缓出曲线。</summary>
         InOutQuad,
+        /// <summary>二次幂形状的缓出曲线。</summary>
         OutQuad,
+        /// <summary>二次幂形状的缓入曲线。</summary>
         InQuad,
+        /// <summary>四次幂形状的缓入缓出曲线。</summary>
         InoutQuart,
+        /// <summary>四次幂形状的缓出曲线。</summary>
         OutQuart,
+        /// <summary>四次幂形状的缓入曲线。</summary>
         InQuart,
+        /// <summary>五次幂形状的缓入缓出曲线。</summary>
         InOutQuint,
+        /// <summary>五次幂形状的缓出曲线。</summary>
         OutQuint,
+        /// <summary>五次幂形状的缓入曲线。</summary>
         InQuint,
+        /// <summary>正弦形状的缓入缓出曲线。</summary>
         InOutSine,
+        /// <summary>正弦形状的缓出曲线。</summary>
         OutSine,
+        /// <summary>正弦形状的缓入曲线。</summary>
         InSine,
+        /// <summary>曲线数量的哨兵值，不表示可计算的缓动曲线。</summary>
         Count
     }
 

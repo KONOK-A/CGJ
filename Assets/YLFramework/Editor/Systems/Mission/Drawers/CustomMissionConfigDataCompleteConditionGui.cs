@@ -12,6 +12,7 @@ using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission
 {
+    /// <summary>绘制任务条件重排列表，按所选参数类型提供比较方式和目标值编辑。</summary>
     public class CustomMissionConfigDataCompleteConditionGui : CustomPropertyGui
     {
 
@@ -29,6 +30,7 @@ namespace YLFramework.Editor.Mission
 
         private GUIContent _valueContent;
 
+        /// <summary>为当前条件字段初始化重排列表，绘制后在检测到变更时应用序列化修改。</summary>
         public override void OnPropertyGui(SerializedProperty conditionsProperty)
         {
 
@@ -56,6 +58,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>按有效数组索引取得条件字段，并交给单条件绘制入口。</summary>
         private void CompleteElementCallbackDelegate(Rect rect, int index, bool isActive, bool isFocused)
         {
 
@@ -68,11 +71,13 @@ namespace YLFramework.Editor.Mission
             DrawCondition(condition, rect);
         }
 
+        /// <summary>绘制条件列表的标题。</summary>
         private void CompleteHeaderCallbackDelegate(Rect rect)
         {
             GUI.Label(rect, "完成任务条件");
         }
 
+        /// <summary>绘制参数选择和类型对应目标值；浮点候选排除等于及不等于，布尔条件隐藏比较选择。</summary>
         private void DrawCondition(SerializedProperty condition, Rect rect)
         {
             rect.width /= 2;

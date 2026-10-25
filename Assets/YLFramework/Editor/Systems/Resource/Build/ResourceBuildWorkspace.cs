@@ -10,7 +10,7 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
-    // 复用旧 YL 的归属预检/链接拒绝契约；仅管理未发布的增量缓存，不执行发布、回滚或目录清理。
+    /// <summary>复用旧 YL 的归属预检/链接拒绝契约；仅管理未发布的增量缓存，不执行发布、回滚或目录清理。</summary>
     internal sealed class ResourceBuildWorkspace
     {
         internal const string Marker = ".ylr-workspace.json";
@@ -18,53 +18,86 @@ namespace YLFramework.Editor.Resource
         private const string Lock = ".ylr-workspace.lock";
         private const int MaximumFiles = 65540;
 
+        /// <summary>单个工作区文件的字节身份，不以 UnityHash 替代磁盘完整性。</summary>
         [Serializable]
         internal sealed class FileDigest
         {
+            /// <summary>工作区叶目录中的文件名，由调用方填入。</summary>
             public string Name;
+            /// <summary>文件字节长度。</summary>
             public long Length;
+            /// <summary>文件全部字节的 SHA-256。</summary>
             public string Sha256;
         }
 
+        /// <summary>可变构建缓存的归属及验证记录；Complete 不是发布或不可变承诺。</summary>
         [Serializable]
         internal class Ownership
         {
+            /// <summary>归属记录格式版本，普通工作区为 1。</summary>
             public int Version = 1;
+            /// <summary>登记时的完整工程根路径。</summary>
             public string ProjectRoot;
+            /// <summary>所属项目配置的持久 GUID。</summary>
             public string ProjectGuid;
+            /// <summary>所属项目的完整技术标识。</summary>
             public string ProjectId;
+            /// <summary>完整构建设置指纹，用于拒绝短路径 token 碰撞。</summary>
             public string Settings;
+            /// <summary>原生构建叶目录及根 Manifest Bundle 的名称。</summary>
             public string Leaf;
+            /// <summary>历次尝试已预登记的文件名并集，包含部分产物及不再使用的文件。</summary>
             public string[] KnownFiles = Array.Empty<string>();
+            /// <summary>当前指纹和产物记录是否经构建后复验确认；重新尝试前清除。</summary>
             public bool Complete;
+            /// <summary>最近完整验证的输入指纹，不完整尝试不得用来跳过构建。</summary>
             public string Fingerprint;
+            /// <summary>当前已验证原始文件的摘要集合，不包含全部历史登记项。</summary>
             public FileDigest[] Files = Array.Empty<FileDigest>();
         }
 
+        /// <summary>派生交付候选与其原始构建字节的对应记录，失败时仍保留已登记路径。</summary>
         [Serializable]
         internal sealed class DeliveryRecord
         {
+            /// <summary>相对工作区根的交付文件路径。</summary>
             public string RelativePath;
+            /// <summary>对应的原始工作区文件名。</summary>
             public string Name;
+            /// <summary>派生来源的原始字节长度。</summary>
             public long RawLength;
+            /// <summary>派生来源的原始字节摘要。</summary>
             public string RawSha256;
+            /// <summary>交付文件的字节长度。</summary>
             public long Length;
+            /// <summary>交付文件的全部字节摘要。</summary>
             public string Sha256;
+            /// <summary>候选是否已写完并通过交付与原始内容验证。</summary>
             public bool Complete;
+            /// <summary>复制交付文件的公开摘要描述。</summary>
             internal FileDigest Digest() => new() { Name = Name, Length = Length, Sha256 = Sha256 };
         }
 
         // 独立派生类型使 None 继续写原 v1 字段，而不是给旧格式追加空 delivery 字段。
+        /// <summary>加密工作区的 v2 归属记录，仅保存非秘密策略和候选字节身份。</summary>
         [Serializable]
         internal sealed class EncryptedOwnership : Ownership
         {
+            /// <summary>稳定内容密钥标识，不包含密钥。</summary>
             public string KeyId;
+            /// <summary>交付绑定的目标平台。</summary>
             public string Platform;
+            /// <summary>交付绑定的 Unity 版本。</summary>
             public string UnityCompatibility;
+            /// <summary>内容封装协议版本。</summary>
             public int ContentProtocolVersion = 1;
+            /// <summary>历次编码尝试预登记的相对文件路径。</summary>
             public string[] KnownDeliveryFiles = Array.Empty<string>();
+            /// <summary>可复验和复用的候选记录，包含尚未完成的尝试。</summary>
             public DeliveryRecord[] Deliveries = Array.Empty<DeliveryRecord>();
+            /// <summary>当前完整交付快照所在的独立子目录名。</summary>
             public string DeliveryDirectory;
+            /// <summary>当前交付快照的完整文件摘要集合。</summary>
             public FileDigest[] DeliveryFiles = Array.Empty<FileDigest>();
         }
 
@@ -86,6 +119,7 @@ namespace YLFramework.Editor.Resource
             get;
         }
 
+        /// <summary>计算独立缓存分区并检查原生产物路径长度，不创建或认领输出。</summary>
         internal ResourceBuildWorkspace(ResourceBuildMap map, string settings, string platform,
             ResourceContentEncryption encryption = ResourceContentEncryption.None, string keyId = null)
         {
@@ -111,6 +145,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>只读验证已有归属、登记格式和目录闭包；目录不存在返回 null，未知目录拒绝接管。</summary>
         internal Ownership Read()
         {
             ResourceBuildOperation.RejectLinks(Root);
@@ -214,15 +249,19 @@ namespace YLFramework.Editor.Resource
             return record;
         }
 
+        /// <summary>检查小写十六进制 SHA-256 形状。</summary>
         private static bool ValidDigest(string value) => value != null && value.Length == 64 && value.All(x => x >= '0' && x <= '9' || x >= 'a' && x <= 'f');
+        /// <summary>检查独立交付目录的随机身份形状。</summary>
         private static bool ValidDeliveryDirectory(string value) => value != null && value.Length == 34 && value.StartsWith("d_", StringComparison.Ordinal) &&
             value.Substring(2).All(x => x >= '0' && x <= '9' || x >= 'a' && x <= 'f');
+        /// <summary>要求交付路径仅由合法独立目录和本项目文件名组成。</summary>
         private bool ValidDeliveryPath(string value)
         {
             var parts = value?.Split('/');
             return parts?.Length == 2 && ValidDeliveryDirectory(parts[0]) && ValidFile(parts[1]);
         }
 
+        /// <summary>检查无路径分隔符且属于本项目原生命名空间的文件名。</summary>
         private bool ValidFile(string name)
         {
             if (string.IsNullOrEmpty(name) || name.IndexOfAny(new[] { '/', '\\' }) >= 0)
@@ -235,6 +274,7 @@ namespace YLFramework.Editor.Resource
                 native.All(x => x >= 'a' && x <= 'z' || x >= 'A' && x <= 'Z' || x >= '0' && x <= '9' || x == '_');
         }
 
+        /// <summary>拒绝工作区中的链接、未知文件和目录，不以文件名合法代替预登记。</summary>
         internal void ValidateContents(Ownership record)
         {
             ResourceBuildOperation.RejectLinks(Root);
@@ -283,6 +323,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>取得排他句柄并在锁内重读归属，仅为新建且无未知内容的根登记身份；调用方负责释放句柄。</summary>
         internal FileStream AcquireLock(ref Ownership record)
         {
             var creating = record == null;
@@ -323,9 +364,11 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>列出本次 Bundle、根 Manifest 及各自文本旁车的完整预期文件集。</summary>
         internal string[] ExpectedFiles() => _map.Bundles.Select(x => x.Name).Append(Leaf)
             .SelectMany(x => new[] { x, x + ".manifest" }).OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
+        /// <summary>先预登记本次可能写出的文件并使旧验证记录失效，再准备原生输出目录。</summary>
         internal void BeginAttempt(Ownership record)
         {
             var expected = ExpectedFiles();
@@ -343,6 +386,7 @@ namespace YLFramework.Editor.Resource
             Directory.CreateDirectory(Output);
         }
 
+        /// <summary>检查目录闭包后在同目录暂存并替换归属记录，不清理部分构建产物。</summary>
         internal void Write(Ownership record)
         {
             ValidateContents(record);
@@ -359,6 +403,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>在创建独立交付目录前登记全部候选路径及其原始字节身份，保留失败尝试而不猜测删除范围。</summary>
         internal string RegisterDelivery(EncryptedOwnership record, FileDigest[] raw, out DeliveryRecord[] pending)
         {
             var directory = "d_" + Guid.NewGuid().ToString("N");
@@ -393,6 +438,7 @@ namespace YLFramework.Editor.Resource
             return directory;
         }
 
+        /// <summary>打开只读句柄并核对长度与全部字节摘要，成功后回到流首；调用方负责释放，失败由本方法关闭。</summary>
         internal static FileStream OpenVerified(string path, long length, string digest, CancellationToken token = default)
         {
             ResourceBuildOperation.RejectLinks(path);

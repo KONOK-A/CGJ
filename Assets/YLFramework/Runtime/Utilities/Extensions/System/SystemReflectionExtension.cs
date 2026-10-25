@@ -15,6 +15,7 @@ namespace YLFramework.Extensions
         /// 通过 Type 创建实例，仅使用公共无参构造函数。
         /// 接口、只有有参构造等找不到公共无参构造时返回 null；
         /// abstract 类型即使声明了公共无参构造，反射调用也会抛 <see cref="MemberAccessException"/>。
+        /// 实例无法转换为 T 时也返回 null，但构造过程已经执行。
         /// </summary>
         /// <typeparam name="T">期望返回的类型，可为接口。</typeparam>
         public static T CreateInstance<T>(this Type self) where T : class
@@ -29,7 +30,7 @@ namespace YLFramework.Extensions
         /// 不查找公共方法、不查找基类 private 方法、不支持泛型方法定义。
         /// 方法不存在返回 null；存在重载歧义时由反射抛 <see cref="AmbiguousMatchException"/>；参数不匹配时由反射抛异常。
         /// </summary>
-        /// <typeparam name="T">方法所属类型（声明类型）。</typeparam>
+        /// <typeparam name="T">用于查找方法的编译期类型，不使用 self 的运行时类型。</typeparam>
         public static object ReflectionCallPrivateMethod<T>(this T self, string methodName, params object[] args)
         {
             var type = typeof(T);
@@ -39,9 +40,9 @@ namespace YLFramework.Extensions
 
         /// <summary>
         /// 调用私有实例方法并转换返回值。方法不存在时结果为 null；
-        /// TReturnType 为值类型且结果为 null 时抛 <see cref="NullReferenceException"/>。
+        /// TReturnType 为非可空值类型且结果为 null 时抛 <see cref="NullReferenceException"/>。
         /// </summary>
-        /// <typeparam name="T">方法所属类型（声明类型）。</typeparam>
+        /// <typeparam name="T">用于查找方法的编译期类型，不使用 self 的运行时类型。</typeparam>
         /// <typeparam name="TReturnType">方法返回值的类型。</typeparam>
         public static TReturnType ReflectionCallPrivateMethod<T, TReturnType>(this T self, string methodName,
             params object[] args)

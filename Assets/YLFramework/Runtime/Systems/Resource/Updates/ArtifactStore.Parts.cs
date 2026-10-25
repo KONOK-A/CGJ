@@ -8,8 +8,10 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>下载分片以源 URL、摘要和归属记录绑定，尚未提升为可挂载的正式版本。</remarks>
     public sealed partial class ArtifactStore
     {
+        // 清理已验证归属的分片及候选记录，未知条目保留并计入错误说明。
         private void CleanupParts(ResourceProjectMount project, List<string> errors)
         {
             var root = System.IO.Path.Combine(ProjectRoot(project.ProjectId), "parts");
@@ -83,6 +85,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 核对分片的归属、源 URL、内容身份及其派生文件名，不验证分片内容 hash。
         private void ValidatePartial(JObject data, string path, ResourceProjectMount project)
         {
             ResourceCatalogCodec.Fields(data, "Version,OwnerId,State,ProjectId,Platform,CatalogDigest,File,Length,Sha256,Source,ETag");
@@ -125,6 +128,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 检查数据路径及 next 记录，允许 ETag 更新但不允许更换目标归属。
         private void ValidatePartialFiles(string metadata, JObject record, ResourceProjectMount project)
         {
             var part = System.IO.Path.ChangeExtension(metadata, ".part");
@@ -175,6 +179,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>创建或重新打开身份完全匹配的分片记录，拒绝认领未登记数据。</summary>
             internal DownloadPart(ArtifactStore store, ResourceRemoteRelease release, string file, long length, string sha256)
             {
                 store.RequireOwner();
@@ -221,6 +226,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 将当前强校验器附加到固定分片身份，生成可持久写入的记录副本。
             private JObject Record(string validator)
             {
                 var data = (JObject)_identity.DeepClone();
@@ -228,6 +234,7 @@ namespace YLFramework.Resource
                 return data;
             }
 
+            // 要求记录与本分片身份完全一致，且非空 ETag 满足强校验器格式。
             private void Validate(JObject data)
             {
                 var etag = ResourceCatalogCodec.Text(data, "ETag", true);
@@ -237,6 +244,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 每次使用前复核 Store、数据路径及正式分片记录未发生归属变化。
             private void Require()
             {
                 _store.RequireOwner();
@@ -247,6 +255,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>先清除持久 ETag，再截断已归属数据，使下一次请求从零开始。</summary>
             internal void Reset()
             {
                 Require();
@@ -257,6 +266,7 @@ namespace YLFramework.Resource
                 output.Flush(true);
             }
 
+            /// <summary>按已确认偏移打开覆写或追加流并更新强 ETag；返回流由调用方关闭。</summary>
             internal FileStream OpenWrite(long offset, string validator)
             {
                 Require();
@@ -289,6 +299,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>实际读取完整分片并验证预期长度和 SHA256，不将 Partial 自动提升为正式版本。</summary>
             internal void Verify(CancellationToken cancellation = default)
             {
                 Require();

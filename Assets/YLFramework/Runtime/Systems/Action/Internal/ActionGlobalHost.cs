@@ -13,6 +13,7 @@ namespace YLFramework.Actions
     // 只承载模块全局消息、协程和 StartGlobal；与调用方对象的生命周期无关。
     internal sealed class ActionGlobalHost : MonoSingletonHost<ActionGlobalHost>
     {
+        /// <summary>将自建全局宿主挂到框架 Action 模块根节点下。</summary>
         protected override Transform HostParent => YLFrameworkRoot.Instance.GetModuleRoot("Action");
         // 由协程动作登记的取消回调；宿主释放时统一调用，确保协程先于宿主被停止和清理。
         private readonly HashSet<Action> _coroutineCancellations = new HashSet<Action>();
@@ -56,13 +57,16 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>绑定当前基础执行会话，模块初始化已提交时连接公共更新源。</summary>
         public override void OnSingletonInit()
         {
             _executionSession = SingletonSessionState.ExecutionSession;
             RefreshUpdateBridge();
         }
 
+        /// <summary>宿主启用时按模块与会话状态尝试连接公共更新源。</summary>
         private void OnEnable() => RefreshUpdateBridge();
+        /// <summary>宿主停用时撤销自己的更新桥接，不清除业务消息订阅。</summary>
         private void OnDisable() => DisconnectUpdateBridge();
 
         // 初始化补丁可以重入取得宿主；只有模块成功提交后才允许连接。
@@ -87,11 +91,13 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>检查宿主存活、启用、模块提交与执行会话身份，拒绝退出或旧会话的更新。</summary>
         private bool CanForwardUpdate() => this && !IsHostReleased && IsCurrentHost && isActiveAndEnabled &&
             !_isQuitting && ActionKit.IsInitialized && !ActionKit.IsShuttingDown &&
             SingletonSessionState.CanRunExecution &&
             ReferenceEquals(_executionSession, SingletonSessionState.ExecutionSession);
 
+        /// <summary>仅在桥接轮次和宿主仍有效且存在监听者时转发一条公共相位通知。</summary>
         private void ForwardUpdate(EasyEvent message, object round)
         {
             if (!ReferenceEquals(_updateRound, round) || !CanForwardUpdate() || !message.HasListener)
@@ -102,6 +108,7 @@ namespace YLFramework.Actions
             message.Trigger();
         }
 
+        /// <summary>失效本轮桥接并尝试撤销三个公共相位订阅，保留其他订阅者的更新。</summary>
         private void DisconnectUpdateBridge()
         {
             // token 注销保留公共在途快照，先失效轮次；只释放本宿主的三个身份。
@@ -127,10 +134,14 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>转发 Unity 的 OnGUI 消息，同帧可通知多次。</summary>
         private void OnGUI() => OnGuiEvent.Trigger();
+        /// <summary>将 Unity 的应用焦点状态传给模块订阅者。</summary>
         private void OnApplicationFocus(bool hasFocus) => OnApplicationFocusEvent.Trigger(hasFocus);
+        /// <summary>将 Unity 的应用暂停状态传给模块订阅者。</summary>
         private void OnApplicationPause(bool pauseStatus) => OnApplicationPauseEvent.Trigger(pauseStatus);
 
+        /// <summary>当前会话宿主退出时关闭执行门禁与更新桥接，再同步通知退出事件。</summary>
         protected override void OnApplicationQuit()
         {
             if (IsHostReleased || !IsCurrentHost || _isQuitting ||
@@ -152,6 +163,9 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <summary>在本宿主启动包装协程，正常结束时同步调用完成回调。</summary>
+        /// <param name="coroutine">交给 Unity 推进的枚举器。</param>
+        /// <param name="onFinish">包装协程结束时调用的可选通知，不提供回调异常隔离。</param>
         public void ExecuteCoroutine(IEnumerator coroutine, Action onFinish)
         {
             StartActionCoroutine(coroutine, onFinish);
@@ -207,6 +221,7 @@ namespace YLFramework.Actions
             onFinish?.Invoke();
         }
 
+        /// <summary>撤销本宿主更新桥接，取消登记的协程动作并清理自有消息与协程。</summary>
         protected override void OnHostRelease()
         {
             try

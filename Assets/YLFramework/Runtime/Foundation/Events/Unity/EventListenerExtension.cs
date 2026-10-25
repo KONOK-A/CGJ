@@ -8,6 +8,10 @@ namespace YLFramework.Events
     /// <see cref="EventListener"/> 的便捷扩展：按 EventType 注册 / 注销鼠标、碰撞与 Trigger 回调，
     /// 注册类方法统一返回 <see cref="IUnregister"/>；注销类方法在组件不存在时为空操作，不会自动创建组件。
     /// </summary>
+    /// <remarks>
+    /// 重复委托分别注册，调用方需保存句柄或显式注销；禁用组件不会自动解绑。
+    /// 此处的取消只作用于代码通道，不修改 Inspector 中的 UnityEvent；分发时序与异常规则由 EventListener 决定。
+    /// </remarks>
     public static class EventListenerExtension
     {
         #region 工具方法
@@ -136,7 +140,7 @@ namespace YLFramework.Events
             return RegisterEvent(com, EventType.OnEndDrag, action);
         }
 
-        /// <summary>注销全部点击类回调（OnClick / OnClickDown / OnClickUp 中的一种）。</summary>
+        /// <summary>注销全部指针点击回调，不包含指针按下或抬起回调。</summary>
         public static void RemoveClick(this Component com)
         {
             UnregisterEvent(com, EventType.OnClick);

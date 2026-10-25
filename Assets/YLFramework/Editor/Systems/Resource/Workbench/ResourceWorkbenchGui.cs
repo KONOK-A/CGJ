@@ -6,56 +6,79 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>跨窗口重载恢复选择所需的定义身份，不以临时 TreeView 行号替代资产身份。</summary>
     [Serializable]
     internal sealed class ResourceWorkbenchRowState
     {
+        /// <summary>选择所属项目配置的 GUID。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("ProjectGuid")]
         public string projectGuid;
+        /// <summary>选择所属分组的技术标识。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Group")]
         public string group;
+        /// <summary>已登记主文件或目录的 GUID。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Guid")]
         public string guid;
+        /// <summary>选择时的分包设置与定义序列化内容，用于拒绝恢复已变化条目。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Definition")]
         public string definition;
+        /// <summary>选择时显示的地址，恢复时须与当前行一致。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Address")]
         public string address;
     }
 
+    /// <summary>工作台窗口自身的布局与选择记忆，不写入 ResourceProject 或运行时配置。</summary>
     [Serializable]
     internal sealed class ResourceWorkbenchLayout
     {
+        /// <summary>分组栏请求宽度，由绘制时约束到可用范围。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("GroupWidth")]
         public float groupWidth = 180;
+        /// <summary>详情栏请求宽度。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("DetailWidth")]
         public float detailWidth = 340;
+        /// <summary>宽窗口是否显示分组栏，不影响分组定义。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("ShowGroups")]
         public bool showGroups = true;
+        /// <summary>宽窗口是否显示条目详情。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("ShowDetails")]
         public bool showDetails = true;
+        /// <summary>窄窗口是否用详情替代列表。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("CompactDetails")]
         public bool compactDetails;
+        /// <summary>当前是否显示项目设置页。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Settings")]
         public bool settings;
+        /// <summary>底部完整输出是否展开。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Output")]
         public bool output;
+        /// <summary>用户请求的输出高度，显示钳制不必覆盖此值。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("OutputHeight")]
         public float outputHeight;
+        /// <summary>当前任务页索引。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Task")]
         public int task;
+        /// <summary>资源表的列宽、可见性和排序记忆。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("Columns")]
         public MultiColumnHeaderState columns;
+        /// <summary>保存行选择时的项目 GUID。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("SelectionProjectGuid")]
         public string selectionProjectGuid;
+        /// <summary>保存选择时的分组标识；为空表示全部分组视图。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("SelectionGroup")]
         public string selectionGroup;
+        /// <summary>主资源表的搜索条件。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("EntrySearch")]
         public string entrySearch;
+        /// <summary>须经当前定义身份复核才能恢复的行选择。</summary>
         [global::UnityEngine.Serialization.FormerlySerializedAs("SelectedRows")]
         public ResourceWorkbenchRowState[] selectedRows;
     }
 
+    /// <summary>共享工作台绘制样式和字段控件，目录缓存仅供显示，不代替正式操作校验。</summary>
     internal static class ResourceWorkbenchGui
     {
+        /// <summary>一次目录显示解析的结果或异常，随项目语义身份和编辑器修订失效。</summary>
         private sealed class DirectoryDisplay
         {
             internal int Revision = -1;
@@ -63,17 +86,21 @@ namespace YLFramework.Editor.Resource
             internal ResourceProjectPaths Paths;
             internal Exception Error;
         }
+        // 弱键避免显示缓存永久持有项目资产；共享订阅属于编辑器域，不随单个窗口开关。
         private static readonly ConditionalWeakTable<ResourceProject, DirectoryDisplay> _directoryDisplays = new();
         private static int _directoryRevision;
 
+        /// <summary>为域内共享目录显示缓存订阅资产变化与 Undo 失效通知。</summary>
         static ResourceWorkbenchGui()
         {
             EditorApplication.projectChanged += InvalidateDirectoryDisplay;
             Undo.undoRedoPerformed += InvalidateDirectoryDisplay;
         }
 
+        /// <summary>推进显示修订号，让下一次访问重新解析而非立即全量扫描。</summary>
         private static void InvalidateDirectoryDisplay() => _directoryRevision++;
 
+        /// <summary>按项目语义身份与修订复用目录显示解析，也保留同次解析异常避免逐帧重复工作。</summary>
         internal static ResourceProjectPaths DisplayPaths(ResourceProject project)
         {
             var display = _directoryDisplays.GetValue(project, _ => new DirectoryDisplay());
@@ -238,6 +265,7 @@ namespace YLFramework.Editor.Resource
         internal static Color Accent => EditorGUIUtility.isProSkin ? new Color(.34f, .65f, .95f) : new Color(.12f, .39f, .68f);
         internal static Color Divider => EditorGUIUtility.isProSkin ? new Color(.13f, .13f, .13f) : new Color(.65f, .65f, .65f);
 
+        /// <summary>按当前编辑器明暗主题延迟创建或重建共享样式。</summary>
         private static void EnsureStyles()
         {
             if (_title != null && _isDark == EditorGUIUtility.isProSkin)
@@ -282,6 +310,7 @@ namespace YLFramework.Editor.Resource
             _selectedRow.normal.textColor = _selectedRow.onNormal.textColor = EditorGUIUtility.isProSkin ? Color.white : new Color(.08f, .25f, .43f);
         }
 
+        /// <summary>绘制带当前项强调的导航条，并返回用户选择。</summary>
         internal static int Navigation(int selected, string[] labels, bool tasks = false, params GUILayoutOption[] options)
         {
             EnsureStyles();
@@ -298,9 +327,11 @@ namespace YLFramework.Editor.Resource
             return GUI.Toolbar(rect, selected, labels, style);
         }
 
+        /// <summary>以统一工具栏尺寸绘制带提示的开关。</summary>
         internal static bool ToolbarToggle(bool selected, string label, float width, string help = null) =>
             EditorGUI.ToggleLeft(EditorGUILayout.GetControlRect(false, FieldHeight, GUILayout.Width(width)), new GUIContent(label, help), selected);
 
+        /// <summary>绘制选中底色与标记，并返回该行的选择状态。</summary>
         internal static bool SelectableRow(Rect rect, bool selected, GUIContent content)
         {
             EnsureStyles();
@@ -313,6 +344,7 @@ namespace YLFramework.Editor.Resource
             return GUI.Toggle(rect, selected, content, selected ? _selectedRow : _row);
         }
 
+        /// <summary>临时强调主要动作按钮，退出后恢复调用方的背景色。</summary>
         internal static bool PrimaryAction(string label, params GUILayoutOption[] options)
         {
             var previous = GUI.backgroundColor;
@@ -327,12 +359,14 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>绘制统一高度的即时或延迟提交文本框，不保存其所属资产。</summary>
         internal static string TextField(string label, string value, bool delayed = false, string help = null)
         {
             var rect = EditorGUILayout.GetControlRect(true, FieldHeight, Field);
             return delayed ? EditorGUI.DelayedTextField(rect, new GUIContent(label, help), value, Field) : EditorGUI.TextField(rect, new GUIContent(label, help), value, Field);
         }
 
+        /// <summary>绘制搜索输入及空值占位提示，提示文本不成为实际搜索条件。</summary>
         internal static string SearchField(string value, string hint, params GUILayoutOption[] options)
         {
             var rect = EditorGUILayout.GetControlRect(false, FieldHeight, Field, options);
@@ -345,14 +379,18 @@ namespace YLFramework.Editor.Resource
             return next;
         }
 
+        /// <summary>绘制仅接受项目资产、不接受场景对象的引用选择框。</summary>
         internal static T ObjectField<T>(string label, T value, string help = null) where T : UnityEngine.Object =>
             (T)EditorGUI.ObjectField(EditorGUILayout.GetControlRect(true, FieldHeight), new GUIContent(label, help), value, typeof(T), false);
 
+        /// <summary>绘制带标签与提示的普通布尔字段。</summary>
         internal static bool Toggle(string label, bool value, string help = null) =>
             EditorGUI.Toggle(EditorGUILayout.GetControlRect(true, FieldHeight), new GUIContent(label, help), value);
 
+        /// <summary>绘制标签可点击的折叠入口，仅返回展开状态。</summary>
         internal static bool Disclosure(bool value, string label) => EditorGUI.Foldout(EditorGUILayout.GetControlRect(true, FieldHeight), value, label, true, Foldout);
 
+        /// <summary>编辑单个序列化属性并递归绘制复合项；应用修改与保存仍由调用方负责。</summary>
         internal static void Property(SerializedProperty property, GUIContent label = null)
         {
             label ??= new GUIContent(PropertyLabel(property), property.tooltip);
@@ -411,6 +449,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>为资源定义字段和数组项生成可读标签，不改变序列化字段名。</summary>
         private static string PropertyLabel(SerializedProperty property)
         {
             if (property.displayName.StartsWith("Element ", StringComparison.Ordinal) && int.TryParse(property.displayName.Substring(8), out var index))
@@ -432,6 +471,7 @@ namespace YLFramework.Editor.Resource
             };
         }
 
+        /// <summary>成对显示指标名称和原值，缺失值明确显示为未知。</summary>
         internal static void Metric(string label, string value, string help = null, float labelWidth = 146)
         {
             EditorGUILayout.BeginHorizontal();
@@ -440,10 +480,13 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>按二进制单位展示逻辑字节，未知值不补成零。</summary>
         internal static string Bytes(long? value) => !value.HasValue ? "未知" : value.Value < 1024 ? value + " B" :
             value.Value < 1024 * 1024 ? (value.Value / 1024d).ToString("F1") + " KiB" : (value.Value / (1024d * 1024)).ToString("F2") + " MiB";
+        /// <summary>将毫秒测量格式化为毫秒或秒，未测量状态保持独立。</summary>
         internal static string Duration(double? value) => !value.HasValue ? "未测量" : value.Value < 1000 ? value.Value.ToString("F1") + " ms" : (value.Value / 1000).ToString("F2") + " s";
 
+        /// <summary>按 GUID 显示和选择来源文件夹，仅做 UI 准入提示；正式目录校验仍由服务执行。</summary>
         internal static string ResourceRootField(SerializedProperty root, string label = "资源目录")
         {
             var path = AssetDatabase.GUIDToAssetPath(root.stringValue);
@@ -499,6 +542,7 @@ namespace YLFramework.Editor.Resource
             return null;
         }
 
+        /// <summary>编辑来源目录登记及地址前缀，不移动文件，也不自动移除受影响的资源条目。</summary>
         internal static string ResourceDirectoriesFields(SerializedObject serialized)
         {
             var directories = serialized.FindProperty("sourceDirectories");
@@ -538,6 +582,7 @@ namespace YLFramework.Editor.Resource
             return error;
         }
 
+        /// <summary>只读提示目录解析问题和失去来源范围的登记项，不修复或保存配置。</summary>
         internal static void DirectoryValidation(ResourceProject project)
         {
             try
@@ -582,6 +627,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>按需展开可复制的原始异常，保留未展开时的紧凑布局。</summary>
         internal static void FailureDetails(Exception error, ref bool expanded)
         {
             if (error == null)
@@ -596,9 +642,11 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>计算可用输出高度，不改写用户请求值，避免窗口缩放丢失布局偏好。</summary>
         internal static float GetOutputHeight(float requested, float windowHeight, bool hasOutput) =>
             Mathf.Clamp(requested > 0 ? requested : hasOutput ? 140 : 56, 48, Mathf.Max(48, Mathf.Min(360, windowHeight - 360)));
 
+        /// <summary>在分隔条捕获鼠标期间更新请求输出高度，结束拖动后释放控件捕获。</summary>
         internal static void HeightSplitter(Rect rect, ref float requested, float displayed, float windowHeight)
         {
             EditorGUI.DrawRect(new Rect(rect.x, rect.center.y, rect.width, 1), Divider);
@@ -624,6 +672,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>换行显示完整值并提供原值复制，不把显示截断或标签混入剪贴板。</summary>
         internal static void CopyLine(string label, string value, float width)
         {
             EnsureStyles();
@@ -639,6 +688,7 @@ namespace YLFramework.Editor.Resource
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>处理横向分隔条拖动，在指定边界和方向内调整栏宽。</summary>
         internal static void Splitter(Rect rect, ref float value, float min, float max, int direction = 1)
         {
             EditorGUI.DrawRect(new Rect(rect.center.x, rect.y, 1, rect.height), Divider);

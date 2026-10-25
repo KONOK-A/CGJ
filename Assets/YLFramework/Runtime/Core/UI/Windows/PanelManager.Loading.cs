@@ -7,6 +7,7 @@ namespace YLFramework.Core
 {
     public partial class PanelManager
     {
+        /// <summary>同步解析并提交打开请求，交付前复核原会话及资源；无论成败都释放本请求输入。</summary>
         internal static T Load<T>(Module owner, string name, GameObject prefab, LoadViewArgs args, UIRootContext root, PanelOverrides overrides) where T : Panel
         {
             var operation = Accept(owner, name, prefab, args, root, overrides, typeof(T), false);
@@ -33,6 +34,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>接受独立异步消费者并启动协程；启动失败也通过该消费者的终态交付。</summary>
         internal static LoadPanelRequest<T> Start<T>(Module owner, string name, GameObject prefab, LoadViewArgs args, UIRootContext root, PanelOverrides overrides) where T : Panel
         {
             var operation = Accept(owner, name, prefab, args, root, overrides, typeof(T), true);
@@ -51,6 +53,7 @@ namespace YLFramework.Core
             return request;
         }
 
+        /// <summary>接管参数、校验打开入口，并固定本次请求的 owner 代次、根与规则快照。</summary>
         private static PanelOperation Accept(Module owner, string name, GameObject prefab, LoadViewArgs args, UIRootContext root,
             PanelOverrides overrides, Type expected, bool asynchronous)
         {
@@ -77,6 +80,7 @@ namespace YLFramework.Core
                 owner.ViewTransactions++;
                 try
                 {
+                    // 优先显式根，再用 Module 绑定；只有引用真正为 null 才继续回退，fake-null 必须报错。
                     var selected = !ReferenceEquals(root, null) ? root : !ReferenceEquals(owner.PanelRoot, null) ? owner.PanelRoot :
                         YLFrameworkRoot.Instance.GetPanelRoot();
                     if (!selected)
@@ -122,6 +126,7 @@ namespace YLFramework.Core
             manager.RefreshInput();
             manager.SyncLateSubscription();
         }
+        /// <summary>撤销根登记并协调依赖它的面板，不创建新的协调器或替代根。</summary>
         internal static void UnregisterRoot(UIRootContext root)
         {
             var manager = _instance;
@@ -134,6 +139,7 @@ namespace YLFramework.Core
             manager.Reconcile();
         }
         internal static void RootChanged() => _instance?.Reconcile();
+        /// <summary>从已有面板的真实祖先查找根；显式挂载不使用 Module 绑定或宿主默认根。</summary>
         internal static UIRootContext RequireAttachedRoot(Panel panel)
         {
             var root = panel.GetComponentInParent<UIRootContext>(true);

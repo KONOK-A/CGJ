@@ -10,6 +10,7 @@ using YLFramework.Excel;
 
 namespace YLFramework.Integrations.Excel.Editor
 {
+    /// <summary>保留工作表单元格列号、协议字段名、列型及描述的列定义。</summary>
     internal sealed class ExcelColumn
     {
         internal string Cell;
@@ -18,6 +19,7 @@ namespace YLFramework.Integrations.Excel.Editor
         internal string Notes;
     }
 
+    /// <summary>读取三行表头的 .xlsx 快照，并保留原行号和源文件哈希。</summary>
     internal sealed class ExcelTable
     {
         internal readonly List<ExcelColumn> Columns = new List<ExcelColumn>();
@@ -25,6 +27,7 @@ namespace YLFramework.Integrations.Excel.Editor
         internal string Source;
         internal string Hash;
 
+        // 解析字段、类型和描述表头，拒绝重复字段与无效列型并跳过完全空白的数据行。
         internal static ExcelTable Read(string path, string sheetName, string excludePrefix = "")
         {
             if (!string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase))
@@ -92,6 +95,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return table;
         }
 
+        // 在校验时点比较文件哈希以拒绝过期预览，不锁定后续写入期间的源文件。
         internal void AssertUnchanged()
         {
             if (Hash != ExcelFiles.Hash(Source))
@@ -99,10 +103,14 @@ namespace YLFramework.Integrations.Excel.Editor
                 throw new InvalidOperationException("Workbook changed after preview; preview again: " + Source);
             }
         }
+        // 统一使用不随区域变化的文本表示，将空值表示为空字符串。
         internal static string Text(object value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        // 按原单元格列号读取值，缺失单元格返回 null。
         internal object Value(IDictionary<string, object> row, ExcelColumn column) => row.TryGetValue(column.Cell, out var value) ? value : null;
+        // 生成含源路径、单元格和字段名的诊断位置。
         internal string Location(int row, ExcelColumn column) => Source + "!" + column.Cell + row + " (" + column.Name + ")";
 
+        // 将三行表头与数据写入一个新工作簿，不保留目标文件原有工作表和格式。
         internal static void Write(string path, IReadOnlyList<ExcelColumn> columns, IEnumerable<IDictionary<string, object>> data, string sheetName)
         {
             if (!string.Equals(Path.GetExtension(path), ".xlsx", StringComparison.OrdinalIgnoreCase))
@@ -120,8 +128,10 @@ namespace YLFramework.Integrations.Excel.Editor
         }
     }
 
+    /// <summary>为 Excel 作者流程提供文件哈希与同目录临时文件替换，不协调多文件事务。</summary>
     internal static class ExcelFiles
     {
+        // 计算存在文件的 SHA-256，文件不存在时返回 null。
         internal static string Hash(string path)
         {
             if (!File.Exists(path))
@@ -136,6 +146,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 先写同目录临时文件，再替换或移动到目标，并清理本次临时文件。
         internal static void WriteAtomic(string path, Action<string> writer)
         {
             path = Path.GetFullPath(path);

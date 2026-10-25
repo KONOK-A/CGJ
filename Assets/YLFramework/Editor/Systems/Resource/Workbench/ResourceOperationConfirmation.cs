@@ -4,8 +4,10 @@ using YLFramework.Resource;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>把正式操作和状态映射为界面说明，不参与状态判断或执行校验。</summary>
     internal static class ResourceEditorText
     {
+        /// <summary>将已记录的操作标识转换为展示名称。</summary>
         internal static string Operation(string value) => value switch
         {
             "BuildOnly" => "仅构建",
@@ -15,6 +17,7 @@ namespace YLFramework.Editor.Resource
             _ => "资源操作"
         };
 
+        /// <summary>描述预检实际覆盖的范围，不将静态通过表述为完整验证。</summary>
         internal static string Preflight(ResourcePreflightResult value) => value?.State switch
         {
             ResourcePreflightState.StaticReady => "配置基础检查通过；资源、密钥和输出将在执行前继续检查。",
@@ -25,8 +28,10 @@ namespace YLFramework.Editor.Resource
             _ => "尚未检查资源。"
         };
 
+        /// <summary>保留原始异常及调用信息供技术详情展示，不改写失败原因。</summary>
         internal static string FailureDetails(System.Exception error) => error == null ? "" : "原始异常与调用信息：\n" + error;
 
+        /// <summary>展示请求状态，缺失状态保持为不适用而非补成成功。</summary>
         internal static string RequestStatus(ResourceRequestStatus? value) => value switch
         {
             ResourceRequestStatus.Pending => "进行中",
@@ -39,12 +44,14 @@ namespace YLFramework.Editor.Resource
         };
     }
 
+    /// <summary>确认窗口中的身份、文件范围和执行约束文本，不承载操作回调。</summary>
     internal sealed class ResourceConfirmationDetails
     {
         internal readonly string Identity;
         internal readonly string Paths;
         internal readonly string Execution;
 
+        /// <summary>保存调用方提供的完整说明，不自行探测或验证文件系统。</summary>
         internal ResourceConfirmationDetails(string identity, string paths, string execution)
         {
             Identity = identity;
@@ -53,6 +60,7 @@ namespace YLFramework.Editor.Resource
         }
     }
 
+    /// <summary>由操作入口提供的确认摘要；内容是告知材料，不是最终安全凭据。</summary>
     internal sealed class ResourceConfirmationSummary
     {
         internal (string Label, string Value)[] Fields = System.Array.Empty<(string, string)>();
@@ -60,6 +68,7 @@ namespace YLFramework.Editor.Resource
         internal string Notice;
         internal ResourceConfirmationDetails Details;
 
+        /// <summary>按本次预检身份及所选构建选项组织影响说明，不执行构建或输出路径预检。</summary>
         internal static ResourceConfirmationSummary Build(ResourcePreflightResult input, string action, bool force, bool generate, string directory) => new()
         {
             Fields = new[] { ("资源项目", input.ProjectId), ("构建平台", input.Platform), ("资源兼容标识（App）", input.AppContentCompatibilityId),
@@ -88,6 +97,7 @@ namespace YLFramework.Editor.Resource
         private bool _showTechnical;
         private bool _showRawScope;
 
+        /// <summary>同步显示模态说明并返回用户是否接受，退出时销毁临时窗口；不执行或授权绕过后续复验。</summary>
         internal static bool Confirm(string title, string message, string positive, ResourceConfirmationSummary summary = null, ResourceConfirmationDetails details = null)
         {
             var window = CreateInstance<ResourceOperationConfirmation>();
@@ -113,6 +123,7 @@ namespace YLFramework.Editor.Resource
             }
         }
 
+        /// <summary>展示摘要与可复制详情，仅确认按钮设置接受结果，关闭和 Esc 保持取消。</summary>
         private void OnGUI()
         {
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
@@ -185,6 +196,7 @@ namespace YLFramework.Editor.Resource
             GUILayout.Space(4);
         }
 
+        /// <summary>按当前窗口宽度显示可选择的完整技术说明，避免长路径只剩截断值。</summary>
         private void DrawSection(string title, string value)
         {
             GUILayout.Space(8);

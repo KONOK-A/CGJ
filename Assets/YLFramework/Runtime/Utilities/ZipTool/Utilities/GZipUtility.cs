@@ -10,6 +10,7 @@ namespace YLFramework.Compression
     /// 截断或损坏的输入会抛出异常（GZipException / EndOfStreamException），不做静默容错；
     /// 例外：完整数据块之后的合法多块（concatenated gzip）会继续解压，无法解析的尾随数据被静默忽略。
     /// </summary>
+    /// <remarks>不限制解压后大小；数组重载在内存中保存完整结果，处理不可信的大输入时应由调用方控制读取与输出量。</remarks>
     public static class GZipUtility
     {
         private const int BufferSize = 81920;
@@ -54,6 +55,7 @@ namespace YLFramework.Compression
 
         /// <summary>
         /// 从 input 读取数据压缩后写入 output；不关闭也不接管调用方传入的流（调用完成后仍可继续使用）。
+        /// 从流的当前位置开始处理，不重置或清空 output；异常时可能已写出部分数据。
         /// </summary>
         public static void Compress(Stream input, Stream output)
         {
@@ -75,7 +77,7 @@ namespace YLFramework.Compression
 
         /// <summary>
         /// 从 input 读取 GZip 数据解压后写入 output；不关闭也不接管调用方传入的流。
-        /// 异常时 output 可能已写入部分数据，由调用方决定如何清理。
+        /// 从流的当前位置开始处理，不重置或清空 output；异常时可能已写入部分数据，由调用方决定如何清理。
         /// </summary>
         public static void Decompress(Stream input, Stream output)
         {
@@ -95,6 +97,7 @@ namespace YLFramework.Compression
             }
         }
 
+        /// <summary>使用固定大小缓冲区复制到输入结束，不关闭流，也不限制累计输出量。</summary>
         private static void CopyStream(Stream input, Stream output)
         {
             var buffer = new byte[BufferSize];

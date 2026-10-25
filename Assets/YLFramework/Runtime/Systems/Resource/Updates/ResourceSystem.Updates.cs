@@ -6,14 +6,18 @@ using UnityEngine;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>版本更新先验证内容，再进入项目取得屏障提交完整闭包；持久提交与内存 Catalog 切换分别处理。</remarks>
     public sealed partial class ResourceSystem
     {
         private readonly HashSet<string> _activationProjects = new(StringComparer.Ordinal);
         private bool _isUpdating;
 
+        /// <summary>判断指定项目是否正处于本主体的激活取得屏障中。</summary>
         internal bool IsProjectBlocked(string project) => project != null && _activationProjects.Contains(project);
 
+        // 从已挂载 Catalog 取得 Store 显式闭包，不扫描磁盘推断当前版本。
         private IEnumerable<ResourceLocalSnapshot> StoreSnapshots() => _configuration.ArtifactStore.Projects.Select(x => _catalogs[x.ProjectId].Snapshot);
+        // 汇总挂载、Bundle、内容工作及未完成验证清理仍持有的快照与保护原因。
         private IEnumerable<(ResourceLocalSnapshot snapshot, ArtifactProtection reason)> HeldStoreVersions()
         {
             foreach (var mount in _configuration.ArtifactStore.Projects)
@@ -51,6 +55,8 @@ namespace YLFramework.Resource
         }
 
         /// <summary>本地只读检查。targetClosure 必须明确列出 store 的全部项目及目标摘要，未变化项目也不可省略。</summary>
+        /// <param name="targetClosure">在主线程展开一次的完整目标快照集合。</param>
+        /// <remarks>文件验证由内容工作执行；请求交回前复核来源仍未改变，取消不执行恢复或安装。</remarks>
         public ResourceRequest<UpdatePlan> CheckUpdatesAsync(IEnumerable<ResourceLocalSnapshot> targetClosure)
         {
             CheckThread();
@@ -66,6 +72,7 @@ namespace YLFramework.Resource
             Track(request);
             request.Attach(() => work?.Cancel(), null);
 
+            // 在主线程交接检查结果，并在通知调用方前结束本次版本操作状态。
             void Complete(UpdatePlan plan, Exception failure)
             {
                 RetainContentFailureOwners(failure);
@@ -124,6 +131,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        // 交付计划前同时复核会话、Store 转换身份及当前内存来源闭包。
         private void RequireCheckedFrom(UpdatePlan plan)
         {
             if (!IsSessionActive)
@@ -140,6 +148,9 @@ namespace YLFramework.Resource
         }
 
         /// <summary>复制到自有 staging，完整验证后安装。取消和失败都不写 active；不提供 HTTP/签名降级入口。</summary>
+        /// <param name="plan">本 Store 检查得到的本地或远端完整更新计划。</param>
+        /// <param name="cancellation">取消本次准备等待与内容工作；已安装版本或分片可保留供后续使用。</param>
+        /// <remarks>准备成功只发布完整准备记录，不代表目标已激活；远端计划通过共享下载流水线执行。</remarks>
         public ResourceRequest<PreparedUpdate> PrepareUpdateAsync(UpdatePlan plan, CancellationToken cancellation = default)
         {
             CheckThread();
@@ -161,6 +172,8 @@ namespace YLFramework.Resource
                 plan?.Projects.SelectMany(x => new[] { x.From, x.Target }));
         }
 
+        /// <summary>枚举 Store 持久准备结果并重开其版本，要求本主体及 Store 当前可用。</summary>
+        /// <remarks>底层可能清理已归属的 next 元数据，待恢复 journal 会阻止枚举。</remarks>
         public IReadOnlyList<PreparedUpdate> GetPreparedUpdates()
         {
             CheckThread();
@@ -173,6 +186,7 @@ namespace YLFramework.Resource
         }
 
         /// <summary>显式请求 last-known-good，走与普通激活相同的 native 安全边界；不是旧 PreparedUpdate 的降级通道。</summary>
+        /// <remarks>回滚目标是上一完整闭包而非各项目各自旧版；不降低已确认发布序号门槛。</remarks>
         public ResourceRequest<bool> RollbackAsync()
         {
             CheckThread();
@@ -195,8 +209,10 @@ namespace YLFramework.Resource
 
         /// <summary>
         /// 默认不热共存同项目 native Bundle。任何 live/pending 责任返回 Busy；idle 退休后延迟 Destroy 尚未完成也须重试。
-        /// 不取消别人的请求，不归还外部 lease，不修改应用场景。所有失败路径都恢复旧项目的取得入口。
+        /// 不取消别人的请求，不归还外部 lease，不修改应用场景。收尾时解除取得屏障，提交异常按恢复结果同步内存。
         /// </summary>
+        /// <param name="update">本 Store 的完整准备结果，或显式构造的 LKG 回滚身份。</param>
+        /// <remarks>异常可能发生在持久决策之后，不能据此认定整体回滚；恢复到非目标闭包不会报告激活成功。</remarks>
         public ResourceRequest<bool> ActivatePreparedUpdateAsync(PreparedUpdate update)
         {
             CheckThread();
@@ -228,6 +244,7 @@ namespace YLFramework.Resource
                 receipt => CommitContentUpdate(update, receipt));
         }
 
+        // 完整目标验证后阻止新取得并检查真实 native 责任，再提交并按持久恢复结果更新内存。
         private bool CommitContentUpdate(PreparedUpdate update, ArtifactStore.ValidationReceipt receipt)
         {
             var store = _configuration.ArtifactStore;
@@ -318,6 +335,7 @@ namespace YLFramework.Resource
             return true;
         }
 
+        // 串联可取消安装、输入捕获、内容验证与主线程交接，并保留清理失败的输入责任。
         private ResourceRequest<T> RunUpdateContent<T>(ResourceRequest<T> request, Func<ArtifactStore.ValidationReceipt> capture,
             Func<ArtifactStore.ValidationReceipt, T> complete, CancellationToken cancellation = default,
             Action<CancellationToken> install = null, IEnumerable<ResourceLocalSnapshot> installationSnapshots = null)
@@ -329,6 +347,7 @@ namespace YLFramework.Resource
             Track(request);
             request.Attach(() => work?.Cancel(), null);
 
+            // 只结算一次请求；尝试释放验证输入并保留失败责任后解除屏障，再交付终态。
             void Finish(Exception failure)
             {
                 if (finished)
@@ -390,6 +409,7 @@ namespace YLFramework.Resource
                 CheckDrain();
             }
 
+            // 在主线程捕获验证责任，再将固定收据交给内容工作完成验证。
             void Validate()
             {
                 try
@@ -454,6 +474,7 @@ namespace YLFramework.Resource
             return request;
         }
 
+        // 尝试释放验证收据，无法释放的输入由主体继续持有并保留在错误链中。
         private Exception ReleaseUpdateValidation(ArtifactStore.ValidationReceipt receipt, Exception failure)
         {
             RetainContentFailureOwners(failure);
@@ -475,8 +496,12 @@ namespace YLFramework.Resource
             return failure;
         }
 
+        /// <summary>按运行中责任及持久记录重新计算保护，清理已归属的闲置版本、staging 和分片。</summary>
+        /// <remarks>当前清理在调用线程执行并返回请求结果；不是整批回滚式删除，也不采用旧查询报告作为删除授权。</remarks>
         public ResourceRequest<VersionCleanupResult> CleanupVersionsAsync() => UpdateRequest(() => _configuration.ArtifactStore.Cleanup(HeldStoreVersions().Select(x => x.snapshot).Distinct()));
 
+        /// <summary>读取本主体当前挂载的 Catalog 摘要，不重新读取磁盘 active 指针。</summary>
+        /// <param name="projectId">已知资源项目标识。</param>
         public string GetActiveCatalogDigest(string projectId)
         {
             CheckThread();
@@ -488,12 +513,14 @@ namespace YLFramework.Resource
             return catalog.CatalogDigest;
         }
 
+        // 按 Store 显式类型配置创建 Catalog，并校验快照适用的运行平台。
         private ResourceCatalog CreateStoreCatalog(ResourceLocalSnapshot snapshot)
         {
             ValidateSnapshotPlatform(snapshot);
             return snapshot.CreateCatalog(_configuration.ArtifactStore.Projects.Single(x => x.ProjectId == snapshot.Document.ProjectId).AssetTypes);
         }
 
+        // 拒绝不可用、未配置 Store 或已有本地及远端版本操作的更新入口。
         private bool CanUpdate(out ResourceException error)
         {
             error = !IsAvailable ? new ResourceException(ResourceError.SessionUnavailable, "ResourceSystem is not available.") :
@@ -502,6 +529,7 @@ namespace YLFramework.Resource
             return error == null;
         }
 
+        // 在版本操作标记内同步执行本地操作，将结果或异常转换为请求状态。
         private ResourceRequest<T> UpdateRequest<T>(Func<T> operation)
         {
             CheckThread();
@@ -538,7 +566,9 @@ namespace YLFramework.Resource
             return request;
         }
 
+        // 保留已有资源错误分类，其他异常包装为版本更新失败。
         private static ResourceException AsUpdateError(Exception cause) => cause as ResourceException ?? new ResourceException(ResourceError.UpdateFailed, "Resource version operation failed.", cause);
+        // 为尚未启动的本地版本操作构造失败请求，保留原资源错误种类。
         private static ResourceRequest<T> UpdateFailure<T>(Exception cause) => Fail(new ResourceRequest<T>(),
             cause is ResourceException resource ? resource.Kind : ResourceError.UpdateFailed, "Local resource version operation failed.", cause: cause);
     }

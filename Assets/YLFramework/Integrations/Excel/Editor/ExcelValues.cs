@@ -14,8 +14,10 @@ using YLFramework.Excel;
 
 namespace YLFramework.Integrations.Excel.Editor
 {
+    /// <summary>在列协议与模型字段之间转换值，解析稳定行键并生成原字段状态快照。</summary>
     internal static class ExcelValues
     {
+        // 沿继承链收集可参与字段转换的实例字段，不把此筛选等同于 Unity 完整序列化资格。
         internal static List<FieldInfo> Fields(Type type, bool includeIgnored = false)
         {
             var fields = new List<FieldInfo>();
@@ -49,6 +51,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return fields;
         }
 
+        // 优先选取唯一显式 ID 标记，否则使用名称忽略大小写匹配 id 的字段。
         internal static FieldInfo Id(Type type)
         {
             var fields = Fields(type);
@@ -61,6 +64,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return marked.Length == 1 ? marked[0] : fields.FirstOrDefault(f => f.Name.Equals("id", StringComparison.OrdinalIgnoreCase));
         }
 
+        // 将模型字段映射为工作簿协议列名。
         internal static string ColumnName(FieldInfo field)
         {
             // 仅本轮迁移的自有领域字段沿用旧表头；不把用户模型的 Unity 别名扩展为 Excel 协议。
@@ -74,6 +78,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return field.GetCustomAttributes<FormerlySerializedAsAttribute>().SingleOrDefault()?.oldName ?? field.Name;
         }
 
+        // 将 CLR 字段类型归入列型，非标量且非 Unity 对象的类型按 JSON 处理。
         internal static ExcelFieldsType FieldType(Type type)
         {
             if (type.IsEnum)
@@ -119,6 +124,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return ExcelFieldsType.Json;
         }
 
+        // 在无目标 CLR 字段时按列型解析值；枚举和资产引用保留为文本，引用仅校验格式。
         internal static object Primitive(object raw, ExcelFieldsType type)
         {
             string text = ExcelTable.Text(raw);
@@ -176,6 +182,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 优先调用字段自定义转换，否则严格匹配列型后将值写入暂存对象字段。
         internal static void Import(object target, FieldInfo field, object raw, ExcelFieldsType type)
         {
             var custom = field.GetCustomAttribute<CustomExcelFieldImportAndExport>();
@@ -226,6 +233,7 @@ namespace YLFramework.Integrations.Excel.Editor
             field.SetValue(target, value);
         }
 
+        // 使用自定义转换或默认协议导出字段，长整型和浮点数以文本避免工作簿精度损失。
         internal static object Export(object target, FieldInfo field)
         {
             var value = field.GetValue(target);
@@ -269,6 +277,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return value;
         }
 
+        // 以非空 ID 文本作为行键；允许无 ID 的普通列表使用位置键，不替代稳定业务身份。
         internal static string Key(object value, int index, bool requireId = false)
         {
             if (value == null)
@@ -298,6 +307,7 @@ namespace YLFramework.Integrations.Excel.Editor
         // 差异及并发保护都比较原字段，不能让有损导出或Ignore掩盖实际写入变化。
         internal static string State(object value) => JsonConvert.SerializeObject(Fields(value.GetType(), true).ToDictionary(f => f.Name,
             f => typeof(Object).IsAssignableFrom(f.FieldType) ? f.GetValue(value) == null ? string.Empty : Reference(f.GetValue(value) as Object) : f.GetValue(value)));
+        // 接受空引用或 GUID[:localFileID] 文本格式，不在此检查资产存在性。
         internal static void ValidateReference(string text)
         {
             if (text.Length > 0 && !Regex.IsMatch(text, @"\A[0-9a-fA-F]{32}(:-?[0-9]+)?\z"))
@@ -305,6 +315,7 @@ namespace YLFramework.Integrations.Excel.Editor
                 throw new FormatException("Invalid asset GUID[:localFileID]: " + text);
             }
         }
+        // 按 GUID 及可选 localFileID 加载类型匹配的真实资产，拒绝缺失或身份不匹配。
         private static Object ResolveReference(string text, Type type)
         {
             var parts = text.Split(':');
@@ -331,6 +342,7 @@ namespace YLFramework.Integrations.Excel.Editor
 
             return value;
         }
+        // 生成可重新解析为同一持久资产的引用文本，拒绝仅存于内存的对象。
         private static string Reference(Object value)
         {
             if (value == null)

@@ -49,6 +49,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
         private static bool IsEditorBusy => EditorApplication.isCompiling || EditorApplication.isUpdating ||
             EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer;
 
+        // 初始化窗口尺寸及只读状态，并订阅配置撤销通知。
         private void OnEnable()
         {
             minSize = new Vector2(540, 440);
@@ -56,14 +57,17 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Undo.undoRedoPerformed += ConfigurationChanged;
         }
 
+        // 解绑撤销通知并放弃尚未执行的界面动作。
         private void OnDisable()
         {
             Undo.undoRedoPerformed -= ConfigurationChanged;
             _pendingAction = null;
         }
 
+        // 将工程资产变化反映到配置检查快照的过期状态。
         private void OnProjectChange() => ConfigurationChanged();
 
+        // 标记已有检查过期并重绘，不因变化自动重跑检查或保存。
         private void ConfigurationChanged()
         {
             if (_inspection != null)
@@ -74,6 +78,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Repaint();
         }
 
+        // 只读取官方安装状态和全局登记名单，失败分别保留诊断。
         private void ReadOfficialStatus()
         {
             try
@@ -100,9 +105,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 通过菜单打开集成窗口，不触发安装或构建。
         [MenuItem("YLFramework/Integrations/HybridCLR")]
         private static void Open() => GetWindow<HybridCLRWindow>("HybridCLR");
 
+        // 绘制当前任务页并在布局作用域退出后执行用户明确选择的动作。
         private void OnGUI()
         {
             EnsureStyles();
@@ -170,6 +177,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 显示官方状态及显式设置、安装器和刷新入口。
         private void DrawHeader()
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -190,6 +198,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 显示配置选择和独立新建、保存按钮，以及所引用资产的保存状态。
         private void DrawProfileBar()
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -218,6 +227,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             GUILayout.Space(6);
         }
 
+        // 根据窗口宽度绘制任务导航，切页动作留待布局结束执行。
         private void DrawNavigation()
         {
             page = Mathf.Clamp(page, 0, _pages.Length - 1);
@@ -254,6 +264,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             GUILayout.Space(8);
         }
 
+        // 未选择配置时显示创建引导，通知调用方停止绘制配置相关内容。
         private bool DrawProfileGuide()
         {
             if (profile)
@@ -272,6 +283,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return true;
         }
 
+        // 通过可撤销的序列化编辑展示配置、入口及资源关联操作，不隐式保存。
         private void DrawConfiguration()
         {
             if (DrawProfileGuide())
@@ -326,6 +338,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 只读展示 Recipe 提供的项目、目标和兼容身份，避免另建身份来源。
         private void DrawResourceIdentity(ResourceBuildRecipe recipe)
         {
             GUILayout.Space(6);
@@ -360,6 +373,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             GUILayout.Label("兼容身份来自 Recipe；修改冻结基座的身份或原生要求后，应新建基座，不能作为普通补丁发布。", _secondaryStyle, GUILayout.MinWidth(0));
         }
 
+        // 绘制指定序列化目录字段，并提供延后执行的路径选择动作。
         private void DrawDirectoryProperty(SerializedObject serialized, string propertyName, string label, bool assetsOnly)
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -371,6 +385,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 分开展示只读全局登记与可编辑项目入口，空集合明确表示使用全部。
         private void DrawAssemblies()
         {
             using (new EditorGUILayout.VerticalScope(_cardStyle))
@@ -450,6 +465,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 展示原生检查、新基座、补丁和部署入口，绑定共享基座时禁用新建基座。
         private void DrawBuild()
         {
             if (DrawProfileGuide())
@@ -509,6 +525,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             GUILayout.Label("签名与解密密钥由应用通过 headless API 提供，不在窗口或资产中保存。", _secondaryStyle, GUILayout.MinWidth(0));
         }
 
+        // 展示 Editor 忙碌、编译错误和配置保存门禁，不把按钮可用当作原生验证通过。
         private void DrawReadiness()
         {
             if (IsEditorBusy)
@@ -534,6 +551,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 显示检查快照、原始异常及实际阶段结果，不为未执行步骤推断成功。
         private void DrawDiagnostics()
         {
             using (new EditorGUILayout.VerticalScope(_cardStyle))
@@ -631,6 +649,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 展示最近一次显式配置检查及其过期提示、依赖和警告。
         private void DrawInspection()
         {
             if (_inspection == null)
@@ -659,6 +678,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Copyable("自动包含的依赖", _inspection.Dependencies.Length == 0 ? "无" : string.Join("\n", _inspection.Dependencies));
         }
 
+        // 提供独立于 Profile 的源码导出设置，不生成样例或构建产物。
         private void DrawExport()
         {
             using (new EditorGUILayout.VerticalScope(_cardStyle))
@@ -678,6 +698,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 切换当前配置并清除旧诊断快照，不保存或修改被选择资产。
         private void SelectProfile(HybridCLRBuildProfile value)
         {
             profile = value;
@@ -689,12 +710,14 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             _scroll = Vector2.zero;
         }
 
+        // 进入任务页时从页首展示，避免沿用上一页的滚动偏移。
         private void ChangePage(int value)
         {
             page = value;
             _scroll = Vector2.zero;
         }
 
+        // 经用户选址创建独立配置组，并将新 Profile 设为当前配置。
         private void CreateProfile()
         {
             RequireIdleEditor();
@@ -709,6 +732,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Notify("已创建并保存 Profile、Recipe 与 Project，已关联其自有生成目录。请按项目需求选择程序集入口并检查配置。");
         }
 
+        // 仅保存当前 Project、Recipe 和 Profile，并确认未残留脏标记。
         private void SaveProfile()
         {
             RequireIdleEditor();
@@ -724,6 +748,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Notify("已逐一保存当前 Project、Recipe 与 Profile，未保存其他资产。");
         }
 
+        // 显式关联生成资源并使检查过期，将保存决定留给用户。
         private void MapGeneratedResources()
         {
             RequireIdleEditor();
@@ -733,6 +758,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Notify("已关联生成资源，仅修改 Resource Project，可撤销。请点击顶部“保存”保存修改。", MessageType.Warning);
         }
 
+        // 显式刷新官方状态与配置快照，并转到诊断页展示结果。
         private void InspectProfile()
         {
             RequireIdleEditor();
@@ -745,6 +771,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             ChangePage(2);
         }
 
+        // 在已保存配置上执行严格原生环境预检，不生成代码或 Player。
         private void ValidateNative()
         {
             RequireProfile(true);
@@ -752,6 +779,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             ReadOfficialStatus();
         }
 
+        // 经确认后把精确场景与 Player 输出选项交给新基座管线。
         private void BuildBase()
         {
             RequireProfile(true);
@@ -781,6 +809,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }));
         }
 
+        // 经确认后按冻结基座发布项目补丁，不自动部署。
         private void PublishPatch()
         {
             RequireProfile(true);
@@ -792,6 +821,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             SetReport("发布项目补丁", HybridCLRBuildPipeline.PublishPatch(profile));
         }
 
+        // 经确认并完成预检后部署当前 Recipe 的已发布版本，原样记录部署错误。
         private void Deploy()
         {
             RequireProfile(true);
@@ -823,6 +853,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             SetReport("部署内置资源", result);
         }
 
+        // 显式导出所选源码集合，沿用默认不覆盖的导出门禁。
         private void Export()
         {
             RequireIdleEditor();
@@ -830,6 +861,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Notify("已导出可选集成包：" + packagePath);
         }
 
+        // 只打开官方 Installer 菜单，安装行为仍需用户在官方界面发起。
         private void OpenInstaller()
         {
             RequireIdleEditor();
@@ -839,6 +871,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 修改单个项目入口，拒绝用取消最后一项隐式恢复官方全量。
         private void ToggleRoot(string name, bool selected)
         {
             var roots = profile.hotUpdateAssemblies ?? Array.Empty<string>();
@@ -851,6 +884,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             WriteRoots(next);
         }
 
+        // 通过 SerializedObject 写入项目入口数组，使改动支持 Undo 且不隐式保存。
         private void WriteRoots(string[] roots)
         {
             RequireIdleEditor();
@@ -871,12 +905,15 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        /// <summary>仅用于读取所选 asmdef 名称的最小 JSON 数据结构。</summary>
         [Serializable]
         private sealed class AssemblyDefinition
         {
+            /// <summary>asmdef 文件声明的程序集名称。</summary>
             public string name = "";
         }
 
+        // 从明确选择的 asmdef 或托管 DLL 取得入口名称，不自动登记官方全局集合。
         private void AddAssemblyAsset()
         {
             RequireIdleEditor();
@@ -906,6 +943,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             Notify(registered ? "已添加项目入口：" + name + "。请保存并检查配置以解析依赖。" : "已添加项目入口：" + name + "，但尚未在官方集合登记。请自行登记后刷新并检查配置，窗口未修改官方设置。", registered ? MessageType.Info : MessageType.Warning);
         }
 
+        // 经用户选址写入目录字段；生成资源目录必须位于当前 Assets 下。
         private void PickDirectory(string propertyName, string current, string label, bool assetsOnly)
         {
             RequireIdleEditor();
@@ -934,6 +972,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 仅选择 Windows Player 输出路径，实际新目录门禁由构建管线复核。
         private void PickPlayerPath()
         {
             var path = EditorUtility.SaveFilePanel("选择新的 Windows Player", DialogDirectory(playerPath), string.IsNullOrWhiteSpace(playerPath) ? "Game" : Path.GetFileNameWithoutExtension(playerPath), "exe");
@@ -943,6 +982,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 仅选择本地 unitypackage 输出路径，不立即导出。
         private void PickPackagePath()
         {
             var path = EditorUtility.SaveFilePanel("导出可选 HybridCLR 集成", DialogDirectory(packagePath), "YLFramework.HybridCLR", "unitypackage");
@@ -952,6 +992,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 为选择对话框找到最近存在的祖先目录，缺省回到工程根。
         private static string DialogDirectory(string path)
         {
             if (!string.IsNullOrWhiteSpace(path))
@@ -970,18 +1011,24 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return Path.GetDirectoryName(Application.dataPath);
         }
 
+        // 判断当前配置是否显式绑定其他基座拥有者。
         private bool HasSharedBase() => profile && profile.baseProfile;
 
+        // 提供界面的最低执行门禁，完整原生环境仍由管线验证。
         private bool CanRunNative() => !IsEditorBusy && !EditorUtility.scriptCompilationFailed && AreAssetsSaved();
 
+        // 确认当前配置组均为已保存且未修改的资产。
         private bool AreAssetsSaved() => profile && profile.recipe && profile.recipe.project &&
             IsSaved(profile) && IsSaved(profile.recipe) && IsSaved(profile.recipe.project);
 
+        // 以 Unity 存活语义、资产路径和脏标记判断保存状态。
         private static bool IsSaved(UnityEngine.Object asset) => asset && !string.IsNullOrEmpty(AssetDatabase.GetAssetPath(asset)) && !EditorUtility.IsDirty(asset);
 
+        // 为配置栏区分未引用、未落盘、已修改和已保存状态。
         private static string AssetState(UnityEngine.Object asset) => !asset ? "未引用" :
             string.IsNullOrEmpty(AssetDatabase.GetAssetPath(asset)) ? "未保存为资产" : EditorUtility.IsDirty(asset) ? "有未保存修改" : "已保存";
 
+        // 要求完整落盘的配置引用，原生动作还须通过空闲、编译和无脏修改门禁。
         private void RequireProfile(bool requireClean)
         {
             if (!profile)
@@ -1021,6 +1068,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 拒绝在编译、导入、Play 或 Player 构建期间执行显式动作。
         private static void RequireIdleEditor()
         {
             if (IsEditorBusy)
@@ -1029,6 +1077,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 保存实际管线报告及配置上下文，默认展开失败阶段并转到诊断页。
         private void SetReport(string operation, HybridCLRBuildReport value)
         {
             _report = value;
@@ -1040,6 +1089,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             ChangePage(2);
         }
 
+        // 更新操作提示并清除上一次未捕获动作异常的展示状态。
         private void Notify(string text, MessageType type = MessageType.Info)
         {
             _notice = text;
@@ -1048,6 +1098,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             _showFailure = false;
         }
 
+        // 任务卡片的统一标题区。
         private void CardHeading(string title, string description)
         {
             GUILayout.Label(title, EditorStyles.boldLabel);
@@ -1055,6 +1106,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             GUILayout.Space(6);
         }
 
+        // 绘制只读身份指标，空值明确显示未设置。
         private void Metric(string label, string value)
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -1064,6 +1116,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 展示可选择的诊断文本，并将复制动作留待布局结束。
         private void Copyable(string label, string value, bool raw = false)
         {
             value = value ?? "";
@@ -1078,6 +1131,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             EditorGUILayout.SelectableLabel(value, style, GUILayout.MinWidth(0), GUILayout.Height(Mathf.Max(22, style.CalcHeight(new GUIContent(value), Mathf.Max(180, position.width - 70)))));
         }
 
+        // 将点击转换为单个待执行动作，绘制期间不直接运行副作用。
         private void ActionButton(string label, Action action, float width)
         {
             if (GUILayout.Button(label, _buttonStyle, GUILayout.Width(width)))
@@ -1086,6 +1140,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 按当前明暗主题复用或重建窗口局部样式。
         private void EnsureStyles()
         {
             if (_titleStyle != null && _isDarkStyle == EditorGUIUtility.isProSkin)
@@ -1111,6 +1166,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             };
         }
 
+        // 将已知阶段标识映射为界面名称，未知标识原样保留。
         private static string StageName(string name)
         {
             switch (name)
@@ -1152,6 +1208,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             }
         }
 
+        // 沿内部异常识别 IMGUI 退出信号，避免把正常布局退出当作操作失败。
         private static bool IsExitGui(Exception error)
         {
             while (error != null)
@@ -1166,6 +1223,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             return false;
         }
 
+        // 执行布局后的动作并展示普通异常，保留 ExitGUI 控制流。
         private void Run(Action operation)
         {
             try

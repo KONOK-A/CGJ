@@ -6,8 +6,10 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>激活通过 journal 决策和完整闭包镜像恢复；版本清理按已登记归属逐项执行，不回滚已完成的删除。</remarks>
     public sealed partial class ArtifactStore
     {
+        /// <summary>同步捕获并验证准备结果的内容，再提交完整闭包转换。</summary>
         internal IReadOnlyList<ResourceLocalSnapshot> Commit(PreparedUpdate update, ResourceDecryptionOptions decryption = null)
         {
             using var receipt = CaptureCommit(update, decryption);
@@ -15,6 +17,7 @@ namespace YLFramework.Resource
             return CommitValidated(update, receipt);
         }
 
+        /// <summary>恢复既有事务并核对来源及当前准备授权，随后在锁外捕获本次提交验证输入。</summary>
         internal ValidationReceipt CaptureCommit(PreparedUpdate update, ResourceDecryptionOptions decryption = null, ResourceContentBudget budget = null)
         {
             if (update == null || update.Root != RootPath)
@@ -38,6 +41,7 @@ namespace YLFramework.Resource
             return ValidationReceipt.Capture(this, update, targets, sources, decryption, budget);
         }
 
+        // 普通提交读取当前持久准备授权而非旧句柄副本；显式回滚必须仍匹配当前完整 LKG。
         private ResourceRemoteRelease[] CommitReleases(PreparedUpdate update)
         {
             if (update.IsRollback)
@@ -68,6 +72,8 @@ namespace YLFramework.Resource
             return releases;
         }
 
+        /// <summary>以已验证收据写入 journal、更新闭包镜像并落下 Committed 决策，再完成恢复收尾。</summary>
+        /// <remarks>决策前后异常均可能留下待恢复状态；异常本身不等于目标已回滚或尚未提交。</remarks>
         internal IReadOnlyList<ResourceLocalSnapshot> CommitValidated(PreparedUpdate update, ValidationReceipt receipt)
         {
             receipt.Require(this, update);
@@ -140,6 +146,7 @@ namespace YLFramework.Resource
             return Select(false);
         }
 
+        // 从已校验转换的 From 或 To 一侧生成完整项目索引。
         private JObject TransitionIndex(JArray transition, string field) => new()
         {
             ["Version"] = 1,
@@ -152,6 +159,7 @@ namespace YLFramework.Resource
             }))
         };
 
+        // 校验 journal 决策、完整转换与原索引，并拒绝降低已确认历史的门槛描述。
         private JObject ValidateJournal(JObject journal)
         {
             var version = ResourceCatalogCodec.Integer(journal, "Version");
@@ -189,6 +197,7 @@ namespace YLFramework.Resource
             return journal;
         }
 
+        // 每个受保护写入前复核根归属及正式 journal 仍与本次决策一致。
         private void RequireJournal(JObject expected)
         {
             RequireOwner();
@@ -198,6 +207,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 存在任何 journal 占位时拒绝开始新的转换，要求先进入恢复边界。
         private void RequireNoJournal()
         {
             if (Exists(JournalPath))
@@ -206,6 +216,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // Verified 恢复原指针；Committed 优先完成目标，目标文件失败时复验来源后恢复原闭包。
         private void RecoverLocked(bool refresh = true)
         {
             if (!ValidateOwner())
@@ -272,6 +283,7 @@ namespace YLFramework.Resource
             Checkpoint?.Invoke("Recovered");
         }
 
+        // 只清理具备固定控制槽或正式记录归属依据的 next 候选，不把它们提升为决策。
         private void RecoverMetadata()
         {
             RequireOwner();
@@ -308,6 +320,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 删除有外部归属依据的未提交候选；完整候选仍须验证，不能删除异主有效记录。
         private void RemoveCandidate(string path, Action<JObject> validate)
         {
             if (!Exists(path))
@@ -337,6 +350,7 @@ namespace YLFramework.Resource
             File.Delete(path);
         }
 
+        // 在已归属控制槽内恢复或删除单个镜像，保护回调仍在实际写入前复核。
         private void RestorePointer(string project, string name, JObject index, Action guard = null)
         {
             var path = Path.Combine(ProjectRoot(project), name);
@@ -382,6 +396,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 验证准备记录的归属、完成状态、转换路径身份及可选远端授权。
         private void ValidatePreparedRecord(JObject record, string path)
         {
             var version = ResourceCatalogCodec.Integer(record, "Version");
@@ -398,6 +413,9 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>显式删除该完整转换的持久准备记录，不删除版本文件或改写 active。</summary>
+        /// <param name="update">属于本 Store 的准备身份；相同转换的其他旧句柄也将失去此准备记录。</param>
+        /// <remarks>可能先清理已归属的 next 元数据；版本能否删除仍由独立清理流程重新判断。</remarks>
         public void DiscardPreparedUpdate(PreparedUpdate update)
         {
             if (update == null || update.Root != RootPath)
@@ -412,6 +430,7 @@ namespace YLFramework.Resource
             RemovePreparedRecord(Transition(update.Projects));
         }
 
+        // 按完整转换定位准备槽，复核归属后删除正式记录。
         private void RemovePreparedRecord(JArray transition)
         {
             var path = PreparedPath(transition);
@@ -425,6 +444,7 @@ namespace YLFramework.Resource
             File.Delete(path);
         }
 
+        /// <summary>将当前闭包到完整 LKG 的转换包装为显式回滚身份，尚不提交指针。</summary>
         internal PreparedUpdate Rollback(IEnumerable<ResourceLocalSnapshot> current)
         {
             using var guard = Enter(false);
@@ -442,6 +462,7 @@ namespace YLFramework.Resource
             return new PreparedUpdate(RootPath, entries, true);
         }
 
+        /// <summary>合并运行中与持久保护后清理已归属的版本、staging 和下载分片，保留未知内容。</summary>
         internal VersionCleanupResult Cleanup(IEnumerable<ResourceLocalSnapshot> held)
         {
             using var guard = Enter(false);
@@ -524,6 +545,7 @@ namespace YLFramework.Resource
             return new VersionCleanupResult(deleted, protectedPaths, errors);
         }
 
+        // 校验 staging 的 Store、项目平台、尝试目录身份及登记文件集合。
         private void ValidateStage(JObject marker, string project, string attempt)
         {
             ResourceCatalogCodec.Fields(marker, "Version,OwnerId,ProjectId,Platform,CatalogDigest,Attempt,Files");
@@ -539,6 +561,7 @@ namespace YLFramework.Resource
             RegisteredFiles(marker);
         }
 
+        // 预检整个已知文件集合后逐项删除并最后删标记；中途 IO 失败不恢复此前已删文件。
         private void DeleteKnownDirectory(string path, string markerName, JObject marker, IEnumerable<string> files)
         {
             RequireOwner();
@@ -565,6 +588,7 @@ namespace YLFramework.Resource
             Directory.Delete(path);
         }
 
+        // 枚举普通且在白名单内的直属文件，未知条目或链接会中止枚举。
         private static IEnumerable<string> KnownDirectoryFiles(string path, HashSet<string> allowed)
         {
             ResourceLocalSnapshot.RejectLinks(path);
@@ -580,6 +604,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 枚举完整指针镜像提供的保护记录，按调用方要求决定是否复验其版本内容。
         private IEnumerable<(JObject data, ArtifactProtection reason)> IndexProtectionRecords(bool verifyIndexes, Action<string> observe = null)
         {
             foreach (var name in new[] { "active.json", "last-known-good.json" })
@@ -599,6 +624,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 将索引或准备转换中的版本身份映射为具体路径及对应保护原因。
         private IEnumerable<(string path, ArtifactProtection reason)> ProtectionPaths(JObject data, ArtifactProtection reason)
         {
             if ((reason & ArtifactProtection.PreparedFrom) == 0)

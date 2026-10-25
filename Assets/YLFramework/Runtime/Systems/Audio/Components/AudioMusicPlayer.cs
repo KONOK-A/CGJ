@@ -27,11 +27,13 @@ namespace YLFramework.Audio
 
         private readonly List<AudioHandle> _owned = new List<AudioHandle>(2);
 
+        /// <summary>为新添加的 Editor 组件选择等功率过渡，不改已有资产保存的 Linear 值。</summary>
         private void Reset()
         {
             crossFadeCurve = AudioCrossfadeCurve.EqualPower;
         }
 
+        /// <summary>按配置仅在首次 Start 自动播放音乐。</summary>
         private void Start()
         {
             if (playOnAwake)
@@ -103,6 +105,7 @@ namespace YLFramework.Audio
             _owned.Clear();
         }
 
+        /// <summary>停用时停止本组件仍持有的当前曲目和尾轨身份，不控制其他所有者的播放。</summary>
         private void OnDisable()
         {
             Stop();

@@ -10,8 +10,12 @@ namespace YLFramework.Resource
 {
     /// <summary>
     /// 本地制品的唯一写入/归属边界。版本只新增，发布源只读；目录摘要不代表生产签名授权。
-    /// 同一 store 的显式项目集合是事务闭包，任何启动和提交都整体恢复，不独立挑选各项目新旧指针。
+    /// 同一 store 的显式项目集合是激活事务闭包；恢复依据 journal 决策选择完整闭包，不独立挑选各项目新旧指针。
     /// </summary>
+    /// <remarks>
+    /// 文件安装、指针镜像和清理分步落盘，不是一次文件系统整体替换；准备失败可留下已安装版本或 staging。
+    /// 普通入口要求构造时的 Unity 线程；内容 IO 入口由调用方调度，操作门禁不代表所有读取都具备线程安全保证。
+    /// </remarks>
     public sealed partial class ArtifactStore
     {
         private const string OwnerFile = ".ylr-store-owner.json";
@@ -30,17 +34,24 @@ namespace YLFramework.Resource
         private static long _activitySerial;
         private readonly int _mainThreadId = Thread.CurrentThread.ManagedThreadId;
         internal Action<string> Checkpoint;
+        /// <summary>本 Store 独占管理的规范绝对根路径，不接管未知既有目录。</summary>
         public string RootPath
         {
             get;
         }
+        /// <summary>构造时明确绑定的完整项目集合，也是激活与恢复的闭包边界。</summary>
         public IReadOnlyList<ResourceProjectMount> Projects
         {
             get;
         }
+        /// <summary>已记录恢复说明的集合副本；读取本属性不会执行恢复。</summary>
         public IReadOnlyList<string> RecoveryNotes => ResourceCatalog.Copy(_recoveryNotes.Values);
+        /// <summary>应用持久数据目录下的默认私有子目录，不会因读取而创建。</summary>
         public static string DefaultRoot => Path.Combine(Application.persistentDataPath, "YLFramework", "Resource");
 
+        /// <summary>校验私有根路径和显式项目闭包，构造本身不创建目录或认领既有内容。</summary>
+        /// <param name="root">不得与受保护工程目录重叠的绝对私有子目录。</param>
+        /// <param name="projects">1 至 64 个非空、项目标识在忽略大小写时仍互异的挂载。</param>
         public ArtifactStore(string root, IEnumerable<ResourceProjectMount> projects)
         {
             if (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root))
@@ -80,9 +91,11 @@ namespace YLFramework.Resource
             ResourceLocalSnapshot.RejectLinks(RootPath);
         }
 
+        // 按目录分隔边界判断规范路径是否位于指定根内，供保护目录重叠检查使用。
         private static bool Within(string path, string root) => string.Equals(path, root, StringComparison.OrdinalIgnoreCase) ||
             path.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
+        // 拒绝不适合用作 Store 路径段的标识及 Windows 保留名称。
         private static void SafeSegment(string value)
         {
             ResourceCatalogCodec.Id(value);
@@ -93,7 +106,9 @@ namespace YLFramework.Resource
             }
         }
 
+        // 将已绑定项目定位到其唯一的平台目录。
         private string ProjectRoot(string project) => Path.Combine(RootPath, project, _mounts[project].Platform);
+        /// <summary>以项目及规范摘要定位正式版本，并检查剩余路径长度预算。</summary>
         internal string VersionPath(string project, string digest)
         {
             ResourceCatalogCodec.Hex(digest, 64);
@@ -109,10 +124,13 @@ namespace YLFramework.Resource
         private string CoordinatorRoot => ProjectRoot(Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal).First().ProjectId);
         private string JournalPath => Path.Combine(CoordinatorRoot, JournalFile);
         private string PreparedRoot => Path.Combine(CoordinatorRoot, "prepared");
+        // 同一完整转换闭包共享准备记录槽，身份不依赖调用方持有的句柄实例。
         private string PreparedPath(JArray transition) => Path.Combine(PreparedRoot, ResourceCatalogCodec.Digest(ResourceCatalogCodec.CanonicalBytes(transition)) + ".json");
         private string OwnerPath => Path.Combine(RootPath, OwnerFile);
+        // 同时识别文件和目录占位，避免将错误类型的既有条目当作缺失。
         private static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
 
+        // 读取有界元数据对象，同时执行操作取消和链接检查。
         private JObject Read(string path)
         {
             _operationCancellation.ThrowIfCancellationRequested();
@@ -128,6 +146,7 @@ namespace YLFramework.Resource
             return ResourceCatalogCodec.ParseObject(buffer.ToArray());
         }
 
+        // 先持久写入独立 next，再在归属及可选保护条件复核后替换单个控制文件。
         private void Write(string path, JObject data, Action beforeReplace = null)
         {
             if (!_isCreating)
@@ -165,6 +184,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 构造绑定根路径、项目闭包及固定控制槽的归属描述。
         private JObject Owner() => new()
         {
             ["Version"] = 1,
@@ -176,9 +196,11 @@ namespace YLFramework.Resource
             ["ControlFiles"] = new JArray(ControlFiles().SelectMany(x => new[] { x, x + ".next" }).Select(x => x.Substring(RootPath.Length + 1).Replace('\\', '/')))
         };
 
+        // 枚举根归属记录预先声明的指针镜像与 journal 控制槽。
         private IEnumerable<string> ControlFiles() => Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal)
             .SelectMany(x => new[] { "active.json", "last-known-good.json" }.Select(name => Path.Combine(ProjectRoot(x.ProjectId), name))).Append(JournalPath);
 
+        // 要求根及所有项目归属仍完整匹配，不认领消失或未知的 Store。
         private void RequireOwner()
         {
             if (!ValidateOwner())
@@ -187,6 +209,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 限制普通入口只能在构造此 Store 的 Unity 线程执行。
         private void CheckThread()
         {
             if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
@@ -195,6 +218,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 缺失根返回 false；既有根必须具有完全匹配的根和项目归属记录。
         private bool ValidateOwner()
         {
             ResourceLocalSnapshot.RejectLinks(RootPath);
@@ -234,8 +258,10 @@ namespace YLFramework.Resource
             return true;
         }
 
+        // 生成单个项目平台目录的归属身份，不包含版本选择。
         private JObject ProjectOwner(string project) => new() { ["Version"] = 1, ["OwnerId"] = _ownerId, ["ProjectId"] = project, ["Platform"] = _mounts[project].Platform };
 
+        // 取得本实例操作责任；写路径另持有文件锁，显式只读检查不创建持久锁文件。
         private IDisposable Enter(bool create, CancellationToken cancellation = default, bool contentIO = false, bool readOnly = false)
         {
             if (!contentIO)
@@ -302,15 +328,18 @@ namespace YLFramework.Resource
             }
         }
 
+        /// <summary>持有一次 Store 操作的进程内门禁及可选文件锁，释放时更新观测代次。</summary>
         private sealed class StoreLock : IDisposable
         {
             private readonly ArtifactStore _owner;
             private readonly FileStream _stream;
+            /// <summary>接管当前操作责任及已取得的可选文件锁。</summary>
             internal StoreLock(ArtifactStore owner, FileStream stream)
             {
                 this._owner = owner;
                 this._stream = stream;
             }
+            /// <summary>关闭文件锁，并在收尾中清除该操作的取消状态与进程内门禁。</summary>
             public void Dispose()
             {
                 try
@@ -326,6 +355,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 验证正式版本归属后按需复用已验证快照，refresh 要求重新打开内容。
         private ResourceLocalSnapshot Open(string project, string digest, bool refresh = false, CancellationToken cancellation = default)
         {
             var path = VersionPath(project, digest);
@@ -343,6 +373,7 @@ namespace YLFramework.Resource
             return snapshot;
         }
 
+        // 校验 Complete 版本标记的归属、项目平台、摘要与登记文件名集合。
         private void ValidateVersionMarker(JObject marker, string project, string digest)
         {
             ResourceCatalogCodec.Fields(marker, "Version,OwnerId,ProjectId,Platform,CatalogDigest,State,Files");
@@ -356,6 +387,7 @@ namespace YLFramework.Resource
             RegisteredFiles(marker);
         }
 
+        // 读取闭合文件名白名单，拒绝重复项、缺失基础文件及不安全路径成分。
         private static string[] RegisteredFiles(JObject marker)
         {
             var files = ReadArray(marker, "Files").Select(x => x.Type == JTokenType.String ? (string)x : throw new InvalidDataException("Expected registered filename.")).ToArray();
@@ -377,9 +409,12 @@ namespace YLFramework.Resource
             return files;
         }
 
+        // 要求元数据指定字段确为数组，避免将缺失或其他类型解释为空集合。
         private static JArray ReadArray(JObject data, string field) => data[field] as JArray ?? throw new InvalidDataException("Expected array: " + field);
 
+        // 从快照文档生成 Store 自有的 Complete 版本描述。
         private JObject VersionMarker(ResourceLocalSnapshot snapshot) => VersionMarker(snapshot.Document);
+        // 将文档的交付文件和基础元数据登记为该版本的已知文件集合。
         private JObject VersionMarker(ResourceCatalogDocument document) => new()
         {
             ["Version"] = 1,
@@ -391,6 +426,7 @@ namespace YLFramework.Resource
             ["Files"] = new JArray(Files(document).Select(x => x.RelativeFile).Concat(new[] { "resource-catalog.json", ".ylr-complete.json" }))
         };
 
+        // 核对显式兼容闭包后重开所选快照，Store 内版本还须验证 owned 标记。
         private ResourceLocalSnapshot Reopen(ResourceLocalSnapshot snapshot, CancellationToken cancellation = default)
         {
             var doc = snapshot.Document;
@@ -408,6 +444,7 @@ namespace YLFramework.Resource
             return snapshot.Reopen(cancellation.CanBeCanceled ? cancellation : _operationCancellation);
         }
 
+        // 构造完整闭包索引，并携带当前可读的最高已确认发布历史。
         private JObject Index(IEnumerable<ResourceLocalSnapshot> snapshots) => WithFloors(new JObject
         {
             ["Version"] = 1,
@@ -420,6 +457,7 @@ namespace YLFramework.Resource
             }))
         }, ReadReleaseFloors());
 
+        // 验证索引归属、历史门槛和完整项目平台集合，此处不验证版本文件内容。
         private JObject ValidateIndex(JObject index)
         {
             var version = ResourceCatalogCodec.Integer(index, "Version");
@@ -460,9 +498,11 @@ namespace YLFramework.Resource
             return index;
         }
 
+        // 打开已校验索引引用的整个版本闭包，不独立回退单个项目。
         private ResourceLocalSnapshot[] OpenIndex(JObject index, bool refresh = true) => ReadArray(ValidateIndex(index), "Projects")
             .Cast<JObject>().Select(x => Open((string)x["ProjectId"], (string)x["CatalogDigest"], refresh)).ToArray();
 
+        // 要求各项目镜像一致且全部存在或全部缺失，并可记录每个读取路径。
         private JObject ReadIndex(string name, Action<string> observe = null)
         {
             JObject selected = null;
@@ -492,6 +532,7 @@ namespace YLFramework.Resource
             return selected;
         }
 
+        // 尝试完整打开一种索引，文件类错误记录为恢复说明并允许改选其他完整闭包。
         private JObject ValidIndex(string name, bool refresh = true)
         {
             try
@@ -510,6 +551,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 按 active、LKG、显式内置集合的顺序选择完整兼容闭包。
         private ResourceLocalSnapshot[] Select(bool refresh = true)
         {
             foreach (var name in new[] { "active.json", "last-known-good.json" })
@@ -528,12 +570,14 @@ namespace YLFramework.Resource
             return Projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal).Select(x => refresh ? Reopen(x.BuiltIn) : x.BuiltIn).ToArray();
         }
 
+        /// <summary>在 Unity 线程执行恢复并选出完整的持久或内置版本闭包。</summary>
         internal IReadOnlyList<ResourceLocalSnapshot> Mount()
         {
             CheckThread();
             return MountForContent(CancellationToken.None);
         }
 
+        /// <summary>在内容 IO 操作责任内恢复并选择闭包，必要时修复 active 镜像。</summary>
         internal IReadOnlyList<ResourceLocalSnapshot> MountForContent(CancellationToken cancellation)
         {
             using var guard = Enter(false, cancellation, true);
@@ -559,6 +603,7 @@ namespace YLFramework.Resource
             return selected;
         }
 
+        /// <summary>在 Unity 线程检查本地完整目标闭包，不创建 Store 或执行恢复写入。</summary>
         internal UpdatePlan Check(IEnumerable<ResourceLocalSnapshot> current, IEnumerable<ResourceLocalSnapshot> targetClosure)
         {
             CheckThread();
@@ -570,12 +615,14 @@ namespace YLFramework.Resource
             return CheckCore(current, targetClosure, CancellationToken.None);
         }
 
+        /// <summary>在只读内容 IO 门禁内生成本地检查计划。</summary>
         internal UpdatePlan CheckForContent(IEnumerable<ResourceLocalSnapshot> current, IEnumerable<ResourceLocalSnapshot> targetClosure, CancellationToken cancellation)
         {
             using var guard = Enter(false, cancellation, true, true);
             return CheckCore(current, targetClosure, cancellation);
         }
 
+        /// <summary>在检查结果交回主线程时复核 Store、操作状态和转换闭包身份。</summary>
         internal void RequireCheckedPlan(UpdatePlan plan)
         {
             CheckThread();
@@ -594,6 +641,7 @@ namespace YLFramework.Resource
             ReadTransition(Transition(plan.Projects));
         }
 
+        // 复验目标及可复用输入，计算完整闭包的安装与控制记录空间预算。
         private UpdatePlan CheckCore(IEnumerable<ResourceLocalSnapshot> current, IEnumerable<ResourceLocalSnapshot> targetClosure, CancellationToken cancellation)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -661,6 +709,7 @@ namespace YLFramework.Resource
             return new UpdatePlan(RootPath, entries, available, required);
         }
 
+        // 将显式快照集合绑定到全部挂载项目，拒绝未知、重复或遗漏项目。
         private Dictionary<string, ResourceLocalSnapshot> Closure(IEnumerable<ResourceLocalSnapshot> snapshots)
         {
             var result = new Dictionary<string, ResourceLocalSnapshot>(StringComparer.Ordinal);
@@ -681,8 +730,10 @@ namespace YLFramework.Resource
             return result;
         }
 
+        // 枚举 Catalog 中的 Bundle 和支持文件，不额外包含 Catalog 或 Complete 元数据。
         private static IEnumerable<ResourceCatalogFile> Files(ResourceCatalogDocument document) => document.Bundles.Cast<ResourceCatalogFile>().Concat(document.SupportFiles);
 
+        /// <summary>同步完成本地安装、内容验证和完整闭包准备记录发布，不切换 active。</summary>
         internal PreparedUpdate Prepare(UpdatePlan plan, CancellationToken cancellation, ResourceDecryptionOptions decryption = null)
         {
             InstallPreparation(plan, cancellation);
@@ -691,12 +742,15 @@ namespace YLFramework.Resource
             return CompletePreparation(plan, receipt, cancellation);
         }
 
+        /// <summary>在 Unity 线程安装本地计划的来源与目标版本，支持调用方存活复核。</summary>
         internal void InstallPreparation(UpdatePlan plan, CancellationToken cancellation, Action ensureAlive = null)
             => InstallPreparationCore(plan, cancellation, ensureAlive, false);
 
+        /// <summary>在内容 IO 工作中安装本地计划，不直接发布准备记录。</summary>
         internal void InstallPreparationForContent(UpdatePlan plan, CancellationToken cancellation)
             => InstallPreparationCore(plan, cancellation, null, true);
 
+        // 在写入责任内逐项目安装完整来源和目标；中断不撤销此前已安装的独立版本。
         private void InstallPreparationCore(UpdatePlan plan, CancellationToken cancellation, Action ensureAlive, bool contentIO)
         {
             if (plan == null || plan.Root != RootPath)
@@ -724,6 +778,7 @@ namespace YLFramework.Resource
             ensureAlive?.Invoke();
         }
 
+        /// <summary>捕获准备所需的完整输入，并在释放 Store 排他锁后调用内容 provider。</summary>
         internal ValidationReceipt CapturePreparation(UpdatePlan plan, ResourceDecryptionOptions decryption = null, ResourceContentBudget budget = null)
         {
             if (plan == null || plan.Root != RootPath)
@@ -746,6 +801,7 @@ namespace YLFramework.Resource
             return ValidationReceipt.Capture(this, plan, targets, sources, decryption, budget);
         }
 
+        /// <summary>消费匹配的验证收据，复核来源、发布时效及历史门槛后发布准备记录。</summary>
         internal PreparedUpdate CompletePreparation(UpdatePlan plan, ValidationReceipt receipt, CancellationToken cancellation = default)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -768,6 +824,7 @@ namespace YLFramework.Resource
             return RecordPrepared(plan, receipt);
         }
 
+        // 以完整转换身份发布或刷新准备授权，保留同一项目已有的较高发布序号。
         private PreparedUpdate RecordPrepared(UpdatePlan plan, ValidationReceipt receipt)
         {
             receipt.RequireStable();
@@ -820,6 +877,7 @@ namespace YLFramework.Resource
             return new PreparedUpdate(RootPath, plan.Projects.Select(x => new UpdateProject(x.From, Open(x.ProjectId, x.ToDigest), Array.Empty<UpdateFile>())), releases: releases);
         }
 
+        // 要求当前持久选择仍等于计划来源，拒绝基于过时闭包继续准备或提交。
         private void RequireFrom(IEnumerable<UpdateProject> projects)
         {
             var current = Select(false).ToDictionary(x => x.Document.ProjectId, StringComparer.Ordinal);
@@ -833,6 +891,7 @@ namespace YLFramework.Resource
         }
 
         // 这是一次事务的短期认证责任，不是第二份版本索引或可持久复用的解密标记。
+        /// <summary>持有本次转换验证输入及内容责任，绑定 Store、操作实例、归属和活动代次。</summary>
         internal sealed class ValidationReceipt : IDisposable
         {
             private readonly ArtifactStore _store;
@@ -855,6 +914,7 @@ namespace YLFramework.Resource
                 get;
             }
 
+            // 捕获操作身份和去重后的快照集合，供验证及清理责任追踪。
             private ValidationReceipt(ArtifactStore store, object operation, ResourceLocalSnapshot[] targets, ResourceLocalSnapshot[] sources)
             {
                 this._store = store;
@@ -866,9 +926,11 @@ namespace YLFramework.Resource
                 Snapshots = ResourceCatalog.Copy(targets.Concat(sources).GroupBy(x => x.DirectoryPath, StringComparer.OrdinalIgnoreCase).Select(x => x.First()));
             }
 
+            // 用规范化完整转换描述绑定计划或准备结果，检测其内部身份漂移。
             private static string Identity(object operation) => Convert.ToBase64String(ResourceCatalogCodec.CanonicalBytes(
                 Transition(operation is UpdatePlan plan ? plan.Projects : ((PreparedUpdate)operation).Projects)));
 
+            /// <summary>打开并持有验证输入；捕获失败时清理，未完成的清理责任由异常保留。</summary>
             internal static ValidationReceipt Capture(ArtifactStore store, object operation, ResourceLocalSnapshot[] targets, ResourceLocalSnapshot[] sources,
                 ResourceDecryptionOptions decryption, ResourceContentBudget budget)
             {
@@ -925,6 +987,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>验证所持文件及目标内容，全部完成后才将收据标记为可消费。</summary>
             internal void Validate(CancellationToken cancellation = default)
             {
                 if (_isDisposing)
@@ -953,6 +1016,7 @@ namespace YLFramework.Resource
                 _isValidated = true;
             }
 
+            /// <summary>要求收据已完成、未消费且匹配操作与活动代次，并复核输入稳定性。</summary>
             internal void Require(ArtifactStore expectedStore, object expectedOperation)
             {
                 _store.CheckThread();
@@ -970,12 +1034,14 @@ namespace YLFramework.Resource
                 RequireStable();
             }
 
+            /// <summary>在稳定性复核后标记收据已消费，阻止其再次用于另一轮交接。</summary>
             internal void Consume()
             {
                 RequireStable();
                 _isConsumed = true;
             }
 
+            /// <summary>复核内容责任、所持文件长度和版本元数据，不声称重新计算全部文件摘要。</summary>
             internal void RequireStable()
             {
                 if (_isDisposing || !_isValidated)
@@ -998,6 +1064,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            // 核对正式目录、Complete 身份及精确文件集合，拒绝验证期间的归属漂移。
             private void RequireMetadata(ResourceLocalSnapshot snapshot)
             {
                 var document = snapshot.Document;
@@ -1017,6 +1084,7 @@ namespace YLFramework.Resource
                 }
             }
 
+            /// <summary>释放内容及文件输入；失败项仍由本收据持有，允许后续继续清理。</summary>
             public void Dispose()
             {
                 if (_isDisposed)
@@ -1061,6 +1129,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 复制只读发布输入到独立 staging，完整验证后提升为正式版本；不修改发布源。
         private ResourceLocalSnapshot Install(ResourceLocalSnapshot source, CancellationToken cancellation, IReadOnlyList<UpdateFile> reuse = null, Action ensureAlive = null)
         {
             ensureAlive?.Invoke();
@@ -1117,6 +1186,7 @@ namespace YLFramework.Resource
             return PromoteStage(stage, stageMarker, source.Document, ensureAlive, cancellation);
         }
 
+        // 写入 owned Complete 后复核 staging 归属并移动目录；此步骤不发布准备记录或激活指针。
         private ResourceLocalSnapshot PromoteStage(string stage, JObject stageMarker, ResourceCatalogDocument document, Action ensureAlive = null,
             CancellationToken cancellation = default)
         {
@@ -1141,9 +1211,11 @@ namespace YLFramework.Resource
             return Open(project, digest, cancellation: cancellation);
         }
 
+        // 按项目顺序生成完整来源到目标转换的稳定元数据身份。
         private static JArray Transition(IEnumerable<UpdateProject> projects) => new(projects.OrderBy(x => x.ProjectId, StringComparer.Ordinal)
             .Select(x => new JObject { ["ProjectId"] = x.ProjectId, ["Platform"] = x.Platform, ["From"] = x.FromDigest, ["To"] = x.ToDigest }));
 
+        // 验证转换覆盖全部挂载项目且各平台及来源、目标摘要格式有效。
         private JArray ReadTransition(JToken token)
         {
             if (token is not JArray array || array.Count != _mounts.Count)
@@ -1172,6 +1244,8 @@ namespace YLFramework.Resource
             return array;
         }
 
+        /// <summary>重开持久准备记录引用的完整版本，返回可再次提交检查的准备身份。</summary>
+        /// <remarks>此入口可能清理已归属的 next 元数据；存在待恢复 journal 时拒绝枚举，不是纯只读查询。</remarks>
         public IReadOnlyList<PreparedUpdate> GetPreparedUpdates()
         {
             using var guard = Enter(false);
@@ -1185,6 +1259,7 @@ namespace YLFramework.Resource
             return PreparedRecords().Select(x => RecoverPrepared(ReadTransition(x["Transition"]), ReadReleaseRecords(x))).ToArray();
         }
 
+        // 枚举并校验正式准备记录，未知 next 不视为已完成准备。
         private IEnumerable<JObject> PreparedRecords()
         {
             ResourceLocalSnapshot.RejectLinks(PreparedRoot);
@@ -1194,6 +1269,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 读取准备记录并核对其归属、状态及文件名绑定的转换身份。
         private JObject ReadPreparedRecord(string path)
         {
             var record = Read(path);
@@ -1201,6 +1277,7 @@ namespace YLFramework.Resource
             return record;
         }
 
+        // 从已验证准备记录重开完整来源和目标版本，重建进程内准备句柄。
         private PreparedUpdate RecoverPrepared(JArray transition, ResourceRemoteRelease[] releases)
         {
             var projects = new List<UpdateProject>();
@@ -1215,6 +1292,7 @@ namespace YLFramework.Resource
             return new PreparedUpdate(RootPath, projects, releases: releases);
         }
 
+        /// <summary>识别可按文件或元数据失败处理的异常类别，不包含任意运行时错误。</summary>
         internal static bool IsFileFailure(Exception error) => error is IOException || error is InvalidDataException || error is UnauthorizedAccessException || error is ArgumentException;
     }
 }

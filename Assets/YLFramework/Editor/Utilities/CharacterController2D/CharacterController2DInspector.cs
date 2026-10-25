@@ -7,6 +7,7 @@ using YLFramework.Character2D;
 
 namespace YLFramework.Editor.Character2D
 {
+    /// <summary>编辑角色控制器的检测、重力与事件配置，并展示控制器已有的接触和移动诊断。</summary>
     [CustomEditor(typeof(CharacterController2D))]
     public class CharacterController2DInspector : UnityEditor.Editor
     {
@@ -35,6 +36,7 @@ namespace YLFramework.Editor.Character2D
 
         private FieldInfo _checkCountInfo = null;
 
+        /// <summary>为当前控制器缓存序列化属性及诊断计数字段的反射入口。</summary>
         private void OnEnable()
         {
             _autoRotation = serializedObject.FindProperty("autoRotation");
@@ -60,6 +62,7 @@ namespace YLFramework.Editor.Character2D
             _checkCountInfo = _character.GetType().GetField("CheckCount", BindingFlags.NonPublic | BindingFlags.Instance);
         }
 
+        /// <summary>提示碰撞体和 Layer 配置问题，按检测开关绘制配置并应用序列化修改，再显示诊断。</summary>
         public override void OnInspectorGUI()
         {
 
@@ -145,6 +148,8 @@ namespace YLFramework.Editor.Character2D
 
 
 
+        /// <summary>只读显示控制器当前接触状态、速度、跳跃次数及射线计数，不触发新的检测。</summary>
+        /// <param name="resultFoldout">由调用方保存并接收本次变化的折叠状态。</param>
         public void DrawResult(ref bool resultFoldout)
         {
             resultFoldout = EditorGUILayout.Foldout(resultFoldout, "Infos");

@@ -13,8 +13,15 @@ using YLFramework.Excel;
 
 namespace YLFramework.Integrations.Excel.Editor
 {
+    /// <summary>提供按稳定 ID 预览、提交及导出 ScriptableObject 定义资产的作者流程。</summary>
     public static partial class ExcelAuthoring
     {
+        /// <summary>导出带具体类型列的 ScriptableObject 工作簿，拒绝缺失或重复 ID。</summary>
+        /// <typeparam name="T">行资产的基类型。</typeparam>
+        /// <param name="values">非空资产集合，各行须与绑定数据类型兼容。</param>
+        /// <param name="path">父目录已存在的 .xlsx 输出路径，替换整个目标工作簿。</param>
+        /// <param name="sheetName">生成的工作表名。</param>
+        /// <param name="dataType">可选绑定数据类型，须兼容 T；空集合也据此生成派生字段列。</param>
         public static void ScriptableObjectToExcel<T>(IEnumerable<T> values, string path, string sheetName = "Sheet1", Type dataType = null) where T : ScriptableObject
         {
             if (values == null)
@@ -37,11 +44,36 @@ namespace YLFramework.Integrations.Excel.Editor
         /// 默认只管理owner同文件的子资产；assetFolder显式选择独占目录下的独立主资产。
         /// initialize仅作用于暂存副本，可用于绑定领域parent；不得修改其他资产或全局状态。
         /// </summary>
+        /// <typeparam name="T">行资产的基类型。</typeparam>
+        /// <param name="path">待读取的 .xlsx 工作簿路径。</param>
+        /// <param name="values">owner 的实际序列化列表字段，不接受列表副本。</param>
+        /// <param name="owner">位于 Assets/ 下、已保存且无未保存改动的主 ScriptableObject 资产。</param>
+        /// <param name="assetFolder">显式拥有的独立主资产目录；null 仅管理 owner 同文件的子资产。</param>
+        /// <param name="sheetName">工作表名；null 使用后端默认的首张工作表。</param>
+        /// <param name="initialize">字段转换前仅初始化暂存对象的回调，可为空。</param>
+        /// <param name="dataType">可选绑定数据类型，限制允许导入的具体派生类型。</param>
+        /// <returns>持有暂存对象的一次性计划，调用方须确认、取消或释放。</returns>
         public static ExcelImportPlan PreviewScriptableObjects<T>(string path, List<T> values, ScriptableObject owner,
             string assetFolder = null, string sheetName = null, Action<T> initialize = null, Type dataType = null) where T : ScriptableObject
             => PreviewScriptableObjects(path, values, owner, assetFolder, sheetName, initialize, dataType, null);
 
         /// <summary>afterImport在转换完成后、生成差异和提交快照前，仅调整暂存对象的派生元数据。</summary>
+        /// <typeparam name="T">行资产的基类型。</typeparam>
+        /// <param name="path">待读取的 .xlsx 工作簿路径。</param>
+        /// <param name="values">owner 的实际序列化列表字段，不接受列表副本。</param>
+        /// <param name="owner">位于 Assets/ 下、已保存且无未保存改动的主 ScriptableObject 资产。</param>
+        /// <param name="assetFolder">显式拥有的独立主资产目录；null 仅管理 owner 同文件的子资产。</param>
+        /// <param name="sheetName">工作表名；null 使用后端默认的首张工作表。</param>
+        /// <param name="initialize">字段转换前仅初始化暂存对象的回调，可为空。</param>
+        /// <param name="dataType">可选绑定数据类型，限制允许导入的具体派生类型。</param>
+        /// <param name="afterImport">字段转换后仅调整暂存对象的回调，可为空，不得修改外部状态。</param>
+        /// <returns>持有暂存对象、错误及差异的一次性计划。</returns>
+        /// <remarks>
+        /// 同 ID 同类型条目在暂存副本上导入，提交时原位复制；新增或换型条目创建新资产。
+        /// 资产写入使用 Unity 序列化，反射可转换的字段不一定能被 Unity 持久化。
+        /// 提交前复核对象、文件及目标路径；写入失败尝试恢复本次捕获的文件和内存状态，
+        /// 回滚不完整时保留恢复目录并报告异常，不保证跨文件原子性或回滚外部回调副作用。
+        /// </remarks>
         public static ExcelImportPlan PreviewScriptableObjects<T>(string path, List<T> values, ScriptableObject owner,
             string assetFolder, string sheetName, Action<T> initialize, Type dataType, Action<T> afterImport) where T : ScriptableObject
         {
@@ -208,6 +240,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return plan;
         }
 
+        // 解析默认绑定类型并拒绝不兼容或包含未闭合泛型参数的类型。
         private static Type ValidateDataType<T>(Type type) where T : ScriptableObject
         {
             type = type ?? typeof(T);
@@ -219,6 +252,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return type;
         }
 
+        // 从原单元格归一化稳定标量 ID，拒绝空值及 ID 字段上的自定义转换。
         private static string RawIdentity(object value, FieldInfo field)
         {
             if (field.GetCustomAttribute<CustomExcelFieldImportAndExport>() != null)
@@ -250,6 +284,7 @@ namespace YLFramework.Integrations.Excel.Editor
             return ExcelTable.Text(Convert.ChangeType(raw, field.FieldType, CultureInfo.InvariantCulture));
         }
 
+        // 找出直接持有目标列表引用的可写序列化字段，防止提交到列表副本。
         private static FieldInfo OwnerListField<T>(ScriptableObject owner, List<T> values)
         {
             for (var type = owner.GetType(); type != typeof(ScriptableObject); type = type.BaseType)
@@ -266,7 +301,9 @@ namespace YLFramework.Integrations.Excel.Editor
 
             throw new InvalidOperationException("The supplied List must be the owner's serialized field, not a copy.");
         }
+        // 检查 Assets/ 前缀并拒绝相对目录段，不据此认领资产所有权。
         private static bool IsAssetPath(string path) => path.StartsWith("Assets/", StringComparison.Ordinal) && !path.Split('/').Any(p => p == "." || p == "..");
+        // 规范显式目标目录并检查沿途文件或孤立 meta 冲突，不在预览时创建目录。
         private static string NormalizeFolder(string folder)
         {
             folder = folder.Replace('\\', '/').TrimEnd('/');
@@ -291,6 +328,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
             return folder;
         }
+        // 拒绝不能原样用作资产文件名的 ID，避免静默清洗造成身份碰撞。
         private static string SafeAssetName(string key)
         {
             if (key == "." || key == ".." || key.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || key.TrimEnd('.', ' ') != key)
@@ -300,6 +338,7 @@ namespace YLFramework.Integrations.Excel.Editor
 
             return key;
         }
+        // 拒绝脏资产及所有权边界外的旧条目，只允许根内子资产或显式目录中的单对象主资产。
         private static void ValidateOwnedAssets<T>(ScriptableObject owner, string ownerPath, IEnumerable<T> previous, string folder) where T : ScriptableObject
         {
             if (EditorUtility.IsDirty(owner))
@@ -329,6 +368,7 @@ namespace YLFramework.Integrations.Excel.Editor
                 }
             }
         }
+        // 检查独立资产新增或换型路径，拒绝忽略大小写的重名及已有文件或 meta 冲突。
         private static void ValidateDestinations<T>(IEnumerable<T> staged, IDictionary<string, T> existing, IDictionary<string, string> paths, string folder) where T : ScriptableObject
         {
             if (folder == null)
@@ -358,6 +398,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 捕获去重后的资产及配套 meta 原始字节，供提交复核和失败恢复使用。
         private static Dictionary<string, byte[]> CaptureAssetFiles(IEnumerable<string> assetPaths)
         {
             var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -368,6 +409,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
             return files;
         }
+        // 逐文件核对捕获字节，拒绝文件丢失或预览后发生改写。
         private static void AssertAssetFilesUnchanged(IDictionary<string, byte[]> files)
         {
             foreach (var file in files)
@@ -379,6 +421,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 提交已校验的自有条目与根列表，失败时尝试恢复捕获状态并保留未完整回滚的证据。
         private static void ApplyAssets<T>(List<T> values, ScriptableObject owner, FieldInfo listField, string ownerPath,
             T[] previous, List<T> staged, IDictionary<string, T> existing, IDictionary<string, string> destinations,
             IDictionary<string, byte[]> files, string folder) where T : ScriptableObject
@@ -603,6 +646,7 @@ namespace YLFramework.Integrations.Excel.Editor
             }
         }
 
+        // 递归创建缺少的资产目录，并只登记本次创建的目录以便失败时清理。
         private static void EnsureFolder(string folder, List<string> created)
         {
             if (AssetDatabase.IsValidFolder(folder))
@@ -620,6 +664,7 @@ namespace YLFramework.Integrations.Excel.Editor
             created.Add(folder);
         }
 
+        // 在独占恢复目录保存原文件字节及路径清单，供提交失败时追溯。
         private static string CreateRecovery(IDictionary<string, byte[]> files)
         {
             string directory = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Temp/Extensions.Data.Excel/Recovery", Guid.NewGuid().ToString("N"));

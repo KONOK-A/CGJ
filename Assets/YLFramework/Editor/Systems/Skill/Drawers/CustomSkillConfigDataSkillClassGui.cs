@@ -10,6 +10,7 @@ using YLFramework.Skill;
 namespace YLFramework.Editor.Skill
 {
 
+    /// <summary>为技能定义选择运行脚本，同步类型全名与 GUID，并提供脚本打开和定位入口。</summary>
     public class CustomSkillConfigDataSkillClassGui : CustomPropertyGui
     {
 
@@ -24,6 +25,7 @@ namespace YLFramework.Editor.Skill
 
         private GUIContent _classTypeContent = null;
 
+        /// <summary>解析并显示当前技能类型，选择候选脚本时同步 GUID 与全名，应用修改并保存资产。</summary>
         public override void OnPropertyGui(SerializedProperty skillClassFullNameProperty)
         {
             if (this._serializedProperty != skillClassFullNameProperty)
@@ -132,6 +134,7 @@ namespace YLFramework.Editor.Skill
 
         }
 
+        /// <summary>扫描 SkillBase 派生类脚本，不排除抽象类型，也不检查公共无参构造器。</summary>
         public static List<MonoScript> GetAllStatesType()
         {
             List<MonoScript> states = new List<MonoScript>();
@@ -165,6 +168,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>已有 GUID 无效时按类型全名扫描替代脚本，未找到则原样返回 GUID。</summary>
         private static string GetGuid(string guid, string classFullName)
         {
             if (!IsValid(guid) && !string.IsNullOrEmpty(classFullName))
@@ -185,6 +189,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>判断 GUID 能否解析到可加载资产，不核对其是否为匹配的技能脚本。</summary>
         private static bool IsValid(string guid)
         {
             string assetPath = AssetDatabase.GUIDToAssetPath(guid);
@@ -201,6 +206,7 @@ namespace YLFramework.Editor.Skill
             return true;
         }
 
+        /// <summary>解析非空脚本 GUID 对应路径并请求打开资产。</summary>
         public static void OpenAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -218,6 +224,7 @@ namespace YLFramework.Editor.Skill
         }
 
 
+        /// <summary>按脚本 GUID 设置编辑器选择并高亮对应资产。</summary>
         public static void SelectAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))

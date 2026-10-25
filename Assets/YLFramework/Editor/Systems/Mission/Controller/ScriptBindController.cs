@@ -9,18 +9,20 @@ using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission
 {
+    /// <summary>扫描任务脚本并通过菜单显式刷新 GUID 与类型全名绑定，同时提供数据类型候选。</summary>
     public class ScriptBindController
     {
 
-        // key:guid value:class_full_name
+        // 从脚本 GUID 到任务运行类型全名的索引。
         private static Dictionary<string, string> _guidClassFullName = new Dictionary<string, string>();
 
-        // key:class_full_name value:guid
+        // 从任务运行类型全名到脚本 GUID 的反向索引。
         private static Dictionary<string, string> _classFullNameGuid = new Dictionary<string, string>();
 
-        // 保存所有的继承自 SkillConfigData 的类型
+        // 保存扫描得到的 MissionConfigData 及其派生类型。
         private static List<Type> _skillConfigDataTypes = null;
 
+        /// <summary>重建任务脚本索引，遍历全部任务配表更新绑定并保存资产。</summary>
         [MenuItem("Tools/YLFramework/Mission/Refresh Script Bindings")]
         static void RefreshAllSkillScripts()
         {
@@ -35,6 +37,7 @@ namespace YLFramework.Editor.Mission
             AssetDatabase.SaveAssets();
         }
 
+        /// <summary>按脚本索引尝试更新配表内各任务的类型全名或 GUID，变更后标脏条目。</summary>
         private static void RefreshScriptClassFullName(MissionsConfig skillsConfig)
         {
             foreach (MissionConfigData missionConfigData in skillsConfig.missions)
@@ -51,7 +54,7 @@ namespace YLFramework.Editor.Mission
                     if (string.IsNullOrEmpty(classFullName))
                     {
 
-                        // 尝试通过类名获取 guid (这种是为了通过excel导入/导出,导致的guid不存在,尝试根据class_full_name 来找到guid )
+                        // 此分支仍调用 GUID 到全名的索引，不能据此保证失效 GUID 能按类型全名修复。
                         string guid = GetClassFullNameByGuid(missionConfigData.missionTypeClassFullName);
                         if (!string.IsNullOrEmpty(guid) && missionConfigData.missionTypeGuid != guid)
                         {
@@ -87,6 +90,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>扫描 MonoScript，仅为 MissionBase 派生类重建 GUID 和类型全名的双向索引。</summary>
         private static void RefreshScript()
         {
             if (_guidClassFullName == null)
@@ -137,6 +141,7 @@ namespace YLFramework.Editor.Mission
             }
         }
 
+        /// <summary>在本次扫描索引中按类型全名查找脚本 GUID，未找到时返回空字符串。</summary>
         private static string GetGuidByClassFullName(string fullName)
         {
             if (_classFullNameGuid.ContainsKey(fullName))
@@ -147,6 +152,7 @@ namespace YLFramework.Editor.Mission
             return string.Empty;
         }
 
+        /// <summary>在本次扫描索引中按脚本 GUID 查找类型全名，未找到时返回空字符串。</summary>
         private static string GetClassFullNameByGuid(string guid)
         {
             if (_guidClassFullName.ContainsKey(guid))
@@ -157,6 +163,7 @@ namespace YLFramework.Editor.Mission
             return string.Empty;
         }
 
+        /// <summary>扫描并返回 MissionConfigData 及其派生类型的共享候选列表，不排除抽象类型。</summary>
         public static List<Type> GetAllSkillConfigDataTypes()
         {
             if (_skillConfigDataTypes == null)

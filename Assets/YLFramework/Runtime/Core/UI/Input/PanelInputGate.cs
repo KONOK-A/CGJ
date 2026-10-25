@@ -4,6 +4,7 @@ using UnityEngine.UI;
 
 namespace YLFramework.Core
 {
+    /// <summary>以框架自有 CanvasGroup 阻挡单个 Selectable，已有业务组时使用独立布局挂载层。</summary>
     [AddComponentMenu("")]
     [DisallowMultipleComponent]
     internal sealed class PanelInputGate : MonoBehaviour
@@ -21,6 +22,7 @@ namespace YLFramework.Core
             get; private set;
         }
 
+        /// <summary>取得当前会话的门禁绑定并准备自有组；原生回调改变绑定时返回 false。</summary>
         internal bool Bind(PanelInputState state, Selectable selectable)
         {
             _target = selectable;
@@ -77,8 +79,10 @@ namespace YLFramework.Core
             return IsBound(state);
         }
 
+        /// <summary>确认调用方仍持有这份物理门禁，且其原会话尚未结束。</summary>
         private bool IsBound(PanelInputState state) => ReferenceEquals(_owner, state) && state.IsCurrent;
 
+        /// <summary>同步布局后仅改自有组的交互开关；绑定或阻挡意图已变时不提交旧值。</summary>
         internal bool Apply(PanelInputState state, bool blocked)
         {
             if (!IsBound(state) || _isCreatingMount)
@@ -100,6 +104,7 @@ namespace YLFramework.Core
             return IsBound(state);
         }
 
+        /// <summary>解除匹配会话并开放自有组，不销毁组或改写业务 CanvasGroup。</summary>
         internal void Release(PanelInputState state)
         {
             if (!ReferenceEquals(_owner, state))
@@ -116,6 +121,7 @@ namespace YLFramework.Core
             // 资源随物理实例保留；会话结束不延迟 Destroy 后再于同帧争用唯一组件槽。
         }
 
+        /// <summary>创建隐藏的占位与坐标穿透节点，令独立门禁参与布局而不接管业务组。</summary>
         private void CreateMount()
         {
             var initial = _owner;
@@ -176,6 +182,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>切层时连同门禁占位一起移动，未装占位时直接重挂面板，均保留局部布局。</summary>
         internal static void Reparent(Panel panel, Transform parent)
         {
             var gate = panel.GetComponent<PanelInputGate>();
@@ -196,6 +203,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>业务对象被外部重挂时请求重新协调，自身安装到坐标节点的回调不重复处理。</summary>
         private void OnTransformParentChanged()
         {
             if (_owner == null || (_frame && transform.parent == _frame))
@@ -206,6 +214,7 @@ namespace YLFramework.Core
             PanelManager.LateUpdate();
         }
 
+        /// <summary>放下旧挂载引用并开放旧组，让旧布局壳延后退役，不把旧壳重新绑定到业务对象。</summary>
         private void ReleaseMount()
         {
             var previous = _layout;
@@ -225,6 +234,7 @@ namespace YLFramework.Core
             }
         }
 
+        /// <summary>撤销绑定并标记挂载壳退役，不在销毁回调中强行重挂业务 Transform。</summary>
         private void OnDestroy()
         {
             _owner = null;

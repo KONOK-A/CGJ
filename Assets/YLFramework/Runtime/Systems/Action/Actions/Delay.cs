@@ -6,20 +6,25 @@ namespace YLFramework.Actions
     // 按执行器传入的 dt 累计等待时长；完成检测在累加之前，因此跨越阈值的下一次执行才会完成。
     internal class Delay : IAction
     {
+        /// <summary>本轮等待时长，单位为秒；动态时长工厂会在启动时覆盖此值。</summary>
         public float DelayTime;
 
+        /// <summary>每次启动时求值一次的可选时长工厂，返回等待秒数。</summary>
         public Func<float> DelayTimeFactory = null;
 
+        /// <summary>检测到等待结束时调用的回调，Deinit 只清除而不调用。</summary>
         public System.Action OnDelayFinish
         {
             get; set;
         }
 
+        /// <summary>启动后各次执行累计的秒数，Reset 时清零。</summary>
         public float CurrentSeconds
         {
             get; set;
         }
 
+        /// <summary>仅供对象池创建延迟动作，等待配置在 Allocate 时设置。</summary>
         private Delay()
         {
         }
@@ -27,6 +32,9 @@ namespace YLFramework.Actions
         private static readonly ActionPool<Delay> _pool =
             new ActionPool<Delay>(() => new Delay(), null, 10);
 
+        /// <summary>分配固定时长的等待动作，清除上次使用的动态时长工厂。</summary>
+        /// <param name="delayTime">等待秒数；非正数仍需在启动之后执行一次才完成。</param>
+        /// <param name="onDelayFinish">检测到等待结束时调用的可选回调。</param>
         public static Delay Allocate(float delayTime, System.Action onDelayFinish = null)
         {
             var retNode = _pool.Allocate();
@@ -40,6 +48,9 @@ namespace YLFramework.Actions
             return retNode;
         }
 
+        /// <summary>分配动态时长的等待动作，时长在每次启动时求值。</summary>
+        /// <param name="delayTimeFactory">可选时长工厂；为 null 时沿用对象中已有的 DelayTime。</param>
+        /// <param name="onDelayFinish">检测到等待结束时调用的可选回调。</param>
         public static Delay Allocate(Func<float> delayTimeFactory, System.Action onDelayFinish = null)
         {
             var retNode = _pool.Allocate();
@@ -52,27 +63,30 @@ namespace YLFramework.Actions
             return retNode;
         }
 
+        /// <inheritdoc />
         public ulong ActionId
         {
             get; set;
         }
+        /// <inheritdoc />
         public ActionStatus Status
         {
             get; set;
         }
 
+        /// <summary>存在动态时长工厂时求值并保存本轮时长，不在启动时检测完成。</summary>
         public void OnStart()
         {
-            // 动态时长在每次启动时求值一次，Reset 后再次启动会重新求值。
             if (DelayTimeFactory != null)
             {
                 DelayTime = DelayTimeFactory();
             }
         }
 
+        /// <summary>先比较已有累计时间，达到时长则标记完成并调用回调，随后累加本次 dt。</summary>
+        /// <param name="dt">本次累计的秒数；本次累加跨过阈值时，下一次执行才检测到完成。</param>
         public void OnExecute(float dt)
         {
-            // 先检测已有累计时间，再累加本次 dt；本次跨过阈值后要到下次执行才检测完成。
             if (CurrentSeconds >= DelayTime)
             {
                 this.Finish();
@@ -82,10 +96,12 @@ namespace YLFramework.Actions
             CurrentSeconds += dt;
         }
 
+        /// <summary>不追加结束处理，等待结束回调由 OnExecute 调用。</summary>
         public void OnFinish()
         {
         }
 
+        /// <summary>清零累计时间并重置执行阶段及暂停标记，保留时长配置和回调。</summary>
         public void Reset()
         {
             Status = ActionStatus.NotStart;
@@ -93,11 +109,13 @@ namespace YLFramework.Actions
             CurrentSeconds = 0.0f;
         }
 
+        /// <inheritdoc />
         public bool IsPaused
         {
             get; set;
         }
 
+        /// <summary>清除时长工厂与回调并安排延迟回收，不发出等待结束通知。</summary>
         public void Deinit()
         {
             if (!IsDeinitialized)
@@ -109,6 +127,7 @@ namespace YLFramework.Actions
             }
         }
 
+        /// <inheritdoc />
         public bool IsDeinitialized
         {
             get; set;

@@ -8,8 +8,10 @@ using Newtonsoft.Json.Linq;
 
 namespace YLFramework.Resource
 {
+    /// <remarks>远端检查只选择已认证发布；准备阶段下载并验证文件，完整准备记录与激活仍是后续独立步骤。</remarks>
     public sealed partial class ArtifactStore
     {
+        /// <summary>依次验签远端发布并核对其绑定的 Catalog，结合本地复用情况生成完整闭包计划，不写 Store。</summary>
         internal IEnumerator CheckRemote(IEnumerable<ResourceLocalSnapshot> current, Action<UpdatePlan> complete, Action ensureAlive = null,
             Func<Action<CancellationToken>, IEnumerator> runIO = null, Action<string, string> observeTarget = null)
         {
@@ -79,6 +81,7 @@ namespace YLFramework.Resource
             complete(new UpdatePlan(RootPath, entries, AvailableSpace(), required));
         }
 
+        /// <summary>在只读内容 IO 门禁内检查远端目标的已安装版本或本地可复用文件。</summary>
         internal IReadOnlyList<UpdateFile> CheckRemoteFilesForContent(ResourceLocalSnapshot current, ResourceRemoteRelease release, CancellationToken cancellation)
         {
             using var guard = Enter(false, cancellation, true, true);
@@ -86,6 +89,7 @@ namespace YLFramework.Resource
             return CheckRemoteFiles(current, release, cancellation);
         }
 
+        // 核对来源兼容范围；目标已安装则复验发布绑定，否则逐项验证可复用的来源文件。
         private IReadOnlyList<UpdateFile> CheckRemoteFiles(ResourceLocalSnapshot current, ResourceRemoteRelease release, CancellationToken cancellation)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -120,6 +124,7 @@ namespace YLFramework.Resource
             return files;
         }
 
+        // 查询当前调用方在目标卷上的可用空间；查询失败不视为无限可用。
         private long AvailableSpace()
         {
 #if !UNITY_EDITOR && UNITY_STANDALONE_WIN && ENABLE_IL2CPP
@@ -134,11 +139,13 @@ namespace YLFramework.Resource
         }
 
 #if !UNITY_EDITOR && UNITY_STANDALONE_WIN && ENABLE_IL2CPP
+        // 为受支持的 Windows IL2CPP 路径取得调用方可用配额，避开该版本 DriveInfo 限制。
         [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
         [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
         private static extern bool GetDiskFreeSpaceExW(string directory, out ulong available, out ulong total, out ulong free);
 #endif
 
+        /// <summary>依次执行远端安装、同步内容验证和准备记录发布，不切换 active。</summary>
         internal IEnumerator PrepareRemote(UpdatePlan plan, Action<PreparedUpdate> complete, Action ensureAlive = null, ResourceDecryptionOptions decryption = null)
         {
             yield return InstallRemotePreparation(plan, ensureAlive);
@@ -149,6 +156,7 @@ namespace YLFramework.Resource
             complete(CompletePreparation(plan, receipt));
         }
 
+        /// <summary>持有 Store 写入责任安装完整来源和目标，枚举器收尾才释放该责任。</summary>
         internal IEnumerator InstallRemotePreparation(UpdatePlan plan, Action ensureAlive = null,
             Func<Action<CancellationToken>, IEnumerator> runIO = null)
         {
@@ -200,6 +208,7 @@ namespace YLFramework.Resource
             ensureAlive?.Invoke();
         }
 
+        // 将一段磁盘工作交给内容调度器；未提供调度器时在当前线程同步执行。
         private static IEnumerator RemotePreparationIO(Action<CancellationToken> work, Func<Action<CancellationToken>, IEnumerator> runIO)
         {
             if (runIO == null)
@@ -212,6 +221,7 @@ namespace YLFramework.Resource
             }
         }
 
+        // 复用已认证输入或续传分片，逐文件验 hash 后再组装此项目的正式版本。
         private IEnumerator InstallRemote(UpdateProject entry, Action ensureAlive, Func<Action<CancellationToken>, IEnumerator> runIO)
         {
             ensureAlive?.Invoke();
@@ -283,6 +293,7 @@ namespace YLFramework.Resource
             yield return RemotePreparationIO(token => InstallRemoteFiles(entry, inputs, token, runIO == null ? ensureAlive : null), runIO);
         }
 
+        // 将远端发布输入复制到独立 staging，写入已认证 Catalog 并完整校验后提升目录。
         private void InstallRemoteFiles(UpdateProject entry, IReadOnlyDictionary<string, string> inputs, CancellationToken cancellation, Action ensureAlive = null)
         {
             var release = entry.Remote;
@@ -346,6 +357,7 @@ namespace YLFramework.Resource
             PromoteStage(stage, stageMarker, release.Catalog, ensureAlive, cancellation);
         }
 
+        // 在 owned 版本校验之外，复验 Catalog 和 Complete 与本次签名发布绑定的长度及摘要。
         private ResourceLocalSnapshot OpenRemoteVersion(ResourceRemoteRelease release, bool refresh = true, CancellationToken cancellation = default)
         {
             var snapshot = Open(release.ProjectId, release.CatalogDigest, refresh, cancellation);
@@ -364,9 +376,11 @@ namespace YLFramework.Resource
             return snapshot;
         }
 
+        // 将发布授权原信封按项目顺序保存，供以后按当前可信公钥重新验签。
         private static JArray ReleaseRecords(IEnumerable<ResourceRemoteRelease> releases) => new(releases.OrderBy(x => x.ProjectId, StringComparer.Ordinal).Select(x =>
             new JObject { ["ProjectId"] = x.ProjectId, ["Envelope"] = Convert.ToBase64String(x.Envelope) }));
 
+        // 重验准备记录内的授权及目标摘要绑定；枚举可读取过期授权，提交另要求 fresh。
         private ResourceRemoteRelease[] ReadReleaseRecords(JObject record, bool fresh = false)
         {
             if (ResourceCatalogCodec.Integer(record, "Version") == 1)

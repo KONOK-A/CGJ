@@ -11,6 +11,7 @@ using YLFramework.Buff;
 
 namespace YLFramework.Editor.Buff
 {
+    /// <summary>为 Buff 定义选择行为脚本，同时维护类型全名与编辑器脚本 GUID。</summary>
     public class CustomBuffConfigDataClassGui : CustomPropertyGui
     {
 
@@ -20,6 +21,7 @@ namespace YLFramework.Editor.Buff
 
         private GUIContent _classTypeContent;
 
+        /// <summary>绘制 Buff 脚本选择与定位入口，选中候选后应用绑定并保存资产。</summary>
         public override void OnPropertyGui(SerializedProperty buffClassFullNameProperty)
         {
             GUILayout.Space(10);
@@ -137,6 +139,7 @@ namespace YLFramework.Editor.Buff
             GUILayout.EndHorizontal();
         }
 
+        /// <summary>扫描 BuffBase 派生脚本，不包含基类，也不验证抽象类型或无参构造条件。</summary>
         public static List<MonoScript> GetAllStatesType()
         {
             List<MonoScript> states = new List<MonoScript>();
@@ -169,6 +172,7 @@ namespace YLFramework.Editor.Buff
             return states;
         }
 
+        /// <summary>已有 GUID 无效时按类型全名扫描脚本，未命中则保留原 GUID。</summary>
         private static string GetGuid(string guid, string classFullName)
         {
             if (!IsValid(guid) && !string.IsNullOrEmpty(classFullName))
@@ -189,6 +193,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>检查 GUID 能否解析为可加载资产，不要求该资产一定是 Buff 脚本。</summary>
         private static bool IsValid(string guid)
         {
             string assetPath = AssetDatabase.GUIDToAssetPath(guid);
@@ -205,6 +210,7 @@ namespace YLFramework.Editor.Buff
             return true;
         }
 
+        /// <summary>按 GUID 打开资产；GUID 或解析路径为空时不处理。</summary>
         public static void OpenAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))
@@ -222,6 +228,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>按 GUID 选中并高亮资产；GUID 或解析路径为空时不处理。</summary>
         public static void SelectAsset(string guid)
         {
             if (string.IsNullOrEmpty(guid))

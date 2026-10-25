@@ -13,6 +13,7 @@ using YLFramework.Mission;
 namespace YLFramework.Editor.Mission
 {
 
+    /// <summary>条件参数选择树，以配表参数索引作为行 ID，并直接编辑绑定条件的序列化字段。</summary>
     public class ParamPopupTreeView : TreeView
     {
         private MissionsConfig _config;
@@ -23,6 +24,7 @@ namespace YLFramework.Editor.Mission
 
         private Dictionary<int, GUIContent> _contents = new Dictionary<int, GUIContent>();
 
+        /// <summary>保存候选配表与目标条件字段，启用交替行背景。</summary>
         public ParamPopupTreeView(TreeViewState state, MissionsConfig controller, SerializedProperty condition) : base(state)
         {
             this._config = controller;
@@ -31,6 +33,7 @@ namespace YLFramework.Editor.Mission
             showAlternatingRowBackgrounds = true;
         }
 
+        /// <summary>按配表参数顺序构建候选行，以名称和描述供树搜索。</summary>
         protected override TreeViewItem BuildRoot()
         {
 
@@ -47,11 +50,13 @@ namespace YLFramework.Editor.Mission
             return root;
         }
 
+        /// <summary>沿用基类的行构建及搜索过滤。</summary>
         protected override IList<TreeViewItem> BuildRows(TreeViewItem root)
         {
             return base.BuildRows(root);
         }
 
+        /// <summary>选中参数后写入名称，数值类型默认大于、布尔默认等于，再应用条件修改，不重置目标值。</summary>
         protected override void SingleClickedItem(int id)
         {
             base.SingleClickedItem(id);
@@ -108,6 +113,7 @@ namespace YLFramework.Editor.Mission
 
         }
 
+        /// <summary>绘制候选参数名称、说明与类型，并标出当前条件绑定的参数。</summary>
         protected override void RowGUI(RowGUIArgs args)
         {
 
@@ -167,6 +173,7 @@ namespace YLFramework.Editor.Mission
 
     }
 
+    /// <summary>带搜索框的条件参数选择弹窗，持有调用方传入的序列化条件字段。</summary>
     public class SelectParamPopWindow : PopupWindowContent
     {
         #region 字段
@@ -194,6 +201,7 @@ namespace YLFramework.Editor.Mission
         #endregion
 
 
+        /// <summary>记录弹窗宽度、候选配表和要修改的条件字段。</summary>
         public SelectParamPopWindow(float width, MissionsConfig controller, SerializedProperty condition)
         {
             this._width = width;
@@ -202,11 +210,13 @@ namespace YLFramework.Editor.Mission
         }
 
 
+        /// <summary>返回传入宽度与固定 240 像素高度。</summary>
         public override Vector2 GetWindowSize()
         {
             return new Vector2(this._width, 240);
         }
 
+        /// <summary>按需建立参数树和搜索框，绘制当前参数名称及过滤后的候选列表。</summary>
         public override void OnGUI(Rect rect)
         {
 

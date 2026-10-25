@@ -11,13 +11,17 @@ namespace YLFramework.FSM
     /// 生命周期：Allocate() → Init(owner) → AddState(id, state) / State(id) → SetUp(startStateId)
     /// → Update / LateUpdate / FixedUpdate / OnGUI → Pause / Continue → RecycleToCache()。
     /// Init 可选（owner 允许为 null）；SetUp 之后才能驱动与切换状态。
-    /// 回收后实例回到对象池，不应继续使用；再次 Allocate 得到的实例需重新 Init、注册状态并 SetUp。
-    /// 异常安全：用户回调抛出的异常不会被吞掉；内部的重入标记与暂停/启动提交点使用 try/finally 或"成功后提交"，
-    /// 状态机不会永久停留在"切换中"或半提交状态。
+    /// 回收后本次借用结束，不应继续使用；再次 Allocate 得到的实例需重新 Init、注册状态并 SetUp。
+    /// 用户回调异常向外传播，内部重入标记在 finally 中解除；启动、切换与暂停的提交时机见各入口。
     /// 驱动回调或状态切换回调（Condition / Exit / OnStateChanged / Enter）中调用 RecycleToCache 会被拒绝，
     /// 避免对象已回池而旧调用栈继续运行。
     /// </summary>
     /// <typeparam name="TStateId">状态 ID 类型，常用枚举，也可为字符串等。</typeparam>
+    /// <remarks>
+    /// 与资产驱动的 YLFramework.StateMachine 相互独立，不读取控制器资产或自动检查转换边；
+    /// 本类不是 Unity 组件，更新入口须由调用方转发。
+    /// 两个 Continue 入口没有切换重入拒绝检查，不应从条件求值或进入/退出回调中重入恢复。
+    /// </remarks>
     public class Fsm<TStateId> : IOfPool, IPoolType
     {
         /// <summary>当前运行状态（NotStart / Running / Stop）。其中 Stop 表示已暂停而非终止。</summary>
@@ -72,7 +76,7 @@ namespace YLFramework.FSM
 
         /// <summary>
         /// 当前状态已持续的秒数（Time.deltaTime 累加）。
-        /// 仅在 Update 中、且回调结束时仍为 Running 且 CurrentState 未变（未切走也未暂停）时累加；
+        /// 仅在 Update 中、且回调结束时仍为 Running 且 CurrentState 与进入时为同一实例时累加；
         /// FixedUpdate / LateUpdate / OnGUI 不累加。
         /// 暂停期间停止累加；Continue() 恢复累加，Continue(stateId) 切换到新状态时清零。
         /// </summary>
@@ -85,7 +89,7 @@ namespace YLFramework.FSM
         /// 状态切换成功提交后的回调，参数为（上一状态 ID, 当前状态 ID）。
         /// 触发顺序：旧状态 Exit → 更新 PreviousStateId / CurrentState / CurrentStateId → 本回调
         /// → 重置计时 → 新状态 Enter。
-        /// 回调抛异常时切换已提交：计时仍会重置且 Enter 仍会执行，异常随后继续向上传播。
+        /// 回调抛异常时切换已提交：计时仍会重置且仍会调用 Enter；若 Enter 也抛错，向外传播后者。
         /// 可空：未赋值或回收后为 null，不会触发。
         /// </summary>
         public Action<TStateId, TStateId> OnStateChanged
@@ -412,9 +416,9 @@ namespace YLFramework.FSM
         /// 异常语义：
         /// Condition 抛异常 → 不提交任何变化；
         /// Exit 抛异常 → 尚未提交，Current / Previous / 计时保持旧值；
-        /// OnStateChanged 抛异常 → 切换已提交，仍会重置计时并执行 Enter，异常随后继续传播；
-        /// Enter 抛异常 → 切换与计时已提交，MachineState 保持 Running，可用 reCurrentState 重进目标。
-        /// Condition / Exit / OnStateChanged / Enter 回调内禁止再次切换或暂停（返回 false）。
+        /// OnStateChanged 抛异常 → 切换已提交，仍会重置计时并调用 Enter，异常传播规则见 OnStateChanged；
+        /// Enter 抛异常 → 切换与计时已提交，MachineState 保持 Running，可用 reenterCurrentState 重进目标。
+        /// Condition / Exit / OnStateChanged / Enter 回调内调用 ChangeState 或 Pause 会返回 false。
         /// </summary>
         /// <param name="newStateId">目标状态 ID。</param>
         /// <param name="reenterCurrentState">目标与当前相同时是否重新执行 Exit/Enter；默认 false 表示忽略。</param>
@@ -487,6 +491,7 @@ namespace YLFramework.FSM
             return true;
         }
 
+        /// <summary>保留对象池的无参创建入口；直接构造被标记为编译错误，业务应调用 Allocate。</summary>
         [Obsolete("请使用FSM<T>.Allocate()来申请一个状态机", true)]
         public Fsm()
         {
@@ -501,7 +506,8 @@ namespace YLFramework.FSM
 
         /// <summary>
         /// 回收清理（由对象池在回收时调用）：
-        /// 先 Pause 退出当前状态，然后先把 FSM 自身状态清干净（宿主、状态表、当前/上一状态、回调、计时、内部标记），
+        /// 先 Pause 退出当前状态；该步抛异常时直接退出，不进入后续清空。
+        /// 成功后把 FSM 自身状态清干净（宿主、状态表、当前/上一状态、回调、计时、内部标记），
         /// 再对已摘除的状态逐个执行 DeInit。这样即使某个 DeInit 抛异常，也不会留下半清理对象；
         /// 所有状态的 DeInit 都会被执行，只向上抛出第一个异常；异常时对象池会拒绝入池（不会以脏状态被复用）。
         /// 状态对象本身由调用方持有，这里不会 Dispose，只解除 FSM 的引用并调用 DeInit。
@@ -607,11 +613,7 @@ namespace YLFramework.FSM
             }
         }
 
-        /// <summary>
-        /// 提交一次状态切换。调用方必须已设置 _isTransitioning，并保证 MachineState 为 Running。
-        /// 提交顺序：旧状态 Exit → 更新 PreviousStateId / CurrentState / CurrentStateId → OnStateChanged → 重置计时 → 新状态 Enter。
-        /// Exit 抛异常时不进入提交段；OnStateChanged 抛异常时仍完成计时重置与 Enter，异常随后向上传播。
-        /// </summary>
+        /// <summary>在调用方的切换保护内提交目标状态，并在通知失败时仍尝试重置计时和进入目标。</summary>
         private void CommitTransition(IState nextState, TStateId nextStateId, bool exitCurrentState)
         {
             if (exitCurrentState)
@@ -634,11 +636,13 @@ namespace YLFramework.FSM
             }
         }
 
+        /// <summary>按 ID 查询已注册状态，不存在时返回 null，不创建状态。</summary>
         private IState GetState(TStateId stateType)
         {
             return _stateDict.GetValueOrDefault(stateType);
         }
 
+        /// <summary>创建并初始化委托状态，再尝试加入注册表，供 State 的按需创建入口使用。</summary>
         private CustomState CreateState(TStateId stateType)
         {
             var newState = new CustomState();

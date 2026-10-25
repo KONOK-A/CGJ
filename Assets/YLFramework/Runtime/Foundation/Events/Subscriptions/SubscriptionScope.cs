@@ -22,6 +22,7 @@ namespace YLFramework.Events
         public int Count => _subscriptions.Count;
 
         /// <summary>加入句柄；关闭后立即取消，不复活作用域。</summary>
+        /// <remarks>不按句柄去重，重复加入会分别承担清理责任；传入 null 时忽略。</remarks>
         public void Add(IUnregister subscription)
         {
             if (subscription == null)

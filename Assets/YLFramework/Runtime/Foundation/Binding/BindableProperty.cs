@@ -22,10 +22,11 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 注册值变化监听并立即用当前值同步回调一次，随后保持注册。
+        /// 先用当前值同步回调一次，成功返回后再注册后续值变化监听。
         /// </summary>
         /// <param name="onValueChanged">值变化回调，为 null 时不产生实际监听。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
+        /// <remarks>初始回调抛出异常时不留下本次注册；初始回调期间引发的变化不会通知尚未注册的本次监听。</remarks>
         IUnregister RegisterWithInitValue(Action<T> onValueChanged);
 
         /// <summary>
@@ -36,7 +37,7 @@ namespace YLFramework.Binding
         IUnregister Register(Action<T> onValueChanged);
 
         /// <summary>
-        /// 注销一个已注册的值变化回调；未注册时为空操作。
+        /// 按委托注销普通值变化监听；未注册时为空操作，单次监听应使用其返回句柄取消。
         /// </summary>
         /// <param name="onValueChanged">要注销的回调。</param>
         void Unregister(Action<T> onValueChanged);
@@ -75,7 +76,7 @@ namespace YLFramework.Binding
     /// <summary>
     /// 可绑定属性：把“值相等时静默、变化时通知”的常见需求封装为可直接替换字段的属性。
     /// 相等判定默认使用静态 <see cref="Comparer"/>（常见 Unity 值类型已在进入 Play 时自动注册合适的比较器），
-    /// 也可通过 <see cref="WithComparer"/> 为单个实例覆盖；null 与 null 视为相同，null 与非 null 视为不同。
+    /// 也可通过 <see cref="WithComparer"/> 为单个实例覆盖；新值为 null 时只检查存储值是否为 null，其余情况交给比较器。
     /// 可读写属性（<see cref="IBindableProperty{T}.Value"/>）不会重复通知未变化的值；如需绕过比较请用
     /// <see cref="ForceNotify"/> 或 <see cref="SetValueWithoutCallback"/>。
     /// 该类型可通过 <see cref="Allocate"/> / <see cref="Recycle"/> 从池中复用，复用时会清空监听、比较器与值。
@@ -114,6 +115,7 @@ namespace YLFramework.Binding
         /// <param name="comparer">相等判定委托。</param>
         /// <returns>当前实例，便于链式配置。</returns>
         /// <exception cref="ArgumentNullException">comparer 为 null。</exception>
+        /// <remarks>比较器依次接收候选值与存储值；候选值为 null 时由属性直接判断，不调用比较器。</remarks>
         public BindableProperty<T> WithComparer(Func<T, T, bool> comparer)
         {
             _instanceComparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
@@ -150,8 +152,11 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 设置值并在真的发生变化时触发回调，返回是否发生变化
+        /// 设置值并在真的发生变化时触发回调，返回是否发生变化。
         /// </summary>
+        /// <param name="value">参与相等比较的候选值。</param>
+        /// <returns>未变化时返回 false；写入并完成通知后返回 true。</returns>
+        /// <remarks>先写入再同步通知；监听异常会中断后续通知并向上传播，不回滚已写入的值。</remarks>
         public virtual bool TrySetValue(T value)
         {
             if (IsSameValue(value))
@@ -214,7 +219,7 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 注销所有值变化监听。
+        /// 注销所有值变化监听并使旧句柄失效；不撤回已进入分发快照的回调。
         /// </summary>
         public void UnregisterAll()
         {
@@ -222,7 +227,7 @@ namespace YLFramework.Binding
         }
 
         /// <summary>
-        /// 注册值变化监听并立即同步回调当前值一次，随后保持注册。
+        /// 先同步回调当前存储值一次，成功返回后再注册后续值变化监听。
         /// </summary>
         /// <param name="onValueChanged">值变化回调，为 null 时不产生实际监听。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
@@ -242,6 +247,10 @@ namespace YLFramework.Binding
         /// </summary>
         /// <param name="onValueChanged">值变化回调。</param>
         /// <returns>用于注销本次注册的句柄。</returns>
+        /// <remarks>
+        /// 重复委托各自注册，不去重；调用方负责保存句柄并按生命周期取消。
+        /// 普通取消不撤回已有分发快照，只影响后续或嵌套通知；null 回调返回空句柄。
+        /// </remarks>
         public virtual IUnregister Register(Action<T> onValueChanged)
         {
             return _onValueChanged.Register(onValueChanged);
@@ -250,13 +259,15 @@ namespace YLFramework.Binding
         /// <summary>
         /// 只监听一次值变化；用户回调执行前消费注册，嵌套通知不会重复执行。
         /// </summary>
+        /// <param name="onValueChanged">单次变化回调；为 null 时不产生实际监听。</param>
+        /// <returns>本次注册的取消句柄；触发前取消应使用此句柄，而非按委托注销。</returns>
         public IUnregister RegisterOnce(Action<T> onValueChanged)
         {
             return _onValueChanged.RegisterOnce(onValueChanged);
         }
 
         /// <summary>
-        /// 注销一个已注册的值变化回调；未注册时为空操作。
+        /// 移除最后一个匹配的普通委托子序列；未注册时为空操作，单次监听须通过其句柄取消。
         /// </summary>
         public virtual void Unregister(Action<T> onValueChanged)
         {
@@ -329,10 +340,11 @@ namespace YLFramework.Binding
     /// <summary>
     /// 在进入 Play 时为常见值类型注册默认比较器，使 BindableProperty&lt;T&gt; 的相等判定不依赖各类型 Equals 的默认实现
     /// （例如 float 采用 Mathf.Approximately 近似比较，Color32/RangeInt 按字段比较）。
-    /// Domain Reload disabled 时每次进入 Play 都会重新执行，会覆盖运行时被替换的静态比较器。
+    /// 关闭 Domain Reload 时每次进入 Play 都会重新执行，会覆盖运行时被替换的静态比较器。
     /// </summary>
     internal static class ComparerAutoRegister
     {
+        /// <summary>在场景加载前重设常见值类型的静态比较器，不覆盖属性实例的专用比较器。</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         public static void AutoRegister()
         {

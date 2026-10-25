@@ -4,7 +4,7 @@ using UnityEngine;
 namespace YLFramework.Utilities
 {
     /// <summary>
-    /// 字符串工具类
+    /// 将字节长度和进度数值格式化为用于显示的字符串。
     /// </summary>
     public class StringTools
     {
@@ -44,9 +44,11 @@ namespace YLFramework.Utilities
 
 
         /// <summary>
-        /// 把 0 -1 转换成 0% - 100%
+        /// 通过 Mathf.Lerp 将进度换算为百分数字符串，有限的区间外数值按 0 或 100 处理。
+        /// 数字使用当前 Culture 的默认格式，不固定小数位数。
         /// </summary>
-        /// <returns></returns>
+        /// <param name="progress">进度值，通常为 0..1。</param>
+        /// <returns>以百分号结尾的进度文本。</returns>
         public static string FormatProgress(float progress)
         {
             return string.Format("{0}%", Mathf.Lerp(0, 100, progress));

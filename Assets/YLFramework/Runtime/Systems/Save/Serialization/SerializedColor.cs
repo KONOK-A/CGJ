@@ -56,12 +56,14 @@ namespace YLFramework.Save
 
 
         /// <summary>从 <see cref="Color"/> 隐式转换（逐分量复制）。</summary>
+        /// <param name="color">要复制各分量的 Unity 颜色。</param>
         public static implicit operator SerializedColor(Color color)
         {
             return new SerializedColor(color.r, color.g, color.b, color.a);
         }
 
         /// <summary>隐式转换回 <see cref="Color"/>（逐分量复制）。</summary>
+        /// <param name="color">保存颜色分量的序列化值。</param>
         public static implicit operator Color(SerializedColor color)
         {
             return new Color(color.r, color.g, color.b, color.a);

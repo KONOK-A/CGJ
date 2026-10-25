@@ -4,16 +4,26 @@ using UnityEngine;
 
 namespace YLFramework.Editor.Resource
 {
+    /// <summary>显式选择当前或确切历史发布后签发元数据，仅保留非秘密窗口状态。</summary>
     internal sealed class ResourceReleaseSigningWindow : EditorWindow
     {
+        /// <summary>用于定位发布归属的资源项目配置。</summary>
         [SerializeField] private ResourceProject project;
+        /// <summary>选择发布版本时要求匹配的应用资源兼容标识。</summary>
         [SerializeField] private string app;
+        /// <summary>由发布方明确填写的更新渠道。</summary>
         [SerializeField] private string channel = "";
+        /// <summary>签名公钥的非秘密选择标识，不是内容密钥标识。</summary>
         [SerializeField] private string keyId = "";
+        /// <summary>发布方填写的正序号，跨版本递增由发布方及消费者策略保证。</summary>
         [SerializeField] private long sequence = 1;
+        /// <summary>从执行时起计算的有效天数，窗口限制为 1 到 31。</summary>
         [SerializeField] private int validDays = 7;
+        /// <summary>是否锁定选定版本，而不是执行时读取当前发布索引。</summary>
         [SerializeField] private bool selectedMode;
+        /// <summary>选定版本的纯值身份，执行时仍须重新复验来源。</summary>
         [SerializeField] private ResourceReleaseIdentity selected;
+        /// <summary>待新增元数据文件的绝对路径，不保存凭据路径或密码。</summary>
         [SerializeField] private string outputPath = "";
         private string _status;
         private bool _isStatusError;
@@ -22,6 +32,7 @@ namespace YLFramework.Editor.Resource
         private Vector2 _scroll;
         private bool _showTechnical;
 
+        /// <summary>打开签发窗口，以执行时发布索引当前版本为来源。</summary>
         internal static void Open(ResourceProject project, string app)
         {
             var window = GetWindow<ResourceReleaseSigningWindow>(true, "签发发布元数据");
@@ -32,6 +43,7 @@ namespace YLFramework.Editor.Resource
             window.ResetPresentation();
         }
 
+        /// <summary>打开窗口并绑定明确选定的发布身份，不回退到当前索引。</summary>
         internal static void OpenSelected(ResourceProject project, ResourceRelease release)
         {
             var window = GetWindow<ResourceReleaseSigningWindow>(true, "签发选定版本");
@@ -39,6 +51,7 @@ namespace YLFramework.Editor.Resource
             window.ResetPresentation();
         }
 
+        /// <summary>要求发布身份与项目匹配后复制选定身份和兼容标识。</summary>
         internal void SelectRelease(ResourceProject owner, ResourceRelease release)
         {
             var identity = new ResourceReleaseIdentity(release);
@@ -53,6 +66,7 @@ namespace YLFramework.Editor.Resource
             selectedMode = true;
         }
 
+        /// <summary>重置结果展示及本次渠道能力确认，不保留上次签发的确认状态。</summary>
         private void ResetPresentation()
         {
             _channelSupportsContentEncryption = false;
@@ -65,6 +79,7 @@ namespace YLFramework.Editor.Resource
             Repaint();
         }
 
+        /// <summary>按当前模式重新取得明确发布，选定身份丢失时失败而不替换来源。</summary>
         private ResourceRelease ResolveRelease()
         {
             if (selectedMode)
@@ -75,8 +90,10 @@ namespace YLFramework.Editor.Resource
             return ResourcePublisher.ReadCurrent(project, EditorUserBuildSettings.activeBuildTarget, app) ?? throw new InvalidOperationException("当前平台和 App 尚无已登记的当前发布版本。");
         }
 
+        /// <summary>本次显式渠道加密能力确认，每次打开时重置且不序列化。</summary>
         private bool _channelSupportsContentEncryption;
 
+        /// <summary>收集非秘密签发参数，经确认后复验版本并导出，失败展示不回显凭据异常内容。</summary>
         private void OnGUI()
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);

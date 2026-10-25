@@ -48,6 +48,7 @@ namespace YLFramework.Editor.Help
         internal readonly Color ChipBorder;
         internal readonly Color BadgeBg;
 
+        /// <summary>按当前 Editor 深浅皮肤建立窗口专用配色值。</summary>
         internal HelpPalette(bool dark)
         {
             if (dark)
@@ -166,10 +167,12 @@ namespace YLFramework.Editor.Help
     internal static class HelpTexture
     {
         /// <summary>生成不带左侧强调线的圆角内嵌块纹理；用于成员详情区。</summary>
+        /// <returns>由调用窗口持有并在重建样式或停用时销毁的临时纹理。</returns>
         internal static Texture2D RoundedBox(int size, int radius, Color fill, Color border) =>
             RoundedBox(size, radius, fill, border, fill);
 
         /// <summary>生成圆角信息块纹理：细边框、底色、左侧 2 像素低对比强调线；用 style.border 九宫格拉伸。</summary>
+        /// <returns>每次调用新建的纹理；HideAndDontSave 不代替调用方的显式销毁责任。</returns>
         internal static Texture2D RoundedBox(int size, int radius, Color fill, Color border, Color accent)
         {
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)

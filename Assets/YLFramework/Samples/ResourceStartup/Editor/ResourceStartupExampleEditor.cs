@@ -11,11 +11,13 @@ using YLFramework.Resource;
 
 namespace YLFramework.Samples.Resource.Editor
 {
+    /// <summary>样例的显式配置、构建、内置部署与运行入口，不在绘制 Inspector 时自动执行业务。</summary>
     [CustomEditor(typeof(ResourceStartupExample))]
     public sealed class ResourceStartupExampleEditor : UnityEditor.Editor
     {
         private string _developmentKeyEnvironmentVariable = ResourceEditorOperations.ContentKeyEnvironmentVariable;
 
+        /// <summary>展示样例状态与操作按钮，仅在用户选择对应操作时执行构建、部署或运行。</summary>
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
@@ -69,6 +71,9 @@ namespace YLFramework.Samples.Resource.Editor
             }
         }
 
+        /// <summary>查找唯一匹配稳定标识的正式项目，拒绝缺失或重复身份以免操作其他项目。</summary>
+        /// <param name="id">样例明确选择的项目标识。</param>
+        /// <returns>借读的项目配置资产，不转移其销毁责任。</returns>
         private static ResourceProject Project(string id)
         {
             var matches = AssetDatabase.FindAssets("t:ResourceProject")
@@ -82,18 +87,27 @@ namespace YLFramework.Samples.Resource.Editor
             return matches[0];
         }
 
+        /// <summary>按样例显式模式装配模拟或 Bundle 配置，不启动会话，也不在失败时切换来源。</summary>
+        /// <param name="example">提供模式、项目及确切发布选择的样例组件。</param>
+        /// <returns>模拟模式下的正式项目配置，或样例所选快照的 Bundle 配置。</returns>
         public static ResourceConfiguration CreateConfiguration(ResourceStartupExample example) =>
             example.mode == ResourceLoadMode.EditorSimulation
                 ? ResourceEditorSimulation.CreateConfiguration(example.mode, new[] { Project(example.projectId) })
                 : example.CreateBundleConfiguration();
 
         /// <summary>仅供非生产开发，显式绑定当前Project/KeyId与进程变量名；Play/域重载后重新调用，不持久化密钥。</summary>
+        /// <param name="example">接收运行时密钥提供者的样例组件，其项目须唯一匹配正式定义。</param>
+        /// <param name="environmentVariable">含规范 Base64 编码的 32 字节密钥的进程环境变量名，不是密钥本身。</param>
         public static void UseDevelopmentContentKeyFromEnvironment(ResourceStartupExample example, string environmentVariable)
         {
             var project = Project(example.projectId);
             example.ContentKeyProvider = ResourceEditorOperations.ContentKeyFromEnvironment(project.projectId, project.contentKeyId, environmentVariable);
         }
 
+        /// <summary>按当前活动平台构建并本地发布所选项目，将样例指向成功发布的确切非内置快照。</summary>
+        /// <param name="example">提供项目、应用兼容标识及可选内容密钥来源，并接收发布选择的样例组件。</param>
+        /// <returns>本次成功发布的版本；未确认发布成功时抛出构建或发布阶段的错误。</returns>
+        /// <remarks>不切换或同步样例的 mode、platform；调用方须确保平台匹配并显式保存场景，构建发布目录不会在停止样例时删除。</remarks>
         public static ResourceRelease Build(ResourceStartupExample example)
         {
             var report = ResourceEditorOperations.BuildAndPublish(Project(example.projectId), example.appCompatibility, provider: example.ContentKeyProvider);
@@ -107,13 +121,21 @@ namespace YLFramework.Samples.Resource.Editor
             return release;
         }
 
+        /// <summary>将所选平台文本转换为构建目标并校验文本往返一致，供确切发布定位使用。</summary>
+        /// <param name="platform">样例保存的平台文本。</param>
+        /// <returns>与输入文本往返一致的构建目标。</returns>
         private static BuildTarget Target(string platform) => Enum.TryParse<BuildTarget>(platform, out var target) && target.ToString() == platform
             ? target : throw new InvalidOperationException("Select an explicit supported build platform.");
 
+        /// <summary>只读预检样例明确选择的本地发布及其内置部署目标，不取密钥或执行部署。</summary>
+        /// <param name="example">以项目、平台、兼容标识和摘要共同选择确切发布的样例组件。</param>
+        /// <returns>所选版本的部署计划，不代表内置文件已经写入。</returns>
         public static ResourceBuiltInPlan PreflightBuiltIn(ResourceStartupExample example) => ResourceBuiltInDeployer.Preflight(
             ResourcePublisher.ReadVersion(Project(example.projectId), Target(example.platform), example.appCompatibility, example.catalogDigest));
 
         /// <summary>只部署Inspector已选择的确切发布；不保存用户Scene、不启动或切换运行会话。</summary>
+        /// <param name="example">提供发布身份并在部署成功后启用 useBuiltIn 的样例组件。</param>
+        /// <returns>正式部署器确认的内置部署结果，不代表 Player 已构建或资源会话已启动。</returns>
         public static ResourceBuiltInDeployment DeployBuiltIn(ResourceStartupExample example)
         {
             var result = ResourceBuiltInDeployer.Deploy(PreflightBuiltIn(example));
@@ -124,10 +146,16 @@ namespace YLFramework.Samples.Resource.Editor
             return result;
         }
 
+        /// <summary>将用户的创建菜单操作转交独立样例创建入口。</summary>
         [MenuItem("YLFramework/Samples/Create Resource Startup Example")]
         private static void CreateMenu() => Create();
 
         /// <summary>用户显式创建独立示例。只新建GUID，不改已有Scene/资源；脏场景拒绝而非自动保存。</summary>
+        /// <returns>本次新建的样例根目录，包含内容资产、Project.asset 与 Example.unity。</returns>
+        /// <remarks>
+        /// 创建后切换到新场景，但不构建、发布、部署或启动会话；运行前仍需明确选择模式与配置。
+        /// 生成目录由使用方管理，停止运行只结算样例运行时责任，不删除这些资产。
+        /// </remarks>
         public static string Create()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -181,6 +209,8 @@ namespace YLFramework.Samples.Resource.Editor
             return folder;
         }
 
+        /// <summary>生成一秒单声道 PCM 测试音，并在退出时关闭本次输出流。</summary>
+        /// <param name="path">本次新建内容目录中的 WAV 输出路径。</param>
         private static void WriteTone(string path)
         {
             const int Rate = 8000;

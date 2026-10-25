@@ -12,6 +12,7 @@ using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 
 namespace YLFramework.Editor.StateMachine
 {
+    /// <summary>为单个过渡条件选择配置参数的可搜索弹窗。</summary>
     public class FsmSelectParamWindow : PopupWindowContent
     {
 
@@ -38,6 +39,10 @@ namespace YLFramework.Editor.StateMachine
         #endregion
 
 
+        /// <summary>绑定待修改条件与参数来源配置。</summary>
+        /// <param name="width">弹窗宽度。</param>
+        /// <param name="condition">待选择参数的条件。</param>
+        /// <param name="controller">提供参数列表并承载 Undo 的配置。</param>
         public FsmSelectParamWindow(float width, FsmConditionData condition, RuntimeFsmController controller)
         {
             this._width = width;
@@ -46,11 +51,15 @@ namespace YLFramework.Editor.StateMachine
         }
 
 
+        /// <summary>使用指定宽度及固定高度布局参数弹窗。</summary>
+        /// <returns>弹窗尺寸。</returns>
         public override Vector2 GetWindowSize()
         {
             return new Vector2(this._width, 240);
         }
 
+        /// <summary>延迟创建参数树，绘制搜索字段、当前参数标签及候选项。</summary>
+        /// <param name="rect">弹窗内容区域。</param>
         public override void OnGUI(Rect rect)
         {
 

@@ -10,12 +10,14 @@ using YLFramework.Editor.Utilities;
 namespace YLFramework.Editor.Buff
 {
 
+    /// <summary>普通 Inspector 只读展示效果，效果窗口借用本检查器编辑定义及分类。</summary>
     [CustomEditor(typeof(EffectData))]
     public class EffectDataInspector : UnityEditor.Editor
     {
 
         private static EffectDataInspector _instance;
 
+        /// <summary>供效果窗口复用的内嵌检查器实例。</summary>
         public static EffectDataInspector Instance
         {
             get
@@ -46,6 +48,7 @@ namespace YLFramework.Editor.Buff
 
         private GUIContent _typeContent;
 
+        /// <summary>只读展示效果资产，并提供跳转到效果窗口的按钮。</summary>
         public override void OnInspectorGUI()
         {
             EditorGUI.BeginDisabledGroup(true);
@@ -64,6 +67,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>在效果窗口内编辑定义，ID、名称与业务分类使用专用控件。</summary>
         internal void OnInspectorGUI(EffectConfigsWindow window, EffectData data)
         {
             this._window = window;
@@ -146,6 +150,7 @@ namespace YLFramework.Editor.Buff
         }
 
 
+        /// <summary>延迟提交效果名称，检查显示名占用后保存并重命名资产、刷新列表。</summary>
         private void OnInspectorName()
         {
             _effectName = _currentEffectData.effectName;
@@ -176,6 +181,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>拒绝零值与已占用 ID，合法修改直接写入资产并保存、刷新列表。</summary>
         private void OnInspectorId()
         {
             int id = _currentEffectData.id;
@@ -207,6 +213,7 @@ namespace YLFramework.Editor.Buff
             }
         }
 
+        /// <summary>检查登记的效果资产中是否已有指定 ID。</summary>
         private bool IsContains(int id)
         {
             foreach (var item in BuffSystemSettings.Instance.AllEffectDatas)
@@ -225,6 +232,7 @@ namespace YLFramework.Editor.Buff
             return false;
         }
 
+        /// <summary>提供业务分类选择并应用序列化修改，另提供项目设置跳转。</summary>
         private void OnTypeInspector(SerializedProperty property)
         {
 

@@ -6,7 +6,8 @@ namespace YLFramework.Extensions
 {
     /// <summary>
     /// GameObject 链式扩展。变更类方法返回原对象以便串联；查询方法不修改对象。
-    /// 判空使用 Unity 的 <c>== null</c> 语义（已销毁对象视为空）。
+    /// 判空使用 Unity 的 <c>== null</c> 语义，但多数方法不保护无效的自身对象。
+    /// 显隐只设置 activeSelf，实际激活仍受祖先状态影响；父子关系变更保留世界变换。
     /// </summary>
     public static class GameObjectExtension
     {
@@ -62,7 +63,7 @@ namespace YLFramework.Extensions
             selfObj.tag = tag;
             return selfObj;
         }
-        /// <summary>判断所在层是否包含在 layerMask 中。</summary>
+        /// <summary>判断所在层是否包含在 layerMask 中；null 或已销毁对象返回 false。</summary>
         public static bool IsInLayerMask(this GameObject selfObj, LayerMask layerMask)
         {
             return LayerMaskUtility.IsInLayerMask(selfObj, layerMask);
