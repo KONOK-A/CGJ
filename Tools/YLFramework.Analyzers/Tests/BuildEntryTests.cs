@@ -53,5 +53,67 @@ namespace YLFramework.Analyzers.Tests
                 ownedLock?.Dispose();
             }
         }
+
+        [TestCase("missing", "meta")]
+        [TestCase("guid", "GUID")]
+        [TestCase("label", "RoslynAnalyzer")]
+        [TestCase("reference", "Runtime")]
+        [TestCase("platform", "platform")]
+        public async Task DeployRejectsInvalidMetaBeforeCallingSdk(string kind, string reason)
+        {
+            var root = Path.Combine(AnalyzerFixture.Root, "Temp", "AnalyzerMetaGuard-" + Guid.NewGuid().ToString("N"));
+            var tools = Path.Combine(root, "Tools", "YLFramework.Analyzers");
+            var meta = Path.Combine(root, "Assets", "YLFramework", "Runtime", "Core", "Analyzers", "YLFramework.Analyzers.dll.meta");
+            Directory.CreateDirectory(tools);
+            Directory.CreateDirectory(Path.Combine(root, "Temp"));
+            Directory.CreateDirectory(Path.GetDirectoryName(meta));
+            File.Copy(Path.Combine(AnalyzerFixture.Root, "Tools", "YLFramework.Analyzers", "build.ps1"), Path.Combine(tools, "build.ps1"));
+            const string valid = "fileFormatVersion: 2\nguid: 471f81c4273ee66429677df44cbd6960\nlabels:\n- RoslynAnalyzer\nPluginImporter:\n  isExplicitlyReferenced: 1\n  platformData:\n  - first:\n      Any: \n    second:\n      enabled: 0\n";
+            if (kind != "missing")
+            {
+                var text = kind == "guid" ? valid.Replace("471f81c4273ee66429677df44cbd6960", "00000000000000000000000000000000") :
+                    kind == "label" ? valid.Replace("RoslynAnalyzer", "roslynanalyzer") :
+                    kind == "reference" ? valid.Replace("isExplicitlyReferenced: 1", "isExplicitlyReferenced: 0") :
+                    valid.Replace("enabled: 0", "enabled: 1");
+                File.WriteAllText(meta, text);
+            }
+            try
+            {
+                var start = new ProcessStartInfo("pwsh")
+                {
+                    WorkingDirectory = tools,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-File", Path.Combine(tools, "build.ps1"), "-Deploy" })
+                {
+                    start.ArgumentList.Add(argument);
+                }
+                using var process = Process.Start(start);
+                var stdout = process.StandardOutput.ReadToEndAsync();
+                var stderr = process.StandardError.ReadToEndAsync();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    process.Kill(true);
+                    await process.WaitForExitAsync();
+                    Assert.Fail("Invalid deployment metadata did not fail before SDK invocation.");
+                }
+                var output = await stdout + await stderr;
+                Assert.That(process.ExitCode, Is.Not.EqualTo(0));
+                Assert.That(output, Does.Contain(reason));
+                Assert.That(output, Does.Not.Contain("SDK="));
+                Assert.That(File.Exists(Path.Combine(root, "Temp", "YLFramework.Analyzers", "build-info.json")), Is.False);
+            }
+            finally
+            {
+                Directory.Delete(root, true);
+            }
+        }
     }
 }

@@ -99,6 +99,72 @@ namespace YLFramework.Core.Editor.Tests
         public IEnumerator MergedRuntimeHasActualUnityPlayerPositiveAndNegativeAnalyzerWitnesses()
             => CompileAnalyzerWitnesses(AssemblyBuilderFlags.DevelopmentBuild);
 
+        [UnityTest]
+        public IEnumerator NewUsageRulesHaveActualUnityPositiveAndNegativeWitnesses()
+            => CompileNewUsageWitnesses(AssemblyBuilderFlags.EditorAssembly);
+
+        [UnityTest]
+        public IEnumerator NewUsageRulesHaveActualUnityPlayerPositiveAndNegativeWitnesses()
+            => CompileNewUsageWitnesses(AssemblyBuilderFlags.DevelopmentBuild);
+
+        private static IEnumerator CompileNewUsageWitnesses(AssemblyBuilderFlags flags)
+        {
+            var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
+            var runtime = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player)
+                .Single(assembly => assembly.name == "YLFramework.Runtime");
+            var folder = Path.GetFullPath(Path.Combine("Temp", "YLFramework.Analyzers", "NewUnityRules-" + Guid.NewGuid().ToString("N")));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                foreach (var negative in new[] { true, false })
+                {
+                    var source = "using System.Collections;using System.Collections.Generic;using UnityEngine;using YLFramework.Core;using YLFramework.Audio;using YLFramework.DependencyInjection;class Probe{" +
+                        (negative
+                            ? "[Inject]public static object Bad;[field:Inject]static event System.Action Changed;void Load(Module owner){owner.LoadView<Panel>(\"name\",loadViewArgs:null);}IEnumerator Run(AudioPlayRequest request){yield return request;}"
+                            : "[Inject]public object Dependency{get;private set;}[field:Inject]event System.Action Changed;void Load(Module owner){owner.LoadView<View>(\"name\",loadViewArgs:null);owner.LoadPanel<Panel>(\"name\");owner.GetView<Panel>(\"name\");owner.AttachView<Panel>(null);}IEnumerator Run(AudioPlayRequest request){yield return new WaitUntil(()=>request.HasStarted||request.IsDone);yield return new WaitUntil(()=>request.IsDone);}") +
+                        "IEnumerable<AudioPlayRequest> Data(AudioPlayRequest request){yield return request;}}" +
+                        (negative ? "record Consumer([field:Inject]object Service);" : "record Consumer([property:Inject]object Service);") +
+                        "namespace System.Runtime.CompilerServices{public sealed class IsExternalInit{}}";
+                    var path = Path.Combine(folder, negative ? "Negative.cs" : "Positive.cs");
+                    var output = Path.ChangeExtension(path, ".dll");
+                    File.WriteAllText(path, source);
+                    var builder = new AssemblyBuilder(output, new[] { path })
+                    {
+                        flags = flags,
+                        buildTarget = BuildTarget.StandaloneWindows64,
+                        buildTargetGroup = BuildTargetGroup.Standalone,
+                        referencesOptions = ReferencesOptions.UseEngineModules,
+                        additionalReferences = new[] { typeof(Module).Assembly.Location },
+                        compilerOptions = new ScriptCompilerOptions { RoslynAnalyzerDllPaths = runtime.compilerOptions.RoslynAnalyzerDllPaths }
+                    };
+                    builder.excludeReferences = builder.defaultReferences.Where(reference =>
+                        Path.GetFileName(reference).StartsWith("YLFramework", StringComparison.Ordinal) ||
+                        Path.GetFileName(reference).EndsWith("TestRunner.dll", StringComparison.Ordinal) ||
+                        (!editor && Path.GetFileName(reference).StartsWith("UnityEditor", StringComparison.Ordinal))).ToArray();
+                    CompilerMessage[] messages = null;
+                    builder.buildFinished += (_, result) => messages = result;
+                    Assert.That(builder.Build(), Is.True);
+                    while (builder.status != AssemblyBuilderStatus.Finished)
+                    {
+                        yield return null;
+                    }
+                    Assert.That(messages, Is.Not.Null);
+                    Assert.That(messages.Where(message => message.type == CompilerMessageType.Error), Is.Empty,
+                        string.Join("\n", messages.Select(message => message.message)));
+                    Assert.That(messages.Any(message => message.message.Contains("AD0001") || message.message.Contains("CS8032")), Is.False);
+                    var own = messages.Where(message => Regex.IsMatch(message.message, @"\bYL\d{4}\b")).ToArray();
+                    Assert.That(own.Select(message => Regex.Match(message.message, @"\bYL\d{4}\b").Value),
+                        Is.EquivalentTo(negative ? new[] { "YL0008", "YL0008", "YL0008", "YL0009", "YL0010" } : Array.Empty<string>()));
+                    Assert.That(own.All(message => message.type == CompilerMessageType.Warning), Is.True);
+                    Assert.That(File.Exists(output), Is.True);
+                }
+            }
+            finally
+            {
+                Directory.Delete(folder, true);
+            }
+        }
+
         private static IEnumerator CompileAnalyzerWitnesses(AssemblyBuilderFlags flags)
         {
             var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;

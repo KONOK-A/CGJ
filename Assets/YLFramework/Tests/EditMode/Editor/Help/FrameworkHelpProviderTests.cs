@@ -103,12 +103,13 @@ namespace YLFramework.Tests.Help
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
             }
 
-            for (var id = 1; id <= 7; id++)
+            for (var id = 1; id <= 10; id++)
             {
-                Assert.That(core.Guides.Any(p => p.Matches("YL000" + id + " Warning")), Is.True);
+                Assert.That(core.Guides.Any(p => p.Matches("YL" + id.ToString("D4") + " Warning")), Is.True);
             }
 
-            foreach (var query in new[] { "RoslynAnalyzer YLFramework.Runtime", "ruleset editorconfig", "build.ps1 -Deploy", "SDK 9.0.312" })
+            foreach (var query in new[] { "RoslynAnalyzer YLFramework.Runtime", "ruleset editorconfig", "build.ps1 -Deploy", "SDK 9.0.312",
+                "Project Settings Analyzers", "YLFramework/Core/分析器规则", "HasStarted IsDone" })
             {
                 Assert.That(core.Guides.Any(p => p.Matches(query)), Is.True, query);
             }

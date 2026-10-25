@@ -44,7 +44,9 @@ namespace YLFramework.Analyzers.Tests
                 text.Append("protected override void Start(){base.Start();}\nvoid OnEnable(){}\nvoid Wrong(){F();\n");
                 for (int j = 0; j < ordinaryCalls; j++)
                     text.Append("Math.Abs(-1);\n");
-                text.Append("}}\n");
+                text.Append("}\n[YLFramework.DependencyInjection.Inject] static object Injected;\n");
+                text.Append("void Load(YLFramework.Core.Module owner){owner.LoadView<YLFramework.Core.Panel>(\"name\",loadViewArgs:null);}\n");
+                text.Append("System.Collections.IEnumerator Play(YLFramework.Audio.AudioPlayRequest request){yield return request;}\n}\n");
             }
             return text.ToString();
         }
@@ -79,13 +81,13 @@ namespace YLFramework.Analyzers.Tests
                 var source = Corpus(configuration.count, configuration.calls);
                 var tree = CSharpSyntaxTree.ParseText(source, AnalyzerFixture.Parse, "Measured.cs");
                 var coldOff = await Measure(tree, false, 0);
-                var coldOn = await Measure(tree, true, configuration.count * 3);
+                var coldOn = await Measure(tree, true, configuration.count * 6);
                 var off = new List<Sample>();
                 var on = new List<Sample>();
                 for (int iteration = 0; iteration < 3; iteration++)
                 {
                     off.Add(await Measure(tree, false, 0));
-                    on.Add(await Measure(tree, true, configuration.count * 3));
+                    on.Add(await Measure(tree, true, configuration.count * 6));
                 }
                 results.Add(new
                 {

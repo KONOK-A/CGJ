@@ -112,11 +112,11 @@ Runtime 分为 Foundation、Core、Systems、Utilities 四个职责区，Editor 
 ## 帮助与导出
 
 - 菜单：`YLFramework/帮助`、`YLFramework/Core/帮助`、`YLFramework/Toolkit/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。浏览帮助不执行示例或创建运行宿主，扩展方式见 [Help](Modules/Help.md)。
-- 常用工具：`YLFramework/Resource/Workbench`、`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。
+- 常用工具：`YLFramework/Resource/Workbench`、`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`、`YLFramework/Core/分析器规则`（Project Settings > YLFramework > Analyzers）。
 - `YLFramework/Toolkit/导出框架包` 的默认根为 `Editor`、`Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation` 六个目录，以及 `LICENSE.md`、`CodingStyle.md`、`AGENTS.md` 三个根文件；使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根导出。
 - 自动化可调用 `YLFramework.Editor.Distribution.ExportUnityPackage.Export(absolutePackagePath)` 向已有本地父目录导出同一内容，默认不覆盖、不保存其他资产；菜单入口会先保存资产。Resource 发布快照是另一类交付，见 [Resource](Modules/Resource.md#轮换与交付)。
 - `Plugins/BouncyCastle/` 完整递归且保留原导入平台；不递归整个 Plugins，更不复制或改变宿主商业插件配置。JSONObject/SharpZipLib 的现有来源声明与许可证随 Runtime 保留。
-- `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 是编译器输入，不是 Player 运行依赖；七项诊断默认 Warning，配置与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
+- `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 是编译器输入，不是 Player 运行依赖；十项诊断默认 Warning，新增 Inject 声明、View 入口加载 Panel、音频协程等待检查。设置页可选 asmdef/预定义业务程序集、预览并修改原生 ruleset，保留其他规则与继承；只读接入自检不把零诊断当成功。配置、Error 恢复、升级与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
 - 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。
 - 框架需要 UGUI、Json.NET 与随包的 BouncyCastle，不是零依赖安装包；不需要原 XF 生态或商业 Editor 插件。`Library/` 下的 XML 是构建产物，不默认导出，缺 XML 时 Help 仍展示可反射的声明。
 
@@ -137,6 +137,8 @@ HybridCLR 源码仓库首次检出或相关程序集重新编译后，先在非 
 ## 独立工程安装
 
 以 Unity `2022.3.62f3c1` 为安装基线，先在目标工程准备下列依赖，再通过 `Assets > Import Package > Custom Package` 导入框架 `.unitypackage`。不要复制来源工程的 manifest、Library 或游戏插件来补依赖；来源工程含有与框架无关的包，其声明也不能代替目标工程实际解析的版本。
+
+Analyzer 的发行验收目标为 Windows / Unity 2022.3 LTS、Unity 6.3 LTS / Visual Studio、Rider；以每份发行记录的实际版本与结果为准，不将目标矩阵当作已通过证明。未完成环境验证时不得扩写支持声明，其他系统、Unity版本及IL2CPP不由本目标自动保证，详见 [发布支持边界](Modules/Attributes.md#发布支持边界)。
 
 | 依赖 | 安装来源与版本 | 用途 |
 | --- | --- | --- |

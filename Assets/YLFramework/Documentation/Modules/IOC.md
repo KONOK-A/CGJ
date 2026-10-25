@@ -94,6 +94,19 @@ container.Clear(); // 只清注册；不会销毁 presenter 或 Sink。
 - static / const / 方法 / 事件不参与扫描；被标记但不可注入的成员（readonly 字段、无 setter 属性、indexer）抛出 `IOCInjectionException` 并说明原因；private setter 属性可注入。
 - 被标记的成员视为必需依赖：未注册且无法自动构造时抛异常；显式注册的 null 依赖按 null 注入。
 
+成员声明还有默认 Warning 的 [YL0008](Attributes.md#yl0008) 提前检查：static/const/readonly 字段、static 属性、无 setter 属性及 indexer 不属于受支持的成员注入形态；真实 Inject 的派生特性同样识别。private setter 合法，不会仅因 private 报警。规则不推测 `MemberSearchModes`、注册是否存在或名称能否解析，也不替代值类型 owner 与运行时异常检查。
+
+```csharp
+class Presenter
+{
+    [Inject] public static object Shared; // YL0008：不会被实例扫描注入
+    [Inject] public readonly object Locked; // YL0008：改用构造注入等显式设计
+    [Inject] public object Service { get; private set; } // 合法
+}
+```
+
+不要为了消警随意移除 readonly、改成实例成员或添加 setter；按业务所有权选择构造函数注入、显式 `Resolve` 或可写成员。配置入口为 `YLFramework/Core/分析器规则`，不提供猜测业务设计的自动修复。
+
 ## ResolveAll
 
 - 包含无名与命名注册，匹配规则为“注册键类型可赋值给请求类型”。

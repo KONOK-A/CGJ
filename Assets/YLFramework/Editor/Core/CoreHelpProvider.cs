@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using YLFramework.Core.RoslynAnalyzers;
+using YLFramework.Editor.Core.Analyzers;
 using YLFramework.Editor.Help;
 using YLFramework.UI;
 using YLFramework.Core;
@@ -56,25 +57,26 @@ namespace YLFramework.Editor.Core
                         "YLFramework/Resource/Workbench 通过 ResourceProject、Group 和 Catalog 配置资源。项目可登记多个已有来源目录，每个目录使用 GUID 和明确的地址前缀；由组中的选择项决定内容，无需搬动已有资源。现有Editor配置已统一为此模型，不再保留旧单根配置的读取或迁移。Core Editor 预览使用同一资源模拟层，不查询 XFAB 项目。资源地址常量可生成到 Assets/YLFrameworkData/YLResourceReferences.cs，类型为 YLFramework.Generated.ResourceNames；" +
                         "业务 asmdef 需显式引用生成程序集，未知/手写承载拒绝覆盖。这些用户生成物不在默认导出范围。"),
                     Document("资源工具与生成承载", "Modules/Resource.md")),
-                Guide("analyzers", "自有分析器 YL0001～YL0007", "七项诊断默认启用且均为 Warning；提示使用约束，不是运行时安全证明。",
+                Guide("analyzers", "自有分析器 " + AnalyzerRuleCatalog.Rules[0].Id + "～" + AnalyzerRuleCatalog.Rules[AnalyzerRuleCatalog.Rules.Count - 1].Id,
+                    AnalyzerRuleCatalog.Rules.Count + " 项诊断默认启用且均为 Warning；提示使用约束，不是运行时安全证明。",
                     new[] { typeof(MustCallBaseAttribute), typeof(RestrictedCallAttribute), typeof(WarnInClassesAttribute),
                         typeof(DisableNewAttribute), typeof(MethodLocalOnlyAttribute), typeof(ProtectedHierarchyAttribute), typeof(View) },
-                    HelpBlock.Paragraph("规则与改正方向", "YL0001 MustCallBase：override 的直接方法体须存在正确 base 槽调用，不证明全路径。\n" +
-                        "YL0002 RestrictedCall：只允许指定的直接调用者；Lambda/local 不借用外层 Awake。\n" +
-                        "YL0003 WarnInClasses：指定类型/基类/接口内的调用提示；View 事件优先 RegisterEvent。\n" +
-                        "YL0004 DisableNew：外部 new 受管类型时提示，改用 LoadViewArgs.New() 等工厂。\n" +
-                        "YL0005 MethodLocalOnly：字段/属性、数组和实际容器持有受管类型时提示；方法借用允许。\n" +
-                        "YL0006 ProtectedHierarchy：指定类型层级写受保护实例成员或暴露可写 ref/out 时提示；正常读取允许。\n" +
-                        "YL0007：Core View 派生声明无参、非 static、非 generic 的 void OnEnable/OnDisable/OnDestroy 时提示，改用正式钩子。"),
+                    HelpBlock.Paragraph("规则与改正方向", string.Join("\n", AnalyzerRuleCatalog.Rules.Select(rule =>
+                        rule.Id + " " + rule.Description))),
                     HelpBlock.Paragraph("作用域与匹配", "唯一 YLFramework.Analyzers.dll 位于 Runtime/Core/Analyzers，即 YLFramework.Runtime 的 asmdef 范围，带 RoslynAnalyzer 标签。" +
                         "主体 Runtime 和实际引用它的 Editor/Test/游戏消费者参与；原 XF/XFAB/XFFSM、未引用主体或预定义程序集的作用域以真实编译图和 csc 输入为准。" +
                         "匹配正式程序集的 marker/View 符号，不按短名或 namespace 冒认。Editor/Test/Core 不整体豁免；生成代码默认不分析。"),
                     HelpBlock.Notice("编译器资产与静态限制", "DLL 的 Any/Editor/普通平台均禁用，关闭自动 Runtime 引用，只作为 -analyzer 输入，不加入 Runtime precompiledReferences。" +
-                        "YL0005 只保留 LoadViewArgs._pool 与 LoadViewRequest<T>._args 两个真实内部 owner 例外；反射、object 擦除、闭包逃逸、任意跨过程副作用和所有控制流不保证。" +
+                        "YL0005 只保留 LoadViewArgs._pool、LoadViewRequest<T>._args 与 PanelManager.PanelOperation.Args 三个真实内部 owner 例外；反射、object 擦除、闭包逃逸、任意跨过程副作用和所有控制流不保证。" +
                         "原 XF/Logger 分析器是不同身份，不关闭或替代它们。"),
                     HelpBlock.Paragraph("单 ID 配置", "IDE/SDK 使用 .editorconfig 的 dotnet_diagnostic.YL0002.severity 等设置；Unity 2022.3 Console 不自动遵循 IDE 的 editorconfig。" +
                         "Unity 使用消费者 asmdef 目录的叶子 .ruleset 配置单 ID，Error 阻止编译，None 抑制该 ID；不要为局部需求覆盖根 Default.ruleset。" +
-                        "故意契约测试可在声明/语句处精确 pragma warning disable 并立即 restore，不禁用整套诊断。"),
+                         "故意契约测试可在声明/语句处精确 pragma warning disable 并立即 restore，不禁用整套诊断。"),
+                    HelpBlock.Paragraph("规则设置与接入自检", "打开 Project Settings > YLFramework > Analyzers，或菜单 YLFramework/Core/分析器规则。" +
+                        "支持业务 asmdef 和预定义程序集；原生 ruleset 先预览再应用，保留既有继承与其他规则。Error 可阻断编译，恢复为 Warning/继承或手改目标文件。" +
+                        "接入结构检查、保存成功和零诊断都不是规则实际执行的证明，未知状态明确显示未核实。"),
+                    HelpBlock.Paragraph("新增使用契约", "YL0008 允许 private setter，不推测注册或容器扫描模式。YL0009 包含旧泛型重载与确定的 Panel 约束，不把 parent 机械替换为 root。" +
+                        "YL0010 仅检查非泛型 IEnumerator 协程；等待开始使用 WaitUntil(() => request.HasStarted || request.IsDone)，等待结束使用 WaitUntil(() => request.IsDone)，循环播放可能不结束。"),
                     HelpBlock.Paragraph("从源码重建", "源码仓库 Tools/YLFramework.Analyzers 使用固定 SDK 9.0.312、Roslyn API 3.8.0、netstandard2.0 产物和 NuGet lock。" +
                         "在仓库根执行 pwsh -NoLogo -NoProfile -NonInteractive -File \"Tools/YLFramework.Analyzers/build.ps1\"，默认 locked restore、Release build/test，不部署；" +
                         "显式追加 -Deploy 才替换唯一 DLL 并保留 meta，随后核对 Unity 导入与实际编译。UnityPackage 携带 DLL/meta/说明，不含 SDK 源码项目、测试、NuGet 或中间产物，重建需取得源码仓库。"),

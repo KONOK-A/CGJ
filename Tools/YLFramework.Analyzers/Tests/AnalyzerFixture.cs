@@ -50,11 +50,17 @@ namespace YLFramework.Analyzers.Tests
             return MetadataReference.CreateFromImage(stream.ToArray());
         }
 
-        internal static CSharpCompilation CoreCompilation(string replacement = null)
+        internal static CSharpCompilation CoreCompilation(string replacement = null, bool includeInject = true)
         {
             var sources = Directory.GetFiles(Path.Combine(Root, "Assets/YLFramework/Runtime/Core/Attributes"), "*.cs")
                 .OrderBy(p => p, StringComparer.Ordinal).Select(File.ReadAllText).ToList();
+            if (includeInject)
+            {
+                sources.Add(File.ReadAllText(Path.Combine(Root,
+                    "Assets/YLFramework/Runtime/Foundation/IOC/Attributes/InjectAttribute.cs")));
+            }
             sources.Add("namespace UnityEngine {}");
+            sources.Add("namespace UnityEngine { public class Transform {} public class GameObject {} public class WaitUntil { public WaitUntil(System.Func<bool> predicate) {} } }");
             sources.Add(PoolSource);
             sources.Add(replacement ?? @"using System;
 namespace UnityEngine {}
@@ -76,7 +82,33 @@ namespace YLFramework.Core {
  }
   public class LoadViewRequest<T> { private LoadViewArgs _args; }
   public class PanelManager { internal sealed class PanelOperation { internal LoadViewArgs Args; } }
-}");
+  public class Panel : View {}
+  public class LoadPanelRequest<T> {}
+  public abstract class Module {
+   [Obsolete] public T LoadView<T>(string assetName,UnityEngine.Transform parent=null,params object[] param) where T:View=>default;
+   [Obsolete] public T LoadView<T>(UnityEngine.GameObject prefab,UnityEngine.Transform parent=null,params object[] param) where T:View=>default;
+   [Obsolete] public T LoadView<T>(UnityEngine.Transform parent=null,params object[] param) where T:View=>default;
+   [Obsolete] public LoadViewRequest<T> LoadViewAsync<T>(string assetName,UnityEngine.Transform parent=null,params object[] param) where T:View=>default;
+   [Obsolete] public LoadViewRequest<T> LoadViewAsync<T>(UnityEngine.Transform parent=null,params object[] param) where T:View=>default;
+   public T LoadView<T>(string assetName,UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null) where T:View=>default;
+   public T LoadView<T>(UnityEngine.GameObject prefab,UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null) where T:View=>default;
+   public T LoadView<T>(UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null) where T:View=>default;
+   public LoadViewRequest<T> LoadViewAsync<T>(string assetName,UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null) where T:View=>default;
+   public LoadViewRequest<T> LoadViewAsync<T>(UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null) where T:View=>default;
+   public View LoadView(string assetName,UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null)=>default;
+   public LoadViewRequest<View> LoadViewAsync(string assetName,UnityEngine.Transform parent=null,LoadViewArgs loadViewArgs=null)=>default;
+   public T LoadPanel<T>(string assetName,LoadViewArgs loadViewArgs=null) where T:Panel=>default;
+   public LoadPanelRequest<T> LoadPanelAsync<T>(string assetName,LoadViewArgs loadViewArgs=null) where T:Panel=>default;
+   public T AttachView<T>(T view,LoadViewArgs loadViewArgs=null) where T:View=>view;
+   public T GetView<T>(string assetName) where T:View=>default;
+   public System.Collections.Generic.List<T> GetViews<T>() where T:View=>default;
+  }
+ }
+ namespace YLFramework.Audio {
+  public sealed class AudioPlayRequest:System.IDisposable {
+   public bool IsDone=>false;public bool HasStarted=>false;public void Dispose(){}
+  }
+ }");
             return CSharpCompilation.Create("YLFramework.Runtime", sources.Select(s => CSharpSyntaxTree.ParseText(s, Parse)),
                 Platform, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }

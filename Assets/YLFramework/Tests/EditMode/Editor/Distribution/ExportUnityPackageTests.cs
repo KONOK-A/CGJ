@@ -26,6 +26,68 @@ namespace YLFramework.Tests
         private const string CanvasGuid = "256f0a9016a7098469c8afed875a5d50";
         private const string AnalyzerPath = FrameworkRoot + "/Runtime/Core/Analyzers/YLFramework.Analyzers.dll";
 
+        [Serializable]
+        private sealed class AnalyzerBuildInput
+        {
+            public string Path;
+            public string Sha256;
+        }
+
+        [Serializable]
+        private sealed class AnalyzerBuildReceipt
+        {
+            public string DllSha256;
+            public AnalyzerBuildInput[] Inputs;
+        }
+
+        [Test]
+        public void DeployedAnalyzerMatchesTheLastVerifiedSourceBuild()
+        {
+            var root = Directory.GetParent(Application.dataPath).FullName;
+            var receiptPath = Path.Combine(root, "Temp/YLFramework.Analyzers/build-info.json");
+            Assert.That(File.Exists(receiptPath), Is.True, "先执行 Tools/YLFramework.Analyzers/build.ps1 -Deploy 再验收发行产物。");
+            var receipt = JsonUtility.FromJson<AnalyzerBuildReceipt>(File.ReadAllText(receiptPath));
+            var tools = Path.Combine(root, "Tools/YLFramework.Analyzers");
+            var expectedInputs = new[]
+            {
+                "global.json", "Directory.Build.props", "build.ps1", "Analyzer/YLFramework.Analyzers.csproj",
+                "Analyzer/packages.lock.json", "../../Assets/YLFramework/Editor/Core/Analyzers/AnalyzerRuleCatalog.cs"
+            }.Concat(Directory.GetFiles(Path.Combine(tools, "Analyzer"), "*.cs", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(tools, path).Replace('\\', '/'))).ToArray();
+            Assert.That(receipt, Is.Not.Null);
+            Assert.That(receipt.Inputs, Is.Not.Null);
+            Assert.That(receipt.Inputs.Select(input => input.Path), Is.EquivalentTo(expectedInputs),
+                "当前源码输入集合与构建收据不一致，可能存在新增、缺失或重复输入，请重建并部署。");
+            using var sha = SHA256.Create();
+            Assert.That(BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(Path.Combine(root, AnalyzerPath)))).Replace("-", ""),
+                Is.EqualTo(receipt.DllSha256), "部署 DLL 与已验证源码构建不一致。");
+            Assert.That(receipt.Inputs.Any(input => input.Path.EndsWith("AnalyzerRuleCatalog.cs", StringComparison.Ordinal)), Is.True);
+            foreach (var input in receipt.Inputs)
+            {
+                var path = Path.GetFullPath(Path.Combine(root, "Tools/YLFramework.Analyzers", input.Path));
+                Assert.That(BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", ""),
+                    Is.EqualTo(input.Sha256), input.Path + " 在已验证构建后发生变化。");
+            }
+        }
+
+        [Test]
+        public void SourceBuildGateRejectsAFileAddedAfterTheVerifiedBuild()
+        {
+            var root = Directory.GetParent(Application.dataPath).FullName;
+            var probe = Path.Combine(root, "Tools/YLFramework.Analyzers/Analyzer/InputSetProbe-" + Guid.NewGuid().ToString("N") + ".cs");
+            Assert.That(File.Exists(probe), Is.False);
+            try
+            {
+                File.WriteAllText(probe, "// Owned gate fixture: this source was added after the recorded build.\n");
+                var error = Assert.Throws<AssertionException>(() => DeployedAnalyzerMatchesTheLastVerifiedSourceBuild());
+                Assert.That(error.Message, Does.Contain("输入集合"));
+            }
+            finally
+            {
+                File.Delete(probe);
+            }
+        }
+
         [Test]
         public void FormalExporterAcceptsAnExplicitDestinationWithoutChangingItsRoots()
         {
@@ -104,6 +166,10 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Editor/Systems/Action/Help/ActionKitHelpProvider.cs",
                 FrameworkRoot + "/Editor/Systems/Audio/Help/AudioKitHelpProvider.cs",
                 FrameworkRoot + "/Editor/Core/CoreHelpProvider.cs",
+                FrameworkRoot + "/Editor/Core/Analyzers/AnalyzerRuleCatalog.cs",
+                FrameworkRoot + "/Editor/Core/Analyzers/AnalyzerRuleSetFile.cs",
+                FrameworkRoot + "/Editor/Core/Analyzers/AnalyzerRuleSettingsProvider.cs",
+                FrameworkRoot + "/Editor/Core/Analyzers/AssemblyInfo.cs",
                 FrameworkRoot + "/Editor/Help/FoundationToolsHelpProvider.cs",
                 FrameworkRoot + "/Editor/Foundation/Serialization/SerializedDictionaryDrawer.cs",
                 FrameworkRoot + "/Editor/Foundation/Events/EventListenerEditor.cs",

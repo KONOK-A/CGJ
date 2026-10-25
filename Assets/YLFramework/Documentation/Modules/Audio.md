@@ -166,6 +166,24 @@ Provider 配置和引用身份属于资源身份的一部分。只有同一个 P
 
 `AudioPlayRequest` 不是可直接 yield 的 `CustomYieldInstruction`；协程按需要轮询 `HasStarted` 或 `IsDone`，不要把等待终结误作等待启播。循环请求不会自然完成，退出所有者时必须取消。
 
+[YL0010](Attributes.md#yl0010) 对非泛型 `System.Collections.IEnumerator` 协程直接 `yield return` 静态类型为 AudioPlayRequest 的表达式给出 Warning；普通泛型数据枚举器不报，object 擦除不追踪。自定义调度器若确有其他协议，可在对应方法附近局部抑制，不把标准 Unity 等待语义当成所有调度器的事实。配置入口为 `YLFramework/Core/分析器规则`。
+
+```csharp
+IEnumerator WaitForStart(AudioPlayRequest request)
+{
+    // 失败也可能直接进入 IsDone，不能只等 HasStarted。
+    yield return new WaitUntil(() => request.HasStarted || request.IsDone);
+}
+
+IEnumerator WaitForEnd(AudioPlayRequest request)
+{
+    yield return new WaitUntil(() => request.IsDone);
+    // 再区分 EndReason.Completed 与失败、取消等终态。
+}
+```
+
+没有 `AudioPlayRequest.Wait()` API；循环播放的 WaitForEnd 可能一直等待。分析器不自动选择“等开始”“等结束”或“只延迟一帧”，也不负责请求所有权和退出清理。
+
 `Cancel` 可在加载、数据等待、提交重入或已接纳播放期间使用，只取消/停止自己的原请求。`EndReason.Completed` 仅表示自然完成，其他终态区分 `Canceled`、`Stopped`、`Replaced`、`Unavailable`、`Failed`、`Shutdown`、`Rejected`。异步取得/开始异常保存在 `Error`；同步取得或提交异常仍抛给调用方。`onFinished` 只在自然完成调用，不当作全终态通知。自然回调进入前命名请求已终结为 Completed，原 Handle 可仍有效；Clip 保活直到回调返回，不提前归还资源。
 
 Exclusive 的最新有效命名请求撤销同拓扑旧 pending；旧曲在新资源/数据可提交前继续播放，加载失败不先截断旧曲。普通直接 Clip 播放、Stop、通道 Dispose、Sound off 和 Shutdown 同样约束 pending。Overlap 的等待者独立取消，共享 producer 继续。旧会话迟到结果只能归还原资源责任，不能进入新宿主、创建 Source 或投递新会话的开始/失败通知。后端没有物理取消能力时，Audio 不声称底层已经停止；永久不完成的 producer 可结束所有逻辑等待者，但只能由真实后端完成后归还生产责任。

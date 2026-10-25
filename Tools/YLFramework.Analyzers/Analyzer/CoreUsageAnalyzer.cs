@@ -1,21 +1,18 @@
 using System.Collections.Immutable;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using YLFramework.Editor.Core.Analyzers;
 
 namespace YLFramework.Analyzers
 {
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class CoreUsageAnalyzer : DiagnosticAnalyzer
     {
-        internal static readonly ImmutableArray<DiagnosticDescriptor> Rules = ImmutableArray.Create(
-            Rule("YL0001", "覆写方法缺少基类调用"), Rule("YL0002", "受限方法调用位置不合法"),
-            Rule("YL0003", "指定类型中的方法调用警告"), Rule("YL0004", "类型应通过正式工厂创建"),
-            Rule("YL0005", "成员持有仅限方法借用的类型"), Rule("YL0006", "禁止修改受保护实例"),
-            Rule("YL0007", "View 框架消息被遮蔽", "YLFramework.Lifecycle"));
-
-        private static DiagnosticDescriptor Rule(string id, string title, string category = "YLFramework.Usage")
-            => new DiagnosticDescriptor(id, title, "{0}", category, DiagnosticSeverity.Warning, true);
+        internal static readonly ImmutableArray<DiagnosticDescriptor> Rules = AnalyzerRuleCatalog.Rules.Select(rule =>
+            new DiagnosticDescriptor(rule.Id, rule.Title, "{0}", rule.Category,
+                DiagnosticSeverity.Warning, true, description: rule.Description)).ToImmutableArray();
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => Rules;
 
@@ -34,6 +31,23 @@ namespace YLFramework.Analyzers
                 if (symbols.View != null)
                 {
                     start.RegisterSymbolAction(c => ViewLifecycleRules.Message(c, symbols), SymbolKind.Method);
+                }
+
+                if (symbols.Inject != null)
+                {
+                    start.RegisterSymbolAction(c => InjectionRules.Member(c, symbols), SymbolKind.Field, SymbolKind.Property);
+                    start.RegisterSymbolAction(c => InjectionRules.BackingFields(c, symbols), SymbolKind.NamedType);
+                    start.RegisterSyntaxNodeAction(c => InjectionRules.EventFields(c, symbols), SyntaxKind.EventFieldDeclaration);
+                }
+
+                if (symbols.Module != null && symbols.Panel != null)
+                {
+                    start.RegisterOperationAction(c => PanelLoadingRules.Invocation(c, symbols), OperationKind.Invocation);
+                }
+
+                if (symbols.AudioRequest != null)
+                {
+                    start.RegisterSyntaxNodeAction(c => AudioRules.Yield(c, symbols), SyntaxKind.YieldReturnStatement);
                 }
 
                 if (symbols.Markers[0] != null)

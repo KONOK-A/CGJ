@@ -15,6 +15,10 @@ namespace YLFramework.Analyzers
         internal readonly Compilation Compilation;
         internal readonly INamedTypeSymbol ObjectPool;
         internal readonly INamedTypeSymbol View;
+        internal readonly INamedTypeSymbol Inject;
+        internal readonly INamedTypeSymbol Module;
+        internal readonly INamedTypeSymbol Panel;
+        internal readonly INamedTypeSymbol AudioRequest;
         private readonly IFieldSymbol _poolOwner;
         private readonly IFieldSymbol _requestOwner;
         private readonly IFieldSymbol _panelConsumerOwner;
@@ -27,6 +31,10 @@ namespace YLFramework.Analyzers
             Core = core;
             Compilation = compilation;
             View = core.GetTypeByMetadataName("YLFramework.Core.View");
+            Inject = core.GetTypeByMetadataName("YLFramework.DependencyInjection.InjectAttribute");
+            Module = core.GetTypeByMetadataName("YLFramework.Core.Module");
+            Panel = core.GetTypeByMetadataName("YLFramework.Core.Panel");
+            AudioRequest = core.GetTypeByMetadataName("YLFramework.Audio.AudioPlayRequest");
             var names = new[] { "MustCallBase", "RestrictedCall", "WarnInClasses", "DisableNew", "MethodLocalOnly", "ProtectedHierarchy" };
             Markers = names.Select(n => core.GetTypeByMetadataName("YLFramework.Core.RoslynAnalyzers." + n + "Attribute")).ToArray();
             _inherited = Markers.Select(m => m == null || !m.GetAttributes().Any(a =>
@@ -108,7 +116,7 @@ namespace YLFramework.Analyzers
             return (null, null);
         }
 
-        private static IEnumerable<INamedTypeSymbol> ClassTypes(ITypeSymbol type)
+        internal static IEnumerable<INamedTypeSymbol> ClassTypes(ITypeSymbol type)
         {
             var pending = new Stack<ITypeSymbol>();
             var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
@@ -172,7 +180,7 @@ namespace YLFramework.Analyzers
         private static ISymbol Parent(ISymbol symbol)
             => symbol is IMethodSymbol method ? method.OverriddenMethod : (symbol as INamedTypeSymbol)?.BaseType;
 
-        private static bool HasError(AttributeData attribute) => attribute.ConstructorArguments.Any(Error);
+        internal static bool HasError(AttributeData attribute) => attribute.ConstructorArguments.Any(Error);
         private static bool Error(TypedConstant constant)
             => constant.Kind == TypedConstantKind.Error || (constant.Kind == TypedConstantKind.Array && !constant.IsNull && constant.Values.Any(Error));
 
