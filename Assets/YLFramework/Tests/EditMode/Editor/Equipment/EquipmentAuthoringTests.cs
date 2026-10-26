@@ -17,7 +17,7 @@ namespace YLFramework.Tests.Extensions.Equipment
         private EquipmentsConfig _root;
         private string _folder;
         private string _entries;
-        private static Type Controller => typeof(YLFramework.Editor.Utilities.SplitWindow).Assembly.GetType("YLFramework.Editor.Equipment.EquipmentsConfigController");
+        private static Type Controller => typeof(YLFramework.Editor.Common.SplitWindow).Assembly.GetType("YLFramework.Editor.Equipment.EquipmentsConfigController");
         private static object Call(string name, params object[] args)
         {
             Assert.That(Controller, Is.Not.Null, "YL equipment authoring has not been migrated.");

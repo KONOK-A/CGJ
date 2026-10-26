@@ -97,7 +97,7 @@ namespace YLFramework.Tests.Help
         [TestCase(0.57f)]
         public void LegacySplitWindowRatioRetainsExplicitValuesAcrossReimport(float ratio)
         {
-            var window = ScriptableObject.CreateInstance<YLFramework.Editor.Utilities.SplitWindow>();
+            var window = ScriptableObject.CreateInstance<YLFramework.Editor.Common.SplitWindow>();
             string folder = "Assets/YLFramework/Tests/EditMode/Editor/Help/LegacySplit-" + Guid.NewGuid().ToString("N");
             Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode/Editor/Help", Path.GetFileName(folder)), Is.Not.Empty);
             try
@@ -118,12 +118,12 @@ namespace YLFramework.Tests.Help
                 Assert.That(yaml, Does.Contain("  horizontal_split_percent:"));
                 File.WriteAllText(path, yaml, new System.Text.UTF8Encoding(false));
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-                var restored = AssetDatabase.LoadAssetAtPath<YLFramework.Editor.Utilities.SplitWindow>(path);
+                var restored = AssetDatabase.LoadAssetAtPath<YLFramework.Editor.Common.SplitWindow>(path);
                 Assert.That(restored.HorizontalSplitPercent, Is.EqualTo(ratio));
                 EditorUtility.SetDirty(restored);
                 AssetDatabase.SaveAssetIfDirty(restored);
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-                Assert.That(AssetDatabase.LoadAssetAtPath<YLFramework.Editor.Utilities.SplitWindow>(path).HorizontalSplitPercent, Is.EqualTo(ratio));
+                Assert.That(AssetDatabase.LoadAssetAtPath<YLFramework.Editor.Common.SplitWindow>(path).HorizontalSplitPercent, Is.EqualTo(ratio));
                 Assert.That(File.ReadAllText(path), Does.Not.Contain("  horizontal_split_percent:"));
             }
             finally
@@ -133,6 +133,73 @@ namespace YLFramework.Tests.Help
                 {
                     UnityEngine.Object.DestroyImmediate(window);
                 }
+            }
+        }
+
+        [Test]
+        public void LegacyCommonTreeStateSurvivesNamespaceMigrationAndReimport()
+        {
+            const string Source = "Assets/YLFramework/Tests/Fixtures/NamespaceMigration/EditorCommonStateBefore.asset";
+            byte[] original = File.ReadAllBytes(Source);
+            string folder = "Assets/YLFramework/Tests/EditMode/Editor/Help/LegacyCommon-" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode/Editor/Help", Path.GetFileName(folder)), Is.Not.Empty);
+            try
+            {
+                Assert.That(File.ReadAllText(Source), Does.Contain("ns: YLFramework.Editor.Utilities"));
+                string path = folder + "/State.asset";
+                Assert.That(AssetDatabase.CopyAsset(Source, path), Is.True);
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                    var state = AssetDatabase.LoadAssetAtPath<EditorCommonStateFixture>(path);
+                    Assert.That(state, Is.Not.Null);
+                    Assert.That(state.group, Is.Not.Null);
+                    Assert.That(state.info, Is.Not.Null);
+                    Assert.That(state.group.Get(42).selectedIDs, Is.EqualTo(new[] { 73 }));
+                    Assert.That(state.group.Get(42).expandedIDs, Is.EqualTo(new[] { 99 }));
+                    Assert.That(state.info.id, Is.EqualTo(17));
+                    Assert.That(state.info.treeViewState, Is.Not.Null);
+                    EditorUtility.SetDirty(state);
+                    AssetDatabase.SaveAssetIfDirty(state);
+                }
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+                Assert.That(File.ReadAllBytes(Source), Is.EqualTo(original));
+            }
+        }
+
+        [Test]
+        public void LegacySplitWindowAssetSurvivesNamespaceMigrationAndReimport()
+        {
+            const string Source = "Assets/YLFramework/Tests/Fixtures/NamespaceMigration/SplitWindowBefore.asset";
+            byte[] original = File.ReadAllBytes(Source);
+            string folder = "Assets/YLFramework/Tests/EditMode/Editor/Help/LegacySplitAsset-" + Guid.NewGuid().ToString("N");
+            Assert.That(AssetDatabase.CreateFolder("Assets/YLFramework/Tests/EditMode/Editor/Help", Path.GetFileName(folder)), Is.Not.Empty);
+            YLFramework.Editor.Common.SplitWindow window = null;
+            try
+            {
+                string path = folder + "/Window.asset";
+                Assert.That(AssetDatabase.CopyAsset(Source, path), Is.True);
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+                    window = AssetDatabase.LoadAssetAtPath<YLFramework.Editor.Common.SplitWindow>(path);
+                    Assert.That(window, Is.Not.Null);
+                    Assert.That(window.HorizontalSplitPercent, Is.EqualTo(0.57f));
+                    EditorUtility.SetDirty(window);
+                    AssetDatabase.SaveAssetIfDirty(window);
+                }
+            }
+            finally
+            {
+                Assert.That(AssetDatabase.DeleteAsset(folder), Is.True);
+                if (window)
+                {
+                    UnityEngine.Object.DestroyImmediate(window);
+                }
+                Assert.That(File.ReadAllBytes(Source), Is.EqualTo(original));
             }
         }
 

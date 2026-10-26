@@ -1,6 +1,6 @@
 using UnityEditor;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
     /// <summary>为作者工具提供 Unity 项目设置页面的统一打开入口。</summary>
     public class ProjectSettingTools

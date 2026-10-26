@@ -140,7 +140,6 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Samples",
                 FrameworkRoot + "/Documentation",
                 FrameworkRoot + "/LICENSE.md",
-                FrameworkRoot + "/CodingStyle.md",
                 FrameworkRoot + "/AGENTS.md"
             }));
             foreach (var root in roots)
@@ -174,14 +173,20 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Editor/Foundation/Serialization/SerializedDictionaryDrawer.cs",
                 FrameworkRoot + "/Editor/Foundation/Events/EventListenerEditor.cs",
                 FrameworkRoot + "/Editor/Foundation/Attributes/DisableEditDrawer.cs",
-                FrameworkRoot + "/Editor/Utilities/Serialization/SerializedObjectExtensions.cs",
-                FrameworkRoot + "/Editor/Utilities/Serialization/SerializedPropertyExtensions.cs",
-                FrameworkRoot + "/Editor/Utilities/Scene/HandlesExtensions.cs",
-                FrameworkRoot + "/Editor/Utilities/Assets/AssetNameTools.cs",
-                FrameworkRoot + "/Editor/Utilities/TreeViews/TreeViewStateGroup.cs",
-                FrameworkRoot + "/Editor/Utilities/Windows/SplitWindow.cs",
-                FrameworkRoot + "/Editor/Utilities/Menus/ClearLog.cs",
-                FrameworkRoot + "/Editor/Utilities/Menus/OpenFolder.cs",
+                FrameworkRoot + "/Editor/Common/Inspector/SerializedObjectExtensions.cs",
+                FrameworkRoot + "/Editor/Common/Inspector/SerializedPropertyExtensions.cs",
+                FrameworkRoot + "/Editor/Common/Scene/HandlesExtensions.cs",
+                FrameworkRoot + "/Editor/Common/Assets/AssetNameTools.cs",
+                FrameworkRoot + "/Editor/Common/Assets/EditorAssetTool.cs",
+                FrameworkRoot + "/Editor/Common/Settings/ProjectSettingTools.cs",
+                FrameworkRoot + "/Editor/Common/Settings/ProjectSettingsScriptableObject.cs",
+                FrameworkRoot + "/Editor/Common/TreeViews/TreeViewStateGroup.cs",
+                FrameworkRoot + "/Editor/Common/TreeViews/ReorderableTreeView.cs",
+                FrameworkRoot + "/Editor/Common/Windows/SplitWindow.cs",
+                FrameworkRoot + "/Editor/Core/ScriptableObjectExtensions.cs",
+                FrameworkRoot + "/Editor/Systems/Shared/DomainAssetOwnership.cs",
+                FrameworkRoot + "/Editor/Tools/ClearLog.cs",
+                FrameworkRoot + "/Editor/Tools/OpenFolder.cs",
                 FrameworkRoot + "/Editor/Distribution/ExportUnityPackage.cs",
                 FrameworkRoot + "/Editor/Systems/Resource/Build/ResourceBuildOperation.cs",
                 FrameworkRoot + "/Editor/Systems/Resource/Build/ResourceBuildMap.cs",
@@ -204,7 +209,7 @@ namespace YLFramework.Tests
                 FrameworkRoot + "/Runtime/Systems/Resource/Integration/Audio/ResourceAudioClipProvider.cs",
                 FrameworkRoot + "/Editor/Systems/Audio/AudioClipLibraryMigration.cs",
                 FrameworkRoot + "/Documentation/Modules/Attributes.md",
-                FrameworkRoot + "/CodingStyle.md",
+                FrameworkRoot + "/Documentation/CodingStyle.md",
                 FrameworkRoot + "/AGENTS.md",
                 AnalyzerPath,
                 FrameworkRoot + "/Runtime/csc.rsp",
@@ -445,6 +450,10 @@ namespace YLFramework.Tests
                 // 批准的插件根全递归，精确核验二进制与来源。
                 Assert.That(recordsByPath.Keys.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle")),
                     Is.EquivalentTo(requiredPaths.Where(p => IsAtOrBelow(p, FrameworkRoot + "/Plugins/BouncyCastle"))));
+                Assert.That(recordsByPath.Keys.Where(p => Path.GetFileName(p) == "CodingStyle.md"),
+                    Is.EqualTo(new[] { FrameworkRoot + "/Documentation/CodingStyle.md" }));
+                Assert.That(recordsByGuid["af0ff0e561630f34f8e69387e0233953"].Pathname,
+                    Is.EqualTo(FrameworkRoot + "/Documentation/CodingStyle.md"));
                 Assert.That(recordsByPath.Keys.Where(p => Path.GetFileName(p) == "YLFramework.Analyzers.dll"), Is.EqualTo(new[] { AnalyzerPath }));
                 Assert.That(recordsByPath.Keys.Any(p => Path.GetFileName(p).StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal)), Is.False);
                 Assert.That(recordsByPath.Keys.Any(p => new[] { "bcrypt.dll", "ncrypt.dll", "crypt32.dll" }.Contains(Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)), Is.False);

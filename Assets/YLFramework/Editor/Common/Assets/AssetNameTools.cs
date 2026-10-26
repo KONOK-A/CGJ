@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
     /// <summary>为作者工具按资产文件名搜索同名项，生成带递增序号的候选名称，不创建或预留资源。</summary>
     public class AssetNameTools

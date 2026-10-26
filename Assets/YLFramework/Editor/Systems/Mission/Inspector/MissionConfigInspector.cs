@@ -7,7 +7,7 @@ using UnityEngine;
 using YLFramework.Excel;
 using YLFramework.Foundation;
 using YLFramework.Attributes;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission

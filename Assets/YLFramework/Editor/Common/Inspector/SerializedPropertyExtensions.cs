@@ -8,7 +8,7 @@ using UnityEngine;
 
 // Fixed 编码
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
     /// <summary>为 Inspector 提供属性值同步、原生剪贴板预检和按字段路径查询特性的工具。</summary>
     public static class SerializedPropertyExtensions

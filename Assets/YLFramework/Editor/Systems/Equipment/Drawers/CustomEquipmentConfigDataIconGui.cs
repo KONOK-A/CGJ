@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Attributes;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 namespace YLFramework.Editor.Equipment
 {
     /// <summary>维护装备显示图标的独立资源地址，并通过 Editor 资产工具显示预览。</summary>

@@ -10,7 +10,8 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using FirstSettings = YLFramework.Core.Editor.Tests.Settings.First.CoreEditorSettingsFixture;
 using SecondSettings = YLFramework.Core.Editor.Tests.Settings.Second.CoreEditorSettingsFixture;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
+using YLFramework.Editor.Core;
 
 namespace YLFramework.Core.Editor.Tests
 {

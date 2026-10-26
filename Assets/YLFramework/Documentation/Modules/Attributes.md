@@ -50,7 +50,7 @@
 
 ## 编辑器剪贴板
 
-[`Editor/Utilities/Serialization/SerializedPropertyExtensions.cs`](../../Editor/Utilities/Serialization/SerializedPropertyExtensions.cs) 使用 `YLFramework.Editor.Utilities`，提供 `CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；支持同类型、非混值的可编辑单对象和多对象，沿用 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
+[`Editor/Common/Inspector/SerializedPropertyExtensions.cs`](../../Editor/Common/Inspector/SerializedPropertyExtensions.cs) 使用 `YLFramework.Editor.Common`，提供 `CopyToClipboard`、`IsCanPaste`、`PasteFromClipboard` 与 Unity 原生 Clipboard 格式。粘贴先在独立 SerializedObject 缓冲中解析并完整核对，再以 `ApplyModifiedProperties` 应用；支持同类型、非混值的可编辑单对象和多对象，沿用 Undo/Redo 与 Prefab override。拒绝操作不会应用调用者的待修改数据。
 
 混值、不同类型的多对象、不可编辑目标、不兼容或损坏的数据明确拒绝；原生解析器不能可靠处理的 ManagedReference、ExposedReference、FixedBufferSize 和 double 也拒绝。`IsCanPaste` 对这些输入返回 `false`，实际复制/粘贴抛出 `InvalidOperationException` 说明原因；Unity 私有 API 缺失或签名变化时抛出包含 Unity 版本与成员信息的 `NotSupportedException`，不静默回退。空 ObjectReference/ExposedReference 的 `GetValueText` 显示 `None`。专项回归位于 `Tests/EditMode/Editor/Core/CoreSerializedPropertyTests.cs`。
 

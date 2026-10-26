@@ -32,7 +32,7 @@ namespace YLFramework.Editor.Buff
         /// <summary>按 ID 重命名配表拥有的条目并清除查询缓存，不改名外部借用资产。</summary>
         internal static void Rename(this BuffConfigData data)
         {
-            YLFramework.Editor.Utilities.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), BuffsConfigController.GetBuffConfigDataPath(data.parent));
+            YLFramework.Editor.Domain.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), BuffsConfigController.GetBuffConfigDataPath(data.parent));
             data.parent.ClearCache();
         }
     }

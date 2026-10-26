@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using YLFramework.Localization;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 namespace YLFramework.Editor.Localization
 {

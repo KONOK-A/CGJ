@@ -57,8 +57,8 @@ if ($Action -eq 'Audit') {
     $roots = @([regex]::Matches($block,'"(Assets/[^"\r\n]+)"') | ForEach-Object { $_.Groups[1].Value })
     $expectedRoots = @('Assets/YLFramework/Editor', 'Assets/YLFramework/Plugins/BouncyCastle', 'Assets/YLFramework/Prefabs',
         'Assets/YLFramework/Runtime', 'Assets/YLFramework/Samples', 'Assets/YLFramework/Documentation',
-        'Assets/YLFramework/LICENSE.md', 'Assets/YLFramework/CodingStyle.md', 'Assets/YLFramework/AGENTS.md')
-    if ($roots.Count -ne $expectedRoots.Count -or @(Compare-Object -ReferenceObject $expectedRoots -DifferenceObject $roots -CaseSensitive).Count) { throw 'Expected the exact six directories and three files from the formal exporter.' }
+        'Assets/YLFramework/LICENSE.md', 'Assets/YLFramework/AGENTS.md')
+    if ($roots.Count -ne $expectedRoots.Count -or @(Compare-Object -ReferenceObject $expectedRoots -DifferenceObject $roots -CaseSensitive).Count) { throw 'Expected the exact six directories and two files from the formal exporter.' }
     $expected = @{}
     foreach ($sourceRoot in $roots) {
         $absolute = Join-Path $Repository $sourceRoot; $expected[$sourceRoot] = Hash ($absolute + '.meta')

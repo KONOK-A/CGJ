@@ -8,7 +8,7 @@ using UnityEngine;
 using YLFramework.Foundation;
 using YLFramework.Attributes;
 using YLFramework.Buff;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 namespace YLFramework.Editor.Buff
 {

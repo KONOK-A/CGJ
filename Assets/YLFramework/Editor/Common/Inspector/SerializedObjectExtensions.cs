@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
 
     /// <summary>枚举 Inspector 可见的顶层序列化属性，供自定义 Inspector 按需筛选绘制。</summary>

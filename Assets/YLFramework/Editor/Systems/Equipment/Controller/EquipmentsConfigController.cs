@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Editor.Domain;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using YLFramework.Equipment;
 
 namespace YLFramework.Editor.Equipment

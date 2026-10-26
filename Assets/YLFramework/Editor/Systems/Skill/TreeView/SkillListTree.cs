@@ -5,7 +5,7 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using YLFramework.Foundation;
 using YLFramework.Attributes;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using YLFramework.Skill;
 
 
@@ -250,7 +250,7 @@ namespace YLFramework.Editor.Skill
                 return;
             }
 
-            YLFramework.Editor.Utilities.DomainAssetOwnership.DeleteEntry(_skillsConfig, _skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(_skillsConfig));
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_skillsConfig, _skillsConfig.skills, data, SkillsConfigController.GetSkillConfigDataPath(_skillsConfig));
             _skillsConfig.ClearCache();
             Reload();
         }

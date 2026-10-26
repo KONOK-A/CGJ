@@ -7,7 +7,7 @@ using UnityEngine;
 using YLFramework.Foundation;
 using YLFramework.Attributes;
 using YLFramework.Buff;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 
 namespace YLFramework.Editor.Buff
@@ -266,7 +266,7 @@ namespace YLFramework.Editor.Buff
                 return;
             }
 
-            YLFramework.Editor.Utilities.DomainAssetOwnership.DeleteEntry(_buffsConfig, _buffsConfig.buffs, data, BuffsConfigController.GetBuffConfigDataPath(_buffsConfig));
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_buffsConfig, _buffsConfig.buffs, data, BuffsConfigController.GetBuffConfigDataPath(_buffsConfig));
             _buffsConfig.ClearCache();
             Reload();
 

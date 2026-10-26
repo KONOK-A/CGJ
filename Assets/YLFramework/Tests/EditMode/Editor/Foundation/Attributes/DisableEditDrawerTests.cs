@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using YLFramework.Attributes;
 using YLFramework.Editor.Foundation;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 namespace YLFramework.Core.Editor.Tests
 {

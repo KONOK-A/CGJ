@@ -778,7 +778,6 @@ namespace YLFramework.Tests.DomainMain
                         p.StartsWith("Assets/YLFramework/Editor/Systems/" + m + "/", StringComparison.Ordinal) ||
                         p.Contains("/Tests/EditMode/Systems/" + m + "/") || p.Contains("/Tests/PlayMode/Systems/" + m + "/")) ||
                         p.StartsWith("Assets/YLFramework/Editor/Systems/Shared/", StringComparison.Ordinal) ||
-                        p == "Assets/YLFramework/Editor/Utilities/Assets/DomainAssetOwnership.cs" ||
                         p.Contains("/Tests/EditMode/Editor/Domain/") || p.Contains("/Tests/PlayMode/Systems/Domain/") ||
                         p.Contains("/Tests/Tools/Extensions/Domain/") || (excel && p.Contains("/Integrations/DomainExcel/"))).ToArray();
                 var rows = files.Select(p => new

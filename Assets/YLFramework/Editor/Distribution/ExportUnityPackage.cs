@@ -24,7 +24,6 @@ namespace YLFramework.Editor.Distribution
             "Assets/YLFramework/Samples",
             "Assets/YLFramework/Documentation",
             "Assets/YLFramework/LICENSE.md",
-            "Assets/YLFramework/CodingStyle.md",
             "Assets/YLFramework/AGENTS.md",
         };
 

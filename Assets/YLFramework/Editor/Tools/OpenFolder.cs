@@ -4,7 +4,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Tools
 {
     /// <summary>在系统文件浏览器中打开当前工程或应用持久化数据目录，不创建目录内容。</summary>
     public static class OpenFolder

@@ -5,7 +5,7 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
     /// <summary>记录旧设置类型的完整名称，用于阻止未迁移的旧配置被自动加载或覆盖。</summary>
     [AttributeUsage(AttributeTargets.Class, Inherited = false)]

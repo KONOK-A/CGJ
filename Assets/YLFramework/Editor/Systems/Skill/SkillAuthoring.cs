@@ -1,6 +1,6 @@
 using System;
 using UnityEditor;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Domain;
 using YLFramework.Skill;
 
 namespace YLFramework.Editor.Skill

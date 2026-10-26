@@ -24,7 +24,7 @@ function Import-File([string] $path, [string] $target, [bool] $editor) {
     $text = $text.Replace('Window/XFKT/XFGameFramework/InstalledExtension/', 'Window/YLFramework/').Replace('XFKT/', 'YLFramework/')
     $text = $text.Replace('"SELECT_GUID_KEY"', '"YLFramework.' + $Module + '.SelectedConfig"')
     if ($editor) {
-        $text = "using YLFramework.Foundation;`nusing YLFramework.Attributes;`nusing YLFramework.Editor.Utilities;`n" + $text
+        $text = "using YLFramework.Foundation;`nusing YLFramework.Attributes;`nusing YLFramework.Editor.Common;`n" + $text
         $text = $text.Replace('DragableTreeView<', 'ReorderableTreeView<')
         $text = $text.Replace(': Editor', ': UnityEditor.Editor')
         $text = $text.Replace('base(skillsConfig, skillsConfig.skills,state)', 'base(skillsConfig, () => skillsConfig.skills, state)')

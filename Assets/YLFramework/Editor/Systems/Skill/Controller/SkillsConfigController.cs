@@ -8,7 +8,7 @@ using UnityEditor.PackageManager.UI;
 using UnityEngine;
 using YLFramework.Foundation;
 using YLFramework.Attributes;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using YLFramework.Skill;
 
 namespace YLFramework.Editor.Skill

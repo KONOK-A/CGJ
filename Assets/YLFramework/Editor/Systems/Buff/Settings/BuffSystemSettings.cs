@@ -9,7 +9,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using YLFramework.Buff;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 
 namespace YLFramework.Editor.Buff

@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
     /// <summary>将作者工具的正式资源地址接到 Resource Editor 预览解析器，不初始化 Runtime 资源系统。</summary>
     public class EditorAssetTool

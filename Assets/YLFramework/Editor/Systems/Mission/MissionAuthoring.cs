@@ -37,7 +37,7 @@ namespace YLFramework.Editor.Mission
         /// <remarks>同文件子资产通过对象 Undo 改名；独立受管文件走资产改名，外部借用对象不被改名。</remarks>
         internal static void Rename(this MissionConfigData data)
         {
-            YLFramework.Editor.Utilities.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), GeneratedDirectory(data.parent));
+            YLFramework.Editor.Domain.DomainAssetOwnership.RenameEntry(data.parent, data, data.id.ToString(), GeneratedDirectory(data.parent));
             data.parent.ClearCache();
         }
     }

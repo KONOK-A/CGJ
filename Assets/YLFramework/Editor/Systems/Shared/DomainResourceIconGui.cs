@@ -1,6 +1,6 @@
 using UnityEditor;
 using UnityEngine;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 namespace YLFramework.Editor.Domain
 {

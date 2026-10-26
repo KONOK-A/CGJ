@@ -67,7 +67,7 @@ foreach ($side in @('Runtime', 'Editor')) {
             }
             $text = $lines -join "`n"
         } elseif ($side -eq 'Editor') {
-            $text = "using YLFramework.Editor.Utilities;`nusing YLFramework.$feature;`n" + $text.Replace("namespace YLFramework.$feature", "namespace YLFramework.Editor.$feature")
+            $text = "using YLFramework.Editor.Common;`nusing YLFramework.$feature;`n" + $text.Replace("namespace YLFramework.$feature", "namespace YLFramework.Editor.$feature")
             $text = $text.Replace(' : Editor', ' : UnityEditor.Editor')
             if ($Module -eq 'StateMachine') {
                 $relative = $relative -replace '^Listtener[\\/]', 'Listeners\' -replace '^GUI[\\/]Custom Inspector[\\/]', 'GUI\Inspectors\'

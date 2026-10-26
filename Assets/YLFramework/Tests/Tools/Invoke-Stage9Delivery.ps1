@@ -38,10 +38,10 @@ function Read-ExportRoots([string] $Source) {
     $roots = @([regex]::Matches($declarations[0].Groups[1].Value, '"(Assets/[^"\r\n]+)"') | ForEach-Object { $_.Groups[1].Value })
     $required = @('Assets/YLFramework/Editor','Assets/YLFramework/Plugins/BouncyCastle','Assets/YLFramework/Prefabs',
         'Assets/YLFramework/Runtime','Assets/YLFramework/Samples','Assets/YLFramework/Documentation',
-        'Assets/YLFramework/LICENSE.md','Assets/YLFramework/CodingStyle.md','Assets/YLFramework/AGENTS.md')
+        'Assets/YLFramework/LICENSE.md','Assets/YLFramework/AGENTS.md')
     if ($roots.Count -ne $required.Count -or @($roots | Sort-Object -Unique).Count -ne $required.Count -or
         @($required | Where-Object { $roots -cnotcontains $_ }).Count -ne 0) {
-        throw 'The formal export closure must contain the exact six product directories and three root files.'
+        throw 'The formal export closure must contain the exact six product directories and two root files.'
     }
     $roots
 }

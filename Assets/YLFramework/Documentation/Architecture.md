@@ -19,8 +19,11 @@
 | `Runtime/Utilities/` | `YLFramework.Runtime` | 按需组合的工具、数据结构、检测/移动组件及 Excel 字段合同；Zip 源码保持 BCL-only 边界 |
 | `Editor/` | `YLFramework.Editor` | 全部自有编辑器主体，显式引用 Runtime / UGUI / Json.NET，仅 Editor 平台 |
 | `Editor/Help/` | `YLFramework.Editor` | 共享 Help 功能分区，保留稳定窗口、菜单/Provider id与持久配置身份，无独立产品 DLL |
-| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、UI 迁移与 Core Help；通用资产/设置/预览支撑归 Utilities |
-| `Editor/Systems/Shared/` | `YLFramework.Editor` | 跨玩法生命周期及 Resource 图标作者支持，不塞入 Core 或中立 Utilities |
+| `Editor/Core/` | `YLFramework.Editor` | Core 默认资源、模块生成、UI 迁移与 Core Help；含 Core 专用的 ScriptableObject 生成策略 |
+| `Editor/Utilities/` | `YLFramework.Editor` | Runtime Utilities 的 Overlap、CharacterController2D、MoveablePlatform 配套编辑器 |
+| `Editor/Common/` | `YLFramework.Editor` | 中立资产/Inspector/设置/Scene/TreeView/EditorWindow 支撑与资源预览桥接契约 |
+| `Editor/Tools/` | `YLFramework.Editor` | 无领域归属的独立命令；菜单路径不因目录变化而改变 |
+| `Editor/Systems/Shared/` | `YLFramework.Editor` | 跨玩法生命周期、Resource 图标作者支持及领域资产归属策略，不塞入 Core 或中立 Common |
 | `Integrations/DOTween/Runtime/` | `YLFramework.Actions.DOTween` | 可选 Action 扩展，受 `DOTWEEN` 约束 |
 | `Integrations/Excel/Editor/`、`Integrations/DomainExcel/Editor/` | `YLFramework.Excel.Editor`、`YLFramework.Domain.Excel.Editor` | 可选 xlsx 后端与领域作者接入，仅 Editor |
 | `Integrations/HybridCLR/Runtime/`、`Editor/` | `YLFramework.HybridCLR`、`YLFramework.HybridCLR.Editor` | 可选热更叶子，精确约束官方 HybridCLR 9.0.3；dnlib 只在 Editor，主体无反向依赖 |
@@ -44,15 +47,16 @@ Assets/YLFramework/
                  MoveablePlatform, Overlap, Table, UI/ColorSelector, ZipTool, StringTools.cs
     YLFrameworkRoot.cs, YLFramework.Runtime.asmdef, csc.rsp
   Editor/
-    Foundation/, Core/, Systems/ (含 Shared/), Utilities/, Help/, Distribution/
+    Foundation/, Core/, Systems/ (含 Shared/), Utilities/, Common/, Tools/, Help/, Distribution/
     YLFramework.Editor.asmdef
   Integrations/  DOTween, Excel, DomainExcel, HybridCLR
   Tests/
     EditMode/   Foundation, Core, Systems/<模块>, Utilities, Editor/<功能>
     PlayMode/   Foundation, Core, Systems/<模块>, Utilities
     Integrations/<接入名>/, Acceptance/Core/, Fixtures/, Tools/
-  Plugins/BouncyCastle/, Prefabs/, Samples/, Documentation/
-  LICENSE.md, CodingStyle.md, AGENTS.md
+  Plugins/BouncyCastle/, Prefabs/, Samples/
+  Documentation/  CodingStyle.md, Architecture.md, README.md, Modules/
+  LICENSE.md, AGENTS.md
 ```
 
 只使用 Grid、Json 等工具不需要创建 Module 或公共 Root。`YLFrameworkRoot` 是使用相关宿主能力时的装配入口，不负责自动初始化资源、配置或全部领域系统。
@@ -77,7 +81,7 @@ namespace 表达稳定功能域，不机械拼接 Runtime/Foundation/Systems/Uti
 | Utilities/Json 与 ZipTool 内 SharpZipLib 子树 | 保留现有 `Utilities.Json` / `Utilities.ZipTool.*` 身份及第三方源码，不按自有包装规则重命名 |
 | 根装配宿主 YLFrameworkRoot | `YLFramework`，不属于 Foundation |
 
-Editor 同样按所有者划分为 `YLFramework.Editor.Core`、`.Utilities`、`.Foundation`、`.<功能域>`、`.Domain`、`.Help`、`.Distribution`。通用资产/设置/序列化/Scene/TreeViews/Windows/Menus 属于 `.Utilities`；独立组件即使目录下放 Utilities，其 Editor 仍使用 `.Overlap`、`.Character2D`、`.Platform2D`，不是通用 `.Utilities`。共享领域支持使用 `.Domain`，Core 仅保留自身生命周期与 UI 作者工具；Help 的既有 API 子域不因目录整理强制合并。
+Editor 同样按所有者划分为 `YLFramework.Editor.Core`、`.Common`、`.Tools`、`.Foundation`、`.<功能域>`、`.Domain`、`.Help`、`.Distribution`。通用资产/Inspector/设置/Scene/TreeViews/Windows 属于 `.Common`，无领域归属的独立菜单属于 `.Tools`；独立组件的配套编辑器位于 Utilities，但仍使用 `.Overlap`、`.Character2D`、`.Platform2D`。共享领域支持使用 `.Domain`，Core 仅保留自身策略与作者工具；Help 的既有 API 子域不因目录整理强制合并。
 
 | 可选集成 | 当前 namespace | 保留的程序集名 |
 |---|---|---|
@@ -150,7 +154,7 @@ Foundation 的 Unity 挂载 / 销毁适配直接使用原生 API，不依赖上�
 | `Attributes/`、`Analyzers/` | 正式 marker 与唯一编译器 DLL，属于 Runtime 主体输入作用域，marker namespace 保持 |
 | `Resources/YLFramework/Core/` | 既有 Canvas/EventSystem；逻辑加载键 `YLFramework/Core/Canvas`、`YLFramework/Core/EventSystem` 不变 |
 
-Core Editor 的 `DefaultResources/` 负责默认资源生成和删除保护，`ModuleGeneration/` 提供 Module 模板；UI 资产迁移和 Core Help 同属 `YLFramework.Editor.Core`。通用资产、设置、场景与 TreeView 支撑归 Editor Utilities，不放入 Core。
+Core Editor 的 `DefaultResources/` 负责默认资源生成和删除保护，`ModuleGeneration/` 提供 Module 模板；UI 资产迁移、Core Help 与仅支持 Core 生成目录的 `ScriptableObjectExtensions` 同属 `YLFramework.Editor.Core`。中立的资产、设置、场景与 TreeView 支撑归 `Editor/Common`，不放入 Core；设置存储根仍为 `ProjectSettings/YLFramework/Core`，不因基类归位改变存储合同。
 
 局部 Unity 动画、物理和生命周期监听属于 Foundation Events，不增加事件总线；场景便利入口属于 Core SceneController，加载与卸载权仍归 Resource / 应用。用法见 [Events](Modules/Events.md#局部-unity-监听组件) 与 [Resource](Modules/Resource.md#core-scenecontroller)。
 
@@ -289,18 +293,33 @@ Manager 创建的实例由其持有 InstanceLease 或 CLR 池责任；直接 `Eq
 
 #### 共享作者工具
 
-`YLFramework.Editor.Utilities.ReorderableTreeView<T>` 的构造为 `(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter 须返回 owner 当前的序列化列表，不能捕获 Undo 前的 List；初始化后 `Reload`，停用时 `Dispose` 归还订阅和本实例拖拽。
+`YLFramework.Editor.Common.ReorderableTreeView<T>` 的构造为 `(ScriptableObject owner, Func<IList<T>> getData, TreeViewState state[, MultiColumnHeader header])`。getter 须返回 owner 当前的序列化列表，不能捕获 Undo 前的 List；初始化后 `Reload`，停用时 `Dispose` 归还订阅和本实例拖拽。
 
 默认一槽位一行，包含空项与重复引用；过滤行 / 业务 ID 须覆盖 `GetItemIndex(int)` 返回真实数据索引。陈旧节点起拖时拒绝并刷新；显示字段变化由所属 Inspector 显式 Reload。工具只重排并标脏当前 owner，不自动去重、删空项或保存资产。
 
 - `Editor/Foundation/`：Attributes 的 DisableEdit Drawer、Serialization 的原生字典 Drawer 与 Events 的 EventListener Inspector；`Editor/Core/` 只保留 Core 默认资源、生成、UI 迁移与帮助。
-- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Shared/DomainSessionLifecycle` 协调 Skill/Buff/Mission/Logging，`Shared/DomainResourceIconGui` 消费 Resource 作者数据，均使用 `YLFramework.Editor.Domain`，不充作 Core/中立工具。
-- `Editor/Utilities/`：Serialization/Scene/Assets/Settings/TreeViews/Windows 与菜单通用支撑，以及下放的 Overlap/CharacterController2D/MoveablePlatform Editor；Excel 后端仍在可选 Integrations，不创建普通 Editor/Excel 空模块。`Editor/Distribution/` 承载框架导出入口。
+- `Editor/Systems/`：与 Runtime Systems 对应的领域 Editor；`Shared/DomainSessionLifecycle` 协调 Skill/Buff/Mission/Logging，`Shared/DomainResourceIconGui` 消费 Resource 作者数据，`Shared/DomainAssetOwnership` 维护领域条目资产归属，均使用 `YLFramework.Editor.Domain`，不充作 Core/中立工具。
+- `Editor/Utilities/`：只保留与 Runtime Utilities 对应的 Overlap/CharacterController2D/MoveablePlatform Inspector 与 Gizmos，namespace 仍按各模块命名。Excel 后端仍在可选 Integrations，不创建普通 Editor/Excel 空模块。
+- `Editor/Common/`：Assets、Inspector、Scene、Settings、TreeViews、Windows 的公共支撑统一使用 `YLFramework.Editor.Common`。Inspector 是 SerializedObject/SerializedProperty 辅助，不代替 Foundation 的序列化 Drawer；Windows 是 EditorWindow 支撑，不是 Runtime UI。EditorAssetTool 是资源预览桥，解析器由 Resource Editor 安装，公共层不直接初始化 Runtime 或依赖 Resource 具体实现。
+- `Editor/Tools/`：无领域归属的独立菜单工具，使用 `YLFramework.Editor.Tools`。有 MenuItem 不等于通用工具；模块窗口仍归模块，框架导出仍归 `Editor/Distribution/`。
 - `Editor/Help/`：共享帮助分区，提供方按领域组织但不形成额外主体 DLL。
-- 通用工具：`Editor/Utilities/Menus/ClearLog` / `OpenFolder`、`Editor/Distribution/ExportUnityPackage`，菜单 `YLFramework/Toolkit/...` 保持。
+- 通用工具：`Editor/Tools/ClearLog` / `OpenFolder`、`Editor/Distribution/ExportUnityPackage`，菜单 `YLFramework/Toolkit/...` 保持。
 - 资源工具：`YLFramework/Resource/Workbench`，包含 ResourceProject / Group、目录模拟、Builder、Publisher 和代码生成，见 [Resource](Modules/Resource.md)。
 - 帮助：`YLFramework/帮助` 及 Core / Toolkit / Action / Audio 子入口，共用只读索引，不实例化宿主或运行示例，见 [Help](Modules/Help.md)。
 - 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。运行时 `AudioKitDebugWindow` 位于 Audio / Diagnostics，仅 Editor/Development Build 提供运行 GUI；诊断不为读取空状态创建 AudioManager、Source 或 Listener。
+
+#### Editor namespace 迁移
+
+公共支撑、独立命令和模块策略不再共用 `YLFramework.Editor.Utilities`；这是源码 API 变更，外部消费者须按实际类型更新 using、全限定名及反射字符串，不提供旧 namespace 的包装类或 CLR 别名。
+
+| 原 Utilities 类型 | 新目录 | 新 namespace |
+|---|---|---|
+| AssetNameTools、EditorAssetTool、SerializedObject/SerializedProperty 扩展、HandlesExtensions、设置基类及 Attribute、TreeView、SplitWindow | `Editor/Common` 各职责子目录 | `YLFramework.Editor.Common` |
+| ClearLog、OpenFolder | `Editor/Tools` | `YLFramework.Editor.Tools` |
+| ScriptableObjectExtensions | `Editor/Core` | `YLFramework.Editor.Core` |
+| DomainAssetOwnership（内部领域策略） | `Editor/Systems/Shared` | `YLFramework.Editor.Domain` |
+
+文件和整体移动目录的 GUID 保留，全部仍属 Editor-only 的 `YLFramework.Editor`，不新增 DLL。SplitWindow、TreeViewStateGroup、TreeViewStateInfo 保留旧 namespace 的 MovedFrom，以迁移已有窗口/托管引用数据；这不等于旧 Type.GetType 字符串仍可解析。序列化字段、具体派生设置类型、既有设置路径、生成存储根和菜单不变，不能因整理目录而清空状态或重建设置。旧数据回归使用迁移前由 Unity 保存的夹具，而非改名后伪造旧 YAML。
 
 ## XML 与分发
 

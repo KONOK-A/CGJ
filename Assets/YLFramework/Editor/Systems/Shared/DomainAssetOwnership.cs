@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YLFramework.Editor.Common;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Domain
 {
     /// <summary>领域作者工具共用的资产身份边界，不把文件路径当作subasset身份。</summary>
     internal static class DomainAssetOwnership

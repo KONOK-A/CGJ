@@ -8,11 +8,11 @@ YLFramework 是 Unity 游戏框架，按 Runtime、Editor 和可选集成分层�
 - `Runtime/Core`：Module、MVC、UI 和资源接入；`Runtime/Systems`：Audio、Resource、Save、玩法等系统；`Runtime/Utilities`：通用工具。
 - `Editor`：作者工具、工作台与导出；`Integrations`：可选适配；`Plugins`：随附第三方库。
 - `Samples`：接入示例；`Tests`：测试与验收夹具；`Documentation`：架构和模块说明。
-- 命名与排版只维护 [CodingStyle.md](CodingStyle.md)；架构与模块入口见 [Architecture](Documentation/Architecture.md) 和 [文档首页](Documentation/README.md)。
+- 代码规范只维护 [Documentation/CodingStyle.md](Documentation/CodingStyle.md)；架构与模块入口见 [Architecture](Documentation/Architecture.md) 和 [文档首页](Documentation/README.md)。
 
 ## 工作方式
 
-维护现有代码和新增代码均须遵守 [CodingStyle.md](CodingStyle.md)。
+AI Agent 处理本目录及子目录的框架代码前，必须先阅读并遵守 [代码规范](Documentation/CodingStyle.md)；维护、修复、重构和新增代码均适用。
 
 1. 先读相关模块的实现、调用方、测试和资产，确认预期行为及验证方式，不凭名称猜契约。
 2. 复用现有模块与模式，做最小必要修改；不顺手全库重构、格式化或增加抽象。框架外业务仅同步必要调用/绑定。

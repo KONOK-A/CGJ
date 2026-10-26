@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
 
     /// <summary>补充 Scene 视图的二维轮廓绘制，不创建或修改场景对象。</summary>

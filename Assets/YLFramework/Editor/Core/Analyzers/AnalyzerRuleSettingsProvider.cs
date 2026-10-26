@@ -9,7 +9,7 @@ using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.UIElements;
 using YLFramework.Editor.Help;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using CompilationAssembly = UnityEditor.Compilation.Assembly;
 
 namespace YLFramework.Editor.Core.Analyzers

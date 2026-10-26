@@ -3,7 +3,7 @@
 using System.Reflection;
 using UnityEditor;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Tools
 {
     /// <summary>通过编辑器菜单清空 Unity Console 的现有日志。</summary>
     public static class ClearLog

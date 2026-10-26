@@ -7,7 +7,7 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using YLFramework.Foundation;
 using YLFramework.Attributes;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using YLFramework.Mission;
 
 namespace YLFramework.Editor.Mission
@@ -337,7 +337,7 @@ namespace YLFramework.Editor.Mission
                 return;
             }
 
-            YLFramework.Editor.Utilities.DomainAssetOwnership.DeleteEntry(_missionsConfig, _missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(_missionsConfig));
+            YLFramework.Editor.Domain.DomainAssetOwnership.DeleteEntry(_missionsConfig, _missionsConfig.missions, data, MissionAuthoring.GeneratedDirectory(_missionsConfig));
             _missionsConfig.ClearCache();
             Reload();
         }

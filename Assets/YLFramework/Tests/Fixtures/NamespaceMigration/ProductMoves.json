@@ -37,17 +37,17 @@
     },
     {
       "From": "Editor/Core/Extensions/ScriptableObjectExtensions.cs",
-      "To": "Editor/Utilities/Assets/ScriptableObjectExtensions.cs",
+      "To": "Editor/Core/ScriptableObjectExtensions.cs",
       "Guid": "8f36b44478729c34486b79b7b1ce95f0"
     },
     {
       "From": "Editor/Core/Utilities/Preview/EditorAssetTool.cs",
-      "To": "Editor/Utilities/Assets/EditorAssetTool.cs",
+      "To": "Editor/Common/Assets/EditorAssetTool.cs",
       "Guid": "8b8ad24c1e834bb4e93a9237f2888f66"
     },
     {
       "From": "Editor/Core/Settings",
-      "To": "Editor/Utilities/Settings",
+      "To": "Editor/Common/Settings",
       "Guid": "a05fe4b74c0d3b141862e00280b14c50"
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "From": "Editor/Systems/Skill/DomainAssetOwnership.cs",
-      "To": "Editor/Utilities/Assets/DomainAssetOwnership.cs",
+      "To": "Editor/Systems/Shared/DomainAssetOwnership.cs",
       "Guid": "1ddd9cd019957054cbe3961a7ca6d7b5"
     },
     {

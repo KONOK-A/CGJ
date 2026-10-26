@@ -9,7 +9,7 @@ using YLFramework.Core.Tests;
 using YLFramework.Editor.Resource;
 using YLFramework.Resource;
 using Object = UnityEngine.Object;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 
 namespace YLFramework.Core.Editor.Tests
 {

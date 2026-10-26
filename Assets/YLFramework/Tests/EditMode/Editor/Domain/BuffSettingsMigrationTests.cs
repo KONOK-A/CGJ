@@ -9,7 +9,7 @@ using UnityEditorInternal;
 using UnityEngine;
 using YLFramework.Buff;
 using YLFramework.Editor.Buff;
-using YLFramework.Editor.Utilities;
+using YLFramework.Editor.Common;
 using BuffSettings = YLFramework.Editor.Buff.BuffSystemSettings;
 using Object = UnityEngine.Object;
 

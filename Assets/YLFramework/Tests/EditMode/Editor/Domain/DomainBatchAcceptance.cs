@@ -240,7 +240,6 @@ namespace YLFramework.Tests.Extensions.Domain
         private static bool IsDomainAsset(string path) => _runtimeRoots.Any(module =>
             new[] { "Runtime/Systems/", "Tests/EditMode/Systems/", "Tests/PlayMode/Systems/" }.Any(prefix =>
                 path == "Assets/YLFramework/" + prefix + module || path.StartsWith("Assets/YLFramework/" + prefix + module + "/", StringComparison.Ordinal))) ||
-            path == "Assets/YLFramework/Editor/Utilities/Assets/DomainAssetOwnership.cs" ||
             new[] { "Editor/Systems/Skill", "Editor/Systems/Buff", "Editor/Systems/Mission", "Editor/Systems/Shared", "Tests/EditMode/Editor/Domain", "Tests/PlayMode/Systems/Domain", "Tests/Fixtures/Extensions/Domain", "Tests/Integrations/DomainExcel", "Integrations/DomainExcel" }
                 .Any(root => path == "Assets/YLFramework/" + root || path.StartsWith("Assets/YLFramework/" + root + "/", StringComparison.Ordinal));
         private static string Normalize(string path) => Path.GetFullPath(path).Replace('\\', '/');

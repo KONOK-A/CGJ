@@ -22,7 +22,7 @@ YLFramework 是整体交付、按需使用的 Unity 游戏框架。运行时主�
 | 启动资源并连接 Module / Audio | [Resource 最小接入](Modules/Resource.md#可运行最小接入) |
 | 打开界面、播放音频或组合动作 | [UI](Modules/UI.md) · [Audio](Modules/Audio.md) · [Action](Modules/Action.md) |
 | 使用 Editor 帮助或导出框架 | [帮助与导出](#帮助与导出) |
-| 修改框架源码 | [代码规范](../CodingStyle.md) · [AI 编程说明](../AGENTS.md) |
+| 修改框架源码 | [代码规范](CodingStyle.md) · [AI 编程说明](../AGENTS.md) |
 | 查询旧版本的设计和验收证据 | [历史记录](IntegrationPlan.md) |
 
 ## 目录结构
@@ -31,7 +31,7 @@ YLFramework 是整体交付、按需使用的 Unity 游戏框架。运行时主�
 
 | 目录 | 说明 |
 |---|---|
-| [`CodingStyle.md`](../CodingStyle.md) | 代码、命名、bool 分类与安全改名的唯一规范 |
+| [`Documentation/CodingStyle.md`](CodingStyle.md) | 代码、命名、bool 分类与安全改名的唯一规范 |
 | [`AGENTS.md`](../AGENTS.md) | 面向 AI 编程的项目导航、工作流程与验证要求 |
 | [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Core / Systems / Utilities） |
 | [`Editor/`](../Editor/) | Editor-only 主体、作者工具、帮助与导出 |
@@ -121,7 +121,7 @@ Runtime 分为 Foundation、Core、Systems、Utilities 四个职责区，Editor 
 
 - 菜单：`YLFramework/帮助`、`YLFramework/Core/帮助`、`YLFramework/Toolkit/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。浏览帮助不执行示例或创建运行宿主，扩展方式见 [Help](Modules/Help.md)。
 - 常用工具：`YLFramework/Resource/Workbench`、`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`、`YLFramework/Core/分析器规则`（Project Settings > YLFramework > Analyzers）。
-- `YLFramework/Toolkit/导出框架包` 的默认根为 `Editor`、`Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation` 六个目录，以及 `LICENSE.md`、`CodingStyle.md`、`AGENTS.md` 三个根文件；使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根导出。
+- `YLFramework/Toolkit/导出框架包` 的默认根为 `Editor`、`Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation` 六个目录，以及 `LICENSE.md`、`AGENTS.md` 两个根文件；使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根导出，代码规范随 `Documentation` 导出。
 - 自动化可调用 `YLFramework.Editor.Distribution.ExportUnityPackage.Export(absolutePackagePath)` 向已有本地父目录导出同一内容，默认不覆盖、不保存其他资产；菜单入口会先保存资产。Resource 发布快照是另一类交付，见 [Resource](Modules/Resource.md#轮换与交付)。
 - `Plugins/BouncyCastle/` 完整递归且保留原导入平台；不递归整个 Plugins，更不复制或改变宿主商业插件配置。JSONObject/SharpZipLib 的现有来源声明与许可证随 Runtime 保留。
 - `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 是编译器输入，不是 Player 运行依赖；十项诊断默认 Warning，新增 Inject 声明、View 入口加载 Panel、音频协程等待检查。设置页可选 asmdef/预定义业务程序集、预览并修改原生 ruleset，保留其他规则与继承；只读接入自检不把零诊断当成功。配置、Error 恢复、升级与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。

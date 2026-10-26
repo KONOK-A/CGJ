@@ -3,7 +3,7 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Core
 {
 
     /// <summary>把调用方新建的 ScriptableObject 保存到 YL 专用生成目录，拒绝移动或覆盖已有资产。</summary>

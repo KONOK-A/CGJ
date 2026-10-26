@@ -11,7 +11,7 @@ using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
 using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
 #endif
 
-namespace YLFramework.Editor.Utilities
+namespace YLFramework.Editor.Common
 {
     /// <summary>
     /// 承接XF平面列表的TreeView构建/重排流程，按索引移动以保留空项和重复引用。

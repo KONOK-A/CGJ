@@ -84,8 +84,8 @@ namespace YLFramework.Tests.Extensions.Shared
         private E0ReorderableTestWindow Window(E0ReorderableListAsset asset, Func<IList<Object>> getData = null,
             TreeView prepared = null)
         {
-            var generic = typeof(YLFramework.Editor.Utilities.TreeViewStateGroup).Assembly
-                .GetType("YLFramework.Editor.Utilities.ReorderableTreeView`1");
+            var generic = typeof(YLFramework.Editor.Common.TreeViewStateGroup).Assembly
+                .GetType("YLFramework.Editor.Common.ReorderableTreeView`1");
             Assert.That(generic, Is.Not.Null, "缺少实际列表重排能力，不能只提供字段契约。");
             var tree = prepared ?? (TreeView)Activator.CreateInstance(generic.MakeGenericType(typeof(Object)),
                 asset, getData ?? (() => asset.items), new TreeViewState());
@@ -133,7 +133,7 @@ namespace YLFramework.Tests.Extensions.Shared
             Assert.That(Invoke(window.Tree, "CanStartDrag", ("draggedItem", item), ("draggedItemIDs", ids)), Is.True);
             // StartDrag会进入原生OS拖拽循环；自动测试真实准备/放置逻辑，不启动全局桌面拖拽。
             window.Dispatch(EventType.MouseDrag, () =>
-                Assert.That(typeof(YLFramework.Editor.Utilities.ReorderableTreeView<Object>).GetMethod("PrepareDrag", InstanceMembers)
+                Assert.That(typeof(YLFramework.Editor.Common.ReorderableTreeView<Object>).GetMethod("PrepareDrag", InstanceMembers)
                     .Invoke(window.Tree, new object[] { ids }), Is.True));
         }
 
@@ -337,7 +337,7 @@ namespace YLFramework.Tests.Extensions.Shared
             CollectionAssert.AreEqual(new Object[] { before[1], before[0], null, before[2] }, asset.items);
         }
 
-        private sealed class FilteredTree : YLFramework.Editor.Utilities.ReorderableTreeView<Object>
+        private sealed class FilteredTree : YLFramework.Editor.Common.ReorderableTreeView<Object>
         {
             private readonly E0ReorderableListAsset _asset;
 

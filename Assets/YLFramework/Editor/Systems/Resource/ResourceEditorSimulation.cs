@@ -27,7 +27,7 @@ namespace YLFramework.Editor.Resource
         static ResourceEditorSimulation()
         {
             _mainThread = Thread.CurrentThread.ManagedThreadId;
-            YLFramework.Editor.Utilities.EditorAssetTool.PreviewResolver = ResolveCorePreview;
+            YLFramework.Editor.Common.EditorAssetTool.PreviewResolver = ResolveCorePreview;
         }
 
         /// <summary>从当前资产数据库查找唯一项目后借用目标资产，不复用旧项目索引。</summary>

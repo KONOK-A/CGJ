@@ -69,7 +69,7 @@ EditorFast 要求已有 ResourceSystem 与 Core provider 绑定，仅使用 AppD
 
 应用显式持有 `HybridCLRExample`，yield `Run(configuration, projectId, compatibilityId)` 后读取 Result；关闭时 yield `CloseAsync()`。更新实验可先显式 `CloseCode()` 关闭 Module、实例和 manifest 屏障，待原生销毁排空后 Activate，但仍须新进程运行另一版代码。配置可由 ResourceLocalSnapshot.OpenBuiltIn/ArtifactStore 构造。样例不自动启动、找全场景或接管现有游戏。只改 Support 的版本文本可做 v2 补丁实验，但正式证明仍须相同 Player hash 下的新进程原生执行。
 
-`HybridCLRIntegrationExporter.Export(absolutePackagePath, includeSample: true)` 显式导出本叶子的源码、asmdef 和依赖说明。默认不带样例，不递归依赖，不带 Tests、官方包、生成 DLL、基线、StreamingAssets 制品、私钥或仓库验收工具；默认框架仍导出六个目录（Editor、Plugins/BouncyCastle、Prefabs、Runtime、Samples、Documentation）及三个根文件（LICENSE.md、CodingStyle.md、AGENTS.md），不含本可选叶子或宿主商业插件。
+`HybridCLRIntegrationExporter.Export(absolutePackagePath, includeSample: true)` 显式导出本叶子的源码、asmdef 和依赖说明。默认不带样例，不递归依赖，不带 Tests、官方包、生成 DLL、基线、StreamingAssets 制品、私钥或仓库验收工具；默认框架仍导出六个目录（Editor、Plugins/BouncyCastle、Prefabs、Runtime、Samples、Documentation）及两个根文件（LICENSE.md、AGENTS.md），代码规范随 Documentation 导出，不含本可选叶子或宿主商业插件。
 
 ## 历史验收
 

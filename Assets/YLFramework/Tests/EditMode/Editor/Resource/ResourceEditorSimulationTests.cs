@@ -43,12 +43,12 @@ namespace YLFramework.Tests.ResourceBuild
             EditorUtility.SetDirty(project);
             AssetDatabase.SaveAssetIfDirty(project);
             var simulation = new ResourceEditorSimulation(new[] { fixture.Project });
-            var property = typeof(YLFramework.Editor.Utilities.EditorAssetTool).GetProperty("PreviewResolver");
+            var property = typeof(YLFramework.Editor.Common.EditorAssetTool).GetProperty("PreviewResolver");
             Assert.That(property, Is.Not.Null, "Core Editor must consume an installed preview delegate, not XFAB project lookup.");
             var resolver = (Func<string, string, string, UnityEngine.Object>)property.GetValue(null);
             Assert.That(resolver, Is.Not.Null, "The Resource Editor installs the formal resolver on domain load.");
             var main = AssetDatabase.LoadAssetAtPath<Texture2D>(fixture.Folder + "/Content/Shared.asset");
-            Assert.That(YLFramework.Editor.Utilities.EditorAssetTool.GetTexture2D(project.projectId, "Shared.asset"), Is.SameAs(main));
+            Assert.That(YLFramework.Editor.Common.EditorAssetTool.GetTexture2D(project.projectId, "Shared.asset"), Is.SameAs(main));
             var sprite = AssetDatabase.LoadAllAssetRepresentationsAtPath(fixture.Folder + "/Content/Sprites.png").OfType<Sprite>().First();
             AssetDatabase.TryGetGUIDAndLocalFileIdentifier(sprite, out string _, out long id);
             Assert.That(resolver(project.projectId, "Sprites.png", id.ToString()), Is.SameAs(sprite));
@@ -71,7 +71,7 @@ namespace YLFramework.Tests.ResourceBuild
             try
             {
                 property.SetValue(null, null);
-                Assert.Throws<InvalidOperationException>(() => YLFramework.Editor.Utilities.EditorAssetTool.GetTexture2D(project.projectId, "Shared.asset"));
+                Assert.Throws<InvalidOperationException>(() => YLFramework.Editor.Common.EditorAssetTool.GetTexture2D(project.projectId, "Shared.asset"));
             }
             finally
             {
