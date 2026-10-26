@@ -98,26 +98,6 @@ namespace YLFramework.Core.Tests
 
         private IEnumerator Run()
         {
-            if (Array.IndexOf(Environment.GetCommandLineArgs(), "-ui34-game") >= 0)
-            {
-                DontDestroyOnLoad(gameObject);
-                var game = GameAcceptanceFlow.Run(colorPrefab);
-                try
-                {
-                    while (game.MoveNext())
-                    {
-                        yield return game.Current;
-                    }
-                }
-                finally
-                {
-                    (game as IDisposable)?.Dispose();
-                }
-                Result = "GAME_PLAYER_PASS";
-                Debug.Log("UI34 " + Result);
-                Application.Quit(0);
-                yield break;
-            }
             Round++;
             Check(!_previousRoot && !_previousWindow, "previous Play objects destroyed");
             Check(PanelManager.CanvasCreated == null, "previous static canvas hook cleared");

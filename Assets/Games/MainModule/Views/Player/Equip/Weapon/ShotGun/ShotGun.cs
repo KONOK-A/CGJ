@@ -52,7 +52,7 @@ public class ShotGun : WeaponBase
     }
     private void Shoot(int count,Vector2 direction)
     {
-        Module.LoadController<AudioController>().PlaySound("霰弹1");
+        PlayShotSound("霰弹1");
         
         var angle = direction.ToAngle();
         var originPos = transform.position;

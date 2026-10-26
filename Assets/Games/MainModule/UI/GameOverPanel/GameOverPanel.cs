@@ -1,5 +1,3 @@
-using AudioKit = YLFramework.Audio.AudioKit;
-using YLFramework.Audio;
 using UnityEngine;
 using XFABManager;
 using XFGameFramework;
@@ -13,9 +11,7 @@ public class GameOverPanel : Panel
         var clip = AssetBundleManager.LoadAsset<AudioClip>(Module.ModuleName, "挑战失败");
         if (clip)
         {
-            var options = AudioSoundOptions.Defaults;
-            options.PlaySoundMode = AudioKit.PlaySoundModes.EveryOne;
-            AudioKit.PlaySound(clip, options);
+            AudioPlayer.Play(AudioController.SoundName, clip, true);
         }
         System.GC.Collect();
     }

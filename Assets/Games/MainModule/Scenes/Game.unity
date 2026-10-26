@@ -2601,19 +2601,20 @@ MonoBehaviour:
   m_GameObject: {fileID: 1078099667}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a02644b3809d0e34aa3ad1a21593f647, type: 3}
+  m_Script: {fileID: 11500000, guid: 403c24cad33f2944ead6f9acd0524ea2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clip: {fileID: 8300000, guid: 400ef5481e980d242978b2a794305170, type: 3}
-  loop: 1
-  playOnAwake: 0
-  volume: 1
-  outputRoute:
-    Mode: 0
-    Group: {fileID: 0}
-  autoFade:
-    FadeInSeconds: 0
-    FadeOutSeconds: 0
+  audioSource: {fileID: 0}
+  controllerName: Music
+  audioAssetType: 1
+  projectName: MainModule
+  AssetNames: []
+  Clips:
+  - name: Default
+    clips:
+    - {fileID: 8300000, guid: 400ef5481e980d242978b2a794305170, type: 3}
+    playType: 0
+    playOnAwake: 0
 --- !u!1001 &1181761337
 PrefabInstance:
   m_ObjectHideFlags: 0

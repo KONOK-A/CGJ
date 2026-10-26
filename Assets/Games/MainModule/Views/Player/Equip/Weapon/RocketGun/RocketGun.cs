@@ -51,7 +51,7 @@ public class RocketGun : WeaponBase
     }
     private void Shoot(Vector2 direction)
     {
-        Module.LoadController<AudioController>().PlaySound("火箭发射");
+        PlayShotSound("火箭发射");
         var bullet = Module.LoadView<Bullet>(bulletName);
         int index = Random.Range(0, gunPos.Length);
         bullet.transform.position = gunPos[index].position;

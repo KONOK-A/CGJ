@@ -1,7 +1,6 @@
 
 using System; 
 using System.Collections.Generic;
-using AudioKit = YLFramework.Audio.AudioKit;
 using UnityEngine;
 using XFGameFramework;
 
@@ -24,7 +23,5 @@ public class MainModule : Module
         Application.targetFrameRate = 120;
         //模块启动成功后，即将游戏状态切换
         LoadController<GameController>().SetGameState(GameState.Start);
-        AudioKit.PlaySoundMode = AudioKit.PlaySoundModes.IgnoreSameSoundInGlobalFrames;
-        AudioKit.GlobalFrameCountForIgnoreSameSound = 10;
     }
 }

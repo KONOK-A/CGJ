@@ -1,7 +1,7 @@
 {
     "name": "YLFramework.UI.Acceptance",
     "rootNamespace": "YLFramework.Core.Tests",
-    "references": ["YLFramework.Runtime", "UnityEngine.UI", "Unity.InputSystem", "Project.Game.MainModule", "XFGameFramework", "XFFSM"],
+    "references": ["YLFramework.Runtime", "UnityEngine.UI", "Unity.InputSystem"],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

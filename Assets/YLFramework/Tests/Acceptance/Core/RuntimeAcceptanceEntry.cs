@@ -22,8 +22,6 @@ namespace YLFramework.Core.Tests
         public GameObject colorPrefab;
         [global::UnityEngine.Serialization.FormerlySerializedAs("ServerUrl")]
         public string serverUrl;
-        [global::UnityEngine.Serialization.FormerlySerializedAs("GameMode")]
-        public bool gameMode;
         public static string Result;
         public static int Round;
         public static int PreparedRound
@@ -171,35 +169,6 @@ namespace YLFramework.Core.Tests
 
         private IEnumerator Run()
         {
-            if (gameMode || Array.IndexOf(Environment.GetCommandLineArgs(), "-runtime55-game") >= 0)
-            {
-                var listener = GetComponent<AudioListener>();
-                if (listener)
-                {
-                    listener.enabled = false;
-                }
-
-                var game = AudioGameAcceptanceFlow.Run();
-                try
-                {
-                    while (game.MoveNext())
-                    {
-                        yield return game.Current;
-                    }
-                }
-                finally
-                {
-                    (game as IDisposable)?.Dispose();
-                }
-                Result = "GAME_PASS";
-                Debug.Log("RUNTIME55 GAME_PASS");
-                if (!Application.isEditor)
-                {
-                    Application.Quit(0);
-                }
-
-                yield break;
-            }
             Round++;
             Check(!string.IsNullOrEmpty(serverUrl), "controlled loopback service configured");
             Check(Pending == 0, "fresh HTTP pending table");

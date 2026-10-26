@@ -2,8 +2,9 @@
     "name": "Project.Game.MainModule.Tests.PlayMode",
     "references": [
         "Project.Game.MainModule",
-        "YLFramework.Runtime",
         "XFGameFramework",
+        "XFABManager",
+        "XFGameFramework.Overlap",
         "XFFSM",
         "UnityEngine.UI",
         "UnityEngine.TestRunner"

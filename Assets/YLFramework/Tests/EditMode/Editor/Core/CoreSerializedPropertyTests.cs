@@ -333,8 +333,8 @@ namespace YLFramework.Core.Editor.Tests
                 "YLFramework.Core.Editor.Tests.Settings.First.CoreEditorSettingsFixture|Marker=marker",
                 "YLFramework.Core.Editor.Tests.Settings.Second.CoreEditorSettingsFixture|Marker=marker",
                 "YLFramework.Core.Editor.Tests.CoreEditorGeneratedAssetFixture|Marker=marker",
-                "YLFramework.Core.Tests.RuntimeAcceptanceEntry|ColorPrefab=colorPrefab;ServerUrl=serverUrl;GameMode=gameMode",
-                "YLFramework.Core.Tests.AudioAcceptanceEntry|Group=group;Signal=signal;SecondSignal=secondSignal;MixerConfig=mixerConfig;ResourceKey=resourceKey;GameMode=gameMode",
+                "YLFramework.Core.Tests.RuntimeAcceptanceEntry|ColorPrefab=colorPrefab;ServerUrl=serverUrl",
+                "YLFramework.Core.Tests.AudioAcceptanceEntry|Group=group;Signal=signal;SecondSignal=secondSignal;MixerConfig=mixerConfig;ResourceKey=resourceKey",
                 "YLFramework.Core.Tests.UIPanelAcceptanceDragProbe|Drags=drags",
                 "YLFramework.Core.Tests.UIAcceptanceEntry|RootPrefab=rootPrefab;ColorPrefab=colorPrefab",
                 "YLFramework.Core.Tests.YLCoreSelectionInputProbe|Cancels=cancels",
@@ -360,9 +360,8 @@ namespace YLFramework.Core.Editor.Tests
             }
         }
 
-        [TestCase(false)]
-        [TestCase(true)]
-        public void LegacyAcceptancePrefabKeepsReferencesFlagsAndIdentity(bool gameMode)
+        [Test]
+        public void LegacyAcceptancePrefabKeepsReferencesAndIdentity()
         {
             var type = AppDomain.CurrentDomain.GetAssemblies()
                 .Select(assembly => assembly.GetType("YLFramework.Core.Tests.RuntimeAcceptanceEntry", false))
@@ -385,14 +384,13 @@ namespace YLFramework.Core.Editor.Tests
                 {
                     serialized.FindProperty("colorPrefab").objectReferenceValue = host;
                     serialized.FindProperty("serverUrl").stringValue = "https://127.0.0.1/style-fixture";
-                    serialized.FindProperty("gameMode").boolValue = gameMode;
                     serialized.ApplyModifiedPropertiesWithoutUndo();
                 }
                 Assert.That(PrefabUtility.SaveAsPrefabAsset(host, path), Is.Not.Null);
                 byte[] meta = File.ReadAllBytes(path + ".meta");
                 string guid = AssetDatabase.AssetPathToGUID(path);
                 string yaml = File.ReadAllText(path);
-                foreach (var names in new[] { new[] { "colorPrefab", "ColorPrefab" }, new[] { "serverUrl", "ServerUrl" }, new[] { "gameMode", "GameMode" } })
+                foreach (var names in new[] { new[] { "colorPrefab", "ColorPrefab" }, new[] { "serverUrl", "ServerUrl" } })
                 {
                     Assert.That(yaml, Does.Contain("\n  " + names[0] + ":"));
                     yaml = yaml.Replace("\n  " + names[0] + ":", "\n  " + names[1] + ":");
@@ -406,7 +404,6 @@ namespace YLFramework.Core.Editor.Tests
                 {
                     Assert.That(serialized.FindProperty("colorPrefab").objectReferenceValue, Is.EqualTo(contents));
                     Assert.That(serialized.FindProperty("serverUrl").stringValue, Is.EqualTo("https://127.0.0.1/style-fixture"));
-                    Assert.That(serialized.FindProperty("gameMode").boolValue, Is.EqualTo(gameMode));
                 }
                 Assert.That(PrefabUtility.SaveAsPrefabAsset(contents, path), Is.Not.Null);
                 PrefabUtility.UnloadPrefabContents(contents);
@@ -414,7 +411,6 @@ namespace YLFramework.Core.Editor.Tests
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
                 using (var serialized = new SerializedObject(AssetDatabase.LoadAssetAtPath<GameObject>(path).GetComponent(type)))
                 {
-                    Assert.That(serialized.FindProperty("gameMode").boolValue, Is.EqualTo(gameMode));
                     Assert.That(serialized.FindProperty("serverUrl").stringValue, Is.EqualTo("https://127.0.0.1/style-fixture"));
                 }
                 Assert.That(AssetDatabase.AssetPathToGUID(path), Is.EqualTo(guid));

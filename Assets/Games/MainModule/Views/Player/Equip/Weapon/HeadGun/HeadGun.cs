@@ -55,7 +55,7 @@ public class HeadGun : WeaponBase
 
     private void Shoot(Vector2 direction)
     {
-        Module.LoadController<AudioController>().PlaySound("机炮4");
+        PlayShotSound("机炮4");
         foreach (var pos in gunPos)
         {
             var bullet = Module.LoadView<Bullet>(bulletName);

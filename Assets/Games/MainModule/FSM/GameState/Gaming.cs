@@ -7,7 +7,6 @@ using UnityEngine.SceneManagement;
 using XFABManager;
 using XFFSM;
 using XFGameFramework;
-using YLFramework.Audio;
 using Random = UnityEngine.Random;
 
 public class Gaming : FSMState
@@ -19,7 +18,7 @@ public class Gaming : FSMState
     private int _waves;
     private Coroutine _coroutine;
     private GamePanel _gamePanel;
-    private AudioMusicPlayer _audioPlayer;
+    private AudioPlayer _audioPlayer;
     private SceneController SceneController => _module.LoadController<SceneController>();
     private GameController GameController => _module.LoadController<GameController>();
     private bool IsMax { get; set; }
@@ -106,14 +105,14 @@ public class Gaming : FSMState
             _gamePanel.Close();
             _gamePanel = null;
         }
-        if (_audioPlayer) _audioPlayer.Stop();
+        if (_audioPlayer) _audioPlayer.Stop(StopType.Play);
         _audioPlayer = null;
     }
     private void OnLoaded()
     {
         var scene = SceneManager.GetActiveScene();
         _cinemachineVirtualCamera = scene.FindRootGameObject("Virtual Camera").GetComponent<CinemachineVirtualCamera>();
-        _audioPlayer = _cinemachineVirtualCamera.GetComponent<AudioMusicPlayer>();
+        _audioPlayer = _cinemachineVirtualCamera.GetComponent<AudioPlayer>();
         //加载主角
         _shakeHead = _module.LoadView<SnakeHead>("Snake");
         _shakeHead.transform.position = Vector3.zero;

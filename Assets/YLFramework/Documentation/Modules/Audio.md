@@ -888,9 +888,9 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 ## 业务接入
 
-以下只说明源码仓库原游戏的独立接线，不是新项目接入要求，也不随框架默认导出。原游戏由 XFAB 提供 Clip，再以直接 Clip 借用入口提交 AudioKit；这不构成框架的 XFAB Provider。`MainModule` 的全局 10 帧去重、UI 点击/结算的 EveryOne 覆盖及旧 `AudioConfigVolume:Music` 键迁移均属于业务层。
+源码仓库主游戏已改用 XF AudioPlayer/AudioController 与 XFAB，不再消费 YL AudioKit、AudioEmitter 或 AudioMusicPlayer。游戏代码、Prefab/Scene 和自有测试的依赖闭包与 YL 分开；不随框架默认导出，也不是新项目接入要求。
 
-原游戏使用 AudioEmitter/AudioMusicPlayer，Listener 仍由场景提供；Gaming 入口启动并停止自己持有的 BGM。新项目按本页正式入口配置，不复制原游戏全局策略或把业务历史当作运行前提。
+游戏的分来源战斗预算、80ms 去重、组内优先级抢占和偏好迁回 XF 都是游戏业务策略，不属于 YL 音频契约。YL 的组件生命周期和旧序列化兼容测试使用框架自有夹具，不再读取游戏资源；原 `-ui34-game`、`-audio45-game`、`-runtime55-game` 联合验收入口已退休，默认 YL UI/Audio/Runtime 验收入口保持。新项目按本页正式入口配置，不复制原游戏策略或把历史游戏验收当作运行前提。
 
 ## 测试与帮助
 

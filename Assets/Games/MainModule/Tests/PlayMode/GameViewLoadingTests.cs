@@ -9,6 +9,9 @@ using XFGameFramework;
 
 public class GameViewLoadingTests
 {
+    [UnitySetUp]
+    public IEnumerator ReadyResources() => GameTestResources.Ready();
+
     private MainModule module;
     private readonly List<GameObject> instances = new List<GameObject>();
 

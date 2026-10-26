@@ -52,7 +52,7 @@ public class MachineGun : WeaponBase
 
     private void Shoot(Vector2 direction)
     {
-        Module.LoadController<AudioController>().PlaySound("机炮3");
+        PlayShotSound("机炮3");
         var bullet = Module.LoadView<Bullet>(bulletName);
         bullet.transform.position = gunPos[0].position;
         bullet.transform.up = direction.normalized;

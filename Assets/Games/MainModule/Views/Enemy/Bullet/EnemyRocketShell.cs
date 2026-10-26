@@ -51,7 +51,7 @@ public class EnemyRocketShell : Bullet
                 playerShield.OnResumeDamage(Damage);
                 //只显示特效
                 Module.LoadController<EffectController>().ShowEffect(effect, transform.position);
-                Module.LoadController<AudioController>().PlaySound("火箭爆炸1");
+                Module.LoadController<AudioController>().PlaySound("火箭爆炸1", AudioController.SoundPriority.Important);
                 Close();
             }
         }
@@ -71,7 +71,7 @@ public class EnemyRocketShell : Bullet
     {
         //显示特效
         Module.LoadController<EffectController>().ShowEffect(effect, transform.position);
-        Module.LoadController<AudioController>().PlaySound("火箭爆炸1");
+        Module.LoadController<AudioController>().PlaySound("火箭爆炸1", AudioController.SoundPriority.Important);
         //检测周围的对象，进行攻击
         var f = new ContactFilter2D
         {

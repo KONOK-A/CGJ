@@ -317,6 +317,16 @@ namespace YLFramework.Tests.DomainMain
 
         public static void RunTests(string mode, string name, string scope = "Domain", bool rejectRequestReceipt = false)
         {
+            string[] groups = scope == "Domain" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Domain[.]" } :
+                scope == "Protection" ? new[] { "^YLFramework[.]Tests[.]DomainMainAcceptanceTests[.]" } :
+                scope == "Excel" ? new[] { "^YLFramework[.]Domain[.]Excel[.]Tests[.]" } :
+                scope == "Boundary" ? new[] { "^YLFramework[.]Foundation[.]Tests[.]FoundationBoundaryTests[.]", "^YLFramework[.]Core[.]Tests[.]CoreArchitectureBoundaryTests[.]", "^YLFramework[.]Tests[.]Resource[.]FrameworkAssemblyIndependenceTests[.]", "^YLFramework[.]Core[.]Tests[.]CoreIdentityTests[.]", "^YLFramework[.]Tests[.]ExportUnityPackageTests[.]" } :
+                scope == "ResourceUI" ? new[] { "^YLFramework[.]Tests[.]Resource[.]ResourceSystemTests[.]", "^YLFramework[.]Tests[.]Resource[.]ResourceImageTests[.]", "^YLFramework[.]Core[.]Tests[.]CoreResourcePlayModeTests[.]" } :
+                scope == "DataSave" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Data[.]Save[.]SaveManagerFacadeTests[.]", "^YLFramework[.]Tests[.]Extensions[.]Data[.]Save[.]SaveStoreSafetyTests[.](SlotsObjectsSettingsAndCurrentItemSurviveAColdReopen|ModelIdsSelectionAndDeletionUseTheSameSlotsAndCache|CurrentModelsPreserveStringValuesAndRejectWrongIdsOnLoad)$" } :
+                scope == "DataResource" ? new[] { "^YLFramework[.]Tests[.]DataAssets[.]DataAssetResourceTests[.]" } :
+                scope == "BehaviorCombination" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]OverlapComponentTests[.]", "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]AssetFsmRuntimeTests[.]" } :
+                scope == "Behavior" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]" } :
+                throw new ArgumentException("Unknown exact scope.", nameof(scope));
             string output = Begin(name);
             try
             {
@@ -341,17 +351,6 @@ namespace YLFramework.Tests.DomainMain
                     Environment.SetEnvironmentVariable("YL_SAVE_TEST_OUTPUT", output + "/save-fixtures");
                     SessionState.SetBool(Key + ".SaveEnvironment", true);
                 }
-                string[] groups = scope == "Domain" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Domain[.]" } :
-                    scope == "Protection" ? new[] { "^YLFramework[.]Tests[.]DomainMainAcceptanceTests[.]" } :
-                    scope == "Excel" ? new[] { "^YLFramework[.]Domain[.]Excel[.]Tests[.]" } :
-                    scope == "Boundary" ? new[] { "^YLFramework[.]Foundation[.]Tests[.]FoundationBoundaryTests[.]", "^YLFramework[.]Core[.]Tests[.]CoreArchitectureBoundaryTests[.]", "^YLFramework[.]Tests[.]Resource[.]FrameworkAssemblyIndependenceTests[.]", "^YLFramework[.]Core[.]Tests[.]CoreIdentityTests[.]", "^YLFramework[.]Tests[.]ExportUnityPackageTests[.]" } :
-                    scope == "ResourceUI" ? new[] { "^YLFramework[.]Tests[.]Resource[.]ResourceSystemTests[.]", "^YLFramework[.]Tests[.]Resource[.]ResourceImageTests[.]", "^YLFramework[.]Core[.]Tests[.]CoreResourcePlayModeTests[.]" } :
-                    scope == "DataSave" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Data[.]Save[.]SaveManagerFacadeTests[.]", "^YLFramework[.]Tests[.]Extensions[.]Data[.]Save[.]SaveStoreSafetyTests[.](SlotsObjectsSettingsAndCurrentItemSurviveAColdReopen|ModelIdsSelectionAndDeletionUseTheSameSlotsAndCache|CurrentModelsPreserveStringValuesAndRejectWrongIdsOnLoad)$" } :
-                    scope == "DataResource" ? new[] { "^YLFramework[.]Tests[.]DataAssets[.]DataAssetResourceTests[.]" } :
-                    scope == "BehaviorCombination" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]OverlapComponentTests[.]", "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]AssetFsmRuntimeTests[.]" } :
-                    scope == "OriginalGame" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]OriginalGameNonInterferenceTests[.]" } :
-                    scope == "Behavior" ? new[] { "^YLFramework[.]Tests[.]Extensions[.]Behavior[.]" } :
-                    throw new ArgumentException("Unknown exact scope.");
                 SessionState.SetString(Key + ".Groups", JsonConvert.SerializeObject(groups));
                 var filter = new Filter { testMode = mode == "PlayMode" ? TestMode.PlayMode : TestMode.EditMode, groupNames = groups };
                 if (scope == "Protection")

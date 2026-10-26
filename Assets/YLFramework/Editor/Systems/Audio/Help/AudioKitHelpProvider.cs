@@ -101,7 +101,7 @@ namespace YLFramework.Editor.Audio
                 HelpBlock.Notice("新建/Reset 与旧资源", "MusicPlayer 的 crossFadeCurve 字段初始化仍为 Linear，旧缺字段资源保持 Linear；编辑器新建/Reset 为 EqualPower，Crossfade 仍关闭。" +
                     "MixerController 字段初始化仍为 applyOnAwake=true、transitionDuration=0，保留旧资产；编辑器新建/Reset 为 false/0.5。" +
                     "运行时 AddComponent 不承诺触发 Reset，已有序列化选择不自动改写。新 Mixer 预设只绑定 Config 不自动应用或清全局路由，须勾选 Apply Routing On Awake（applyOnAwake）或显式 Apply。" +
-                    "EveryOne 才关闭去重；显式窗口 0 仅在 GlobalFrames/SoundFrames 下做同帧去重，0 不是关闭去重。默认 5 帧约为 60 FPS 下 83 ms、120 FPS 下 42 ms，并非固定毫秒数。显式 10 帧和显式 Linear 仍合法，MainModule 的 10 帧业务覆盖不变。"),
+                    "EveryOne 才关闭去重；显式窗口 0 仅在 GlobalFrames/SoundFrames 下做同帧去重，0 不是关闭去重。默认 5 帧约为 60 FPS 下 83 ms、120 FPS 下 42 ms，并非固定毫秒数。显式 10 帧和显式 Linear 仍合法。"),
                 HelpBlock.Code("只改需要的 Options 字段", "AudioSoundOptions 仍是 [Serializable] sealed class，公开字段名/类型与无参构造不变；构造默认值集中来自内部 AudioPlaybackOptions 值工厂。new/Defaults 为有效非循环默认值；循环音乐用 MusicDefaults，每次 Defaults/MusicDefaults 都分配新的独立可变类实例。",
                     "AudioKit.PlaySound(soundClip, new AudioSoundOptions { Volume = 0.5f });\n" +
                     "var options = AudioSoundOptions.MusicDefaults;\noptions.Pitch = 1.1f;\nAudioKit.PlayMusicWithOptions(musicClip, options);\n" +
@@ -235,7 +235,7 @@ namespace YLFramework.Editor.Audio
                     "Value、TrySetValue、SetValueWithoutCallback 的非法赋值均抛 ArgumentOutOfRangeException，内存、存档、通知和播放状态不变。" +
                     "合法 Value 变化先持久化后通知；SetValueWithoutCallback 只改内存，不通知或持久化。"),
                 HelpBlock.Paragraph("窗口", "全局默认 EveryOne，不去重，允许重叠但不绕过并发上限；GlobalFrames 共享窗口起点，SoundFrames 每个 Clip 独立。两个窗口默认 5 帧，属于运行时配置，仅在对应模式下生效；显式 0 仅同帧去重，0 不是关闭去重；EveryOne 才关闭去重。边界包含最后一帧。" +
-                    "显式 10 帧冷却仍有效，MainModule 的 10 帧业务覆盖不变。" +
+                    "显式 10 帧冷却仍有效。" +
                     "仅成功接纳的播放登记，先提交后 onStarted；独立记录自然结束按播放代次移除，较早结束不能删除新记录。Stop 不清窗口，开始异常仅回滚自己的记录。单次通过 options.PlaySoundMode 覆盖。"),
                 HelpBlock.Code("Sound 并发", "AudioSoundConcurrency 是 [Serializable] struct，public int Limit、public int DefaultClipLimit 与 public SoundOverflowPolicy OverflowPolicy；RejectNew=0、StopOldest=1、StopLowestPriority=2，default 为 0/unlimited + RejectNew，两项限额默认 0。",
                     "AudioKit.SoundConcurrency = new AudioSoundConcurrency\n{\n    Limit = 24,\n    DefaultClipLimit = 3,\n    OverflowPolicy = SoundOverflowPolicy.StopLowestPriority\n};\n" +

@@ -128,6 +128,32 @@ namespace YLFramework.Tests
         }
     }
 
+    public sealed class DomainMainAcceptanceInputTests
+    {
+        [TestCase("OriginalGame")]
+        [TestCase("UnknownScope")]
+        public void InvalidScopeIsRejectedBeforeAcquiringEditorOwnership(string scope)
+        {
+            var entry = Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, Assembly-CSharp-Editor", true);
+            const string Key = "YLFramework.Domain.MainAcceptance";
+            string output = SessionState.GetString(Key + ".Output", "");
+            string settings = SessionState.GetString(Key + ".Settings", "");
+            int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+            bool reloadEnabled = EditorSettings.enterPlayModeOptionsEnabled;
+            var reload = EditorSettings.enterPlayModeOptions;
+
+            var error = Assert.Throws<TargetInvocationException>(() => entry.GetMethod("RunTests")
+                .Invoke(null, new object[] { "PlayMode", "", scope, false }));
+            Assert.That(error.InnerException, Is.TypeOf<ArgumentException>(), "Reject scope before Begin checks editor ownership or a run name.");
+            Assert.That(((ArgumentException)error.InnerException).ParamName, Is.EqualTo("scope"));
+            Assert.That(SessionState.GetString(Key + ".Output", ""), Is.EqualTo(output));
+            Assert.That(SessionState.GetString(Key + ".Settings", ""), Is.EqualTo(settings));
+            Assert.That(UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle, Is.EqualTo(scene));
+            Assert.That(EditorSettings.enterPlayModeOptionsEnabled, Is.EqualTo(reloadEnabled));
+            Assert.That(EditorSettings.enterPlayModeOptions, Is.EqualTo(reload));
+        }
+    }
+
     [Serializable]
     public struct DomainMapNumber
     {

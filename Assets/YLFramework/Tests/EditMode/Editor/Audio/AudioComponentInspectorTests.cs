@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -98,10 +99,11 @@ namespace YLFramework.Tests.Audio
             }
         }
 
-        [TestCase("Assets/Games/MainModule/Art/Prefabs/ClickPlayer.prefab")]
-        [TestCase("Assets/Games/MainModule/Art/Prefabs/3DAudioPlayer.prefab")]
+        [TestCase("Assets/YLFramework/Tests/Fixtures/Audio/LegacyEmitter2D.prefab")]
+        [TestCase("Assets/YLFramework/Tests/Fixtures/Audio/LegacyEmitter3D.prefab")]
         public void RealLegacyPrefabsKeepExplicitPolicyWhenTheNewFieldIsMissing(string path)
         {
+            Assert.That(File.ReadAllText(path), Does.Not.Contain("  useGlobalPlaySoundMode:"));
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             Assert.IsNotNull(prefab, path);
             var emitter = prefab.GetComponentInChildren<AudioEmitter>(true);
@@ -166,7 +168,10 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void LegacyMusicPrefabKeepsLinearCurveAndNoAutomaticTransition()
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Games/MainModule/UI/StartPanel/StartPanel.prefab");
+            const string path = "Assets/YLFramework/Tests/Fixtures/Audio/LegacyMusicPlayer.prefab";
+            Assert.That(File.ReadAllText(path), Does.Not.Contain("  crossFadeCurve:"));
+            Assert.That(File.ReadAllText(path), Does.Not.Contain("  crossFadeOnPlay:"));
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             Assert.IsNotNull(prefab);
             var music = prefab.GetComponentInChildren<AudioMusicPlayer>(true);
             Assert.IsNotNull(music);
@@ -284,7 +289,9 @@ namespace YLFramework.Tests.Audio
         [Test]
         public void WeightedAddRecordsPrefabOverridesWithoutChangingTheSourceAsset()
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Games/MainModule/Art/Prefabs/ClickPlayer.prefab");
+            var borrowedScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            var wasDirty = borrowedScene.isDirty;
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/YLFramework/Tests/Fixtures/Audio/LegacyEmitter2D.prefab");
             Assert.IsNotNull(prefab);
             var source = prefab.GetComponentInChildren<AudioEmitter>(true);
             var original = Weights(source);
@@ -304,6 +311,7 @@ namespace YLFramework.Tests.Audio
             }
 
             CollectionAssert.AreEqual(original, Weights(source));
+            Assert.AreEqual(wasDirty, borrowedScene.isDirty, "Inspector fixtures must not dirty the user's scene.");
         }
 
         [Test]

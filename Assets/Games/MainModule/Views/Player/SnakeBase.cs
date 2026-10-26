@@ -117,7 +117,7 @@ public abstract class SnakeBase : View
 
     public virtual void OnFallOff()
     {
-        Module.LoadController<AudioController>().PlaySound("机体爆炸1");
+        Module.LoadController<AudioController>().PlaySound("机体爆炸1", AudioController.SoundPriority.Important, AudioController.SoundGroup.Feedback);
         Module.LoadController<EffectController>().ShowEffect("AABomb", transform.position);
     }
 

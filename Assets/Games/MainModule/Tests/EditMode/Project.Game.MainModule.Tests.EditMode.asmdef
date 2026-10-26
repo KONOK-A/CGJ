@@ -1,6 +1,6 @@
 {
     "name": "Project.Game.MainModule.Tests.EditMode",
-    "references": ["Project.Game.MainModule", "YLFramework.Runtime", "XFGameFramework", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["Project.Game.MainModule", "XFGameFramework", "UnityEngine.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "includePlatforms": ["Editor"],
     "overrideReferences": true,
     "precompiledReferences": ["nunit.framework.dll"],

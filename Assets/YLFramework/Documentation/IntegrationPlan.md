@@ -6,6 +6,8 @@
 
 当前使用方式以 [README](README.md)、[Architecture](Architecture.md) 和 [Modules](Modules/) 为准。YL 的正式资源/音频链由自身 ResourceSystem 承担，不再对外提供 XFAB 兼容入口；来源包在原游戏中继续存在，不构成 YL 的运行依赖。历史中的操作授权、默认分支和工作流也不覆盖当前用户要求与有效 AGENTS 约定。
 
+2026-10-26 主游戏解耦批次将游戏音频及自有测试改回 XF，清除 YL Acceptance 对游戏类型和音频资产的反向依赖；框架组件兼容用例改用自有夹具。原 `-ui34-game`、`-audio45-game`、`-runtime55-game` 联合模式已退休，默认 YL UI/Audio/Runtime 流程保留。本文旧游戏/YL Audio 验收仅是历史，实际独立载体、Bundle/Player 与本批限制见[主游戏解耦计划及实施记录](../../../.kilo/plans/1792938880250-main-game-xf-decoupling.md)。本批不实际迁出游戏或卸载 XF。
+
 ## 档案索引
 
 | 记录 | 内容 |

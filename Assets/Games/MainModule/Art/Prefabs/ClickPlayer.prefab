@@ -41,11 +41,18 @@ MonoBehaviour:
   m_GameObject: {fileID: 4194655005717209569}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0f9382a5a3344d4a979ae028b52cb9c, type: 3}
+  m_Script: {fileID: 11500000, guid: 403c24cad33f2944ead6f9acd0524ea2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clips:
-  - {fileID: 8300000, guid: 0ef6464264076e64a81e6ca0646b8f9d, type: 3}
-  - {fileID: 8300000, guid: 006c81f033745d744b14dc35af43bef3, type: 3}
-  volume: 1
-  pitch: 1
+  audioSource: {fileID: 0}
+  controllerName: Sound
+  audioAssetType: 1
+  projectName: MainModule
+  AssetNames: []
+  Clips:
+  - name: Default
+    clips:
+    - {fileID: 8300000, guid: 0ef6464264076e64a81e6ca0646b8f9d, type: 3}
+    - {fileID: 8300000, guid: 006c81f033745d744b14dc35af43bef3, type: 3}
+    playType: 1
+    playOnAwake: 0

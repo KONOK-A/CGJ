@@ -133,7 +133,7 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
       - m_Target: {fileID: 4871695127190365039}
-        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: XFGameFramework.AudioPlayer, XFGameFramework
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -1667,6 +1667,6 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0f9382a5a3344d4a979ae028b52cb9c, type: 3}
+  m_Script: {fileID: 11500000, guid: 403c24cad33f2944ead6f9acd0524ea2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 

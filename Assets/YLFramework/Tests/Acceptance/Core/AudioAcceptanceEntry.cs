@@ -21,8 +21,6 @@ namespace YLFramework.Core.Tests
         public AudioMixerConfig mixerConfig;
         [global::UnityEngine.Serialization.FormerlySerializedAs("ResourceKey")]
         public string resourceKey;
-        [global::UnityEngine.Serialization.FormerlySerializedAs("GameMode")]
-        public bool gameMode;
         public static string Result;
         public static string Stage;
         private AudioHandle _exitHandle;
@@ -57,14 +55,8 @@ namespace YLFramework.Core.Tests
         {
             Result = "RUNNING";
             DontDestroyOnLoad(gameObject);
-            gameMode |= Array.IndexOf(Environment.GetCommandLineArgs(), "-audio45-game") >= 0;
-            if (gameMode)
-            {
-                GetComponent<AudioListener>().enabled = false;
-                GetComponent<Camera>().enabled = false;
-            }
             var stack = new Stack<IEnumerator>();
-            stack.Push(gameMode ? AudioGameAcceptanceFlow.Run() : RunAudio());
+            stack.Push(RunAudio());
             try
             {
                 while (stack.Count > 0)
@@ -109,7 +101,7 @@ namespace YLFramework.Core.Tests
                         yield return current;
                     }
                 }
-                Result = gameMode ? "GAME_PASS" : "AUDIO_PASS";
+                Result = "AUDIO_PASS";
                 Debug.Log("AUDIO45 " + Result);
                 if (!Application.isEditor)
                 {

@@ -16,6 +16,18 @@ namespace YLFramework.Tests.Resource
 {
     public class FrameworkAssemblyIndependenceTests
     {
+        [Test]
+        public void AcceptanceAssemblyDoesNotRequireTheGameOrXf()
+        {
+            var assembly = AppDomain.CurrentDomain.GetAssemblies()
+                .Single(value => value.GetName().Name == "YLFramework.UI.Acceptance");
+            foreach (var reference in assembly.GetReferencedAssemblies())
+            {
+                Assert.IsFalse(reference.Name.StartsWith("Project.Game.", StringComparison.Ordinal), reference.FullName);
+                Assert.IsFalse(IsXfab(reference.Name), reference.FullName);
+            }
+        }
+
         [TestCase("YLFramework.Audio.AudioKit", "YLFramework.Services." + "Audio.AudioKit")]
         [TestCase("YLFramework.Resource.ResourceSystem", "YLFramework.Services." + "Resource.ResourceSystem")]
         [TestCase("YLFramework.Save.SaveManager", "YLFramework.Services." + "Save.SaveManager")]

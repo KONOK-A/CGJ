@@ -201,7 +201,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: XFGameFramework.AudioPlayer, XFGameFramework
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -669,7 +669,7 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: XFGameFramework.AudioPlayer, XFGameFramework
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -802,7 +802,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: XFGameFramework.AudioPlayer, XFGameFramework
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -1181,7 +1181,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 2953294057887368660}
-        m_TargetAssemblyTypeName: YLFramework.Audio.AudioEmitter, YLFramework.Runtime
+        m_TargetAssemblyTypeName: XFGameFramework.AudioPlayer, XFGameFramework
         m_MethodName: Play
         m_Mode: 1
         m_Arguments:
@@ -1323,12 +1323,20 @@ MonoBehaviour:
   m_GameObject: {fileID: 6700837713837139271}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a02644b3809d0e34aa3ad1a21593f647, type: 3}
+  m_Script: {fileID: 11500000, guid: 403c24cad33f2944ead6f9acd0524ea2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clip: {fileID: 8300000, guid: a26bcad52dad4804fa209206f51dc433, type: 3}
-  loop: 1
-  playOnAwake: 1
+  audioSource: {fileID: 0}
+  controllerName: Music
+  audioAssetType: 1
+  projectName: MainModule
+  AssetNames: []
+  Clips:
+  - name: Default
+    clips:
+    - {fileID: 8300000, guid: a26bcad52dad4804fa209206f51dc433, type: 3}
+    playType: 0
+    playOnAwake: 1
 --- !u!1 &7777239065003387978
 GameObject:
   m_ObjectHideFlags: 0
@@ -1461,6 +1469,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d2e4dd15b7d86a4f82565af1c24a23c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  musicPlayer: {fileID: 5077684991716562048}
 --- !u!1001 &1674492706067933462
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1526,7 +1535,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0f9382a5a3344d4a979ae028b52cb9c, type: 3}
+  m_Script: {fileID: 11500000, guid: 403c24cad33f2944ead6f9acd0524ea2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!4 &7083542805382086219 stripped

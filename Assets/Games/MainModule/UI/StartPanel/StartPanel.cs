@@ -1,14 +1,21 @@
-using AudioKit = YLFramework.Audio.AudioKit;
 using UnityEngine;
 using XFGameFramework;
 
 public class StartPanel : Panel
 {
+   [SerializeField] private AudioPlayer musicPlayer;
+
    private GameController GameController => Module.LoadController<GameController>();
    public void OnBtnStartClicked()
    {
+      musicPlayer.Stop(StopType.Play);
       GameController.SetGameState(GameState.GameSetting);
-      AudioKit.StopMusic();
+   }
+
+   protected override void OnDisable()
+   {
+      if (musicPlayer) musicPlayer.Stop(StopType.Play);
+      base.OnDisable();
    }
 
    public void OnBtnMakerClicked()
