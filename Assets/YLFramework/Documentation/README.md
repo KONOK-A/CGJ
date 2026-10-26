@@ -4,6 +4,14 @@ YLFramework 是整体交付、按需使用的 Unity 游戏框架。运行时主�
 
 本文档说明当前源码的接入方式与行为边界，不是完整 API Reference。方法签名以源码和 Editor 帮助为准，平台支持以各模块的限制为准。
 
+## 源码开发宿主
+
+源码仓库保留 `CGJ2024` 的目录、Git 历史与开发环境，当前产品身份为 `YLFrameworkDev`，默认构建与开发场景为 `Assets/Scenes/YLFrameworkDev.unity`。主游戏已迁入独立的 `SnakeUnbound` 工程和仓库，继续使用 XF/XFAB，不是 YL 的示例或产品依赖。
+
+开发场景复用正式 `Prefabs/YLFramework.prefab` 和一个活动主 Camera。`YLFrameworkRoot` 只持有常驻宿主及预绑定 UI 层级，进入 Play 不等于自动启动 Resource、Audio 或业务 Module；业务仍须按各模块合同显式启动。
+
+源码宿主保留 XF/XFAB/XFFSM/Overlap、共享 `Assets/Resources/XFGameFramework`、可选集成和工具，供共存验证与开发使用，不代表这些是 YL 分发包的必要依赖。开发场景、测试和宿主配置不在默认 `.unitypackage` 导出根内，框架分发根、版本和可选集成策略未因此改变。
+
 ## 阅读顺序
 
 | 需要做什么 | 入口 |
@@ -125,6 +133,7 @@ Runtime 分为 Foundation、Core、Systems、Utilities 四个职责区，Editor 
 - EditMode：`Tests/EditMode/{Foundation,Core,Systems/<模块>,Utilities}/`；Editor 行为位于 `Tests/EditMode/Editor/<功能>/`，如 Help、Resource 和 Core。
 - PlayMode：`Tests/PlayMode/{Foundation,Core,Systems/<模块>,Utilities}/`，覆盖单例、Timing、Action、Audio 等运行行为。普通单模块测试随职责归位，混合验收保留跨模块范围。
 - `Tests/Acceptance/Core/` 与 `Tests/Fixtures/Core/` 分别保留显式验收入口及夹具；Tests 整体不默认分发。目录重排不更名测试程序集，也不以源码存在冒充测试发现或通过。
+- `Tests/EditMode/Editor/Distribution/DevelopmentHostBoundaryTests.cs` 验证真实开发场景、正式 Prefab 绑定、产品身份及游戏依赖边界，不把不存在路径的空闭包当作独立性证据。
 - DOTween：`Tests/Integrations/DOTween/` 下两个独立测试程序集，受 `DOTWEEN` + `UNITY_INCLUDE_TESTS` 约束。
 - HybridCLR：`Tests/Integrations/HybridCLR/` 的独立 EditMode/PlayMode 叶子，精确约束 9.0.3；Editor Simulation、替身与真实 IL2CPP 证据分别记录，不把单元测试冒充原生热更。
 
@@ -136,7 +145,7 @@ HybridCLR 源码仓库首次检出或相关程序集重新编译后，先在非 
 
 ## 独立工程安装
 
-以 Unity `2022.3.62f3c1` 为安装基线，先在目标工程准备下列依赖，再通过 `Assets > Import Package > Custom Package` 导入框架 `.unitypackage`。不要复制来源工程的 manifest、Library 或游戏插件来补依赖；来源工程含有与框架无关的包，其声明也不能代替目标工程实际解析的版本。
+以 Unity `2022.3.62f3c1` 为安装基线，先在目标工程准备下列依赖，再通过 `Assets > Import Package > Custom Package` 导入框架 `.unitypackage`。不要复制源码开发宿主或 `SnakeUnbound` 游戏工程的 manifest、Library 或游戏插件来补依赖；这些工程保留了与框架分发无关的包，其声明也不能代替接收工程实际解析的版本。
 
 Analyzer 的发行验收目标为 Windows / Unity 2022.3 LTS、Unity 6.3 LTS / Visual Studio、Rider；以每份发行记录的实际版本与结果为准，不将目标矩阵当作已通过证明。未完成环境验证时不得扩写支持声明，其他系统、Unity版本及IL2CPP不由本目标自动保证，详见 [发布支持边界](Modules/Attributes.md#发布支持边界)。
 

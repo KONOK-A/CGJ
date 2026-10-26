@@ -4,9 +4,11 @@
 
 本文件是原长期蓝图与阶段记录的档案，不是当前安装指南、API 合同或任务授权。下方原文中的“当前”“本轮”“未启动”、程序集名称、导出根、固定本机路径和测试结果，均属于记录当时的版本；后文完成某阶段不会回写前文的历史失败或中间状态。
 
-当前使用方式以 [README](README.md)、[Architecture](Architecture.md) 和 [Modules](Modules/) 为准。YL 的正式资源/音频链由自身 ResourceSystem 承担，不再对外提供 XFAB 兼容入口；来源包在原游戏中继续存在，不构成 YL 的运行依赖。历史中的操作授权、默认分支和工作流也不覆盖当前用户要求与有效 AGENTS 约定。
+当前使用方式以 [README](README.md)、[Architecture](Architecture.md) 和 [Modules](Modules/) 为准。YL 的正式资源/音频链由自身 ResourceSystem 承担，不再对外提供 XFAB 兼容入口；来源包保留在独立游戏及源码开发宿主的共存验证环境，不构成 YL 的运行依赖。历史中的操作授权、默认分支和工作流也不覆盖当前用户要求与有效 AGENTS 约定。
 
 2026-10-26 主游戏解耦批次将游戏音频及自有测试改回 XF，清除 YL Acceptance 对游戏类型和音频资产的反向依赖；框架组件兼容用例改用自有夹具。原 `-ui34-game`、`-audio45-game`、`-runtime55-game` 联合模式已退休，默认 YL UI/Audio/Runtime 流程保留。本文旧游戏/YL Audio 验收仅是历史，实际独立载体、Bundle/Player 与本批限制见[主游戏解耦计划及实施记录](../../../.kilo/plans/1792938880250-main-game-xf-decoupling.md)。本批不实际迁出游戏或卸载 XF。
+
+2026-10-26 后续主游戏迁出批次已将当前已保存游戏迁入独立 `SnakeUnbound` 工程与仓库；原 `CGJ2024` 保留目录和历史，转为 `YLFrameworkDev`，默认场景为 `Assets/Scenes/YLFrameworkDev.unity`，复用正式 YL Prefab，不自动启动业务。源宿主继续保留 XF 共存 Resources、包、可选集成与开发工具，默认框架导出根和版本不变。上段“不实际迁出”与下方原游戏留在 CGJ2024 的表述属于迁出前历史，不能作为当前入口说明；本次快照、隔离 Player、正式产物、宿主验收及限制见[主游戏迁出与开发宿主计划](../../../.kilo/plans/1793007073272-snake-unbound-project-split.md)。
 
 ## 档案索引
 
