@@ -248,8 +248,12 @@ namespace YLFramework.Editor.StateMachine
             Vector3 vector = Event.current.mousePosition;
 
 #if UNITY_6000_2_OR_NEWER
-            vector.x -= _graphView.Window.position.width * _graphView.Window.PercentOfParam + 2;
-            vector.y -= _graphView.Window.docked ? 44 : 46; // 20
+            // 独立 GraphView 宿主没有 FsmEditorWindow 的侧栏和工具栏偏移。
+            if (_graphView.Window != null)
+            {
+                vector.x -= _graphView.Window.position.width * _graphView.Window.PercentOfParam + 2;
+                vector.y -= _graphView.Window.docked ? 44 : 46; // 20
+            }
 #endif
 
             List<FsmTransitionData> transitions = Context.Instance.GetCurrentShowTransitionData();
@@ -318,8 +322,11 @@ namespace YLFramework.Editor.StateMachine
             {
                 _vectors[1] = Event.current.mousePosition;
 #if UNITY_6000_2_OR_NEWER
-                _vectors[1].x -= _graphView.Window.position.width * _graphView.Window.PercentOfParam + 2;
-                _vectors[1].y -= _graphView.Window.docked ? 44 : 46; // 20
+                if (_graphView.Window != null)
+                {
+                    _vectors[1].x -= _graphView.Window.position.width * _graphView.Window.PercentOfParam + 2;
+                    _vectors[1].y -= _graphView.Window.docked ? 44 : 46; // 20
+                }
 #endif
             }
 

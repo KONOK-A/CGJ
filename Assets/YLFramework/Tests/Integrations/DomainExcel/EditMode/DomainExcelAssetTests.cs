@@ -138,6 +138,10 @@ namespace YLFramework.Domain.Excel.Tests
                 data.missionName = "xlsx mission";
                 data.missionTypeClassFullName = typeof(MissionBase).FullName;
                 data.conditions.Add(new MissionCondition { paramName = "amount", compareType = CompareType.GreaterEqual, target = 2 });
+                var jsonProperty = typeof(MissionCondition).GetField(nameof(MissionCondition.paramName)).GetCustomAttributes(false)
+                    .Single(attribute => attribute.GetType().FullName == "Newtonsoft.Json.JsonPropertyAttribute");
+                Assert.That(jsonProperty.GetType().GetProperty("PropertyName").GetValue(jsonProperty), Is.EqualTo("param_name"),
+                    "Nested snapshots retain the shipped Mission JSON key.");
                 ExcelAuthoring.ScriptableObjectToExcel(new[] { data }, _path, "missions");
                 using (var cancel = DomainExcelCommands.PreviewImport(root, _path))
                 {

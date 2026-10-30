@@ -119,6 +119,7 @@ namespace YLFramework.Core.Tests
         private CoreClassPoolScope _classPool;
         private CoreUpdateHostScope _updateHosts;
         private readonly HashSet<GameObject> _priorEventSystems = new HashSet<GameObject>();
+        private Action _restoreInputFocus;
 
         [SetUp]
         public void SetUp()
@@ -141,6 +142,34 @@ namespace YLFramework.Core.Tests
             }
 
             _module = new YLCoreDirectViewModule();
+#if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
+            var inputType = Type.GetType("UnityEngine.InputSystem.InputSystem, Unity.InputSystem", true);
+            var settingsProperty = inputType.GetProperty("settings", BindingFlags.Public | BindingFlags.Static);
+            var backgroundProperty = inputType.GetProperty("runInBackground", BindingFlags.Public | BindingFlags.Static);
+            var previousSettings = (Object)settingsProperty.GetValue(null);
+            var previousFlags = previousSettings.hideFlags;
+            var previousBackground = backgroundProperty.GetValue(null);
+            var settings = Object.Instantiate(previousSettings);
+            _restoreInputFocus = () =>
+            {
+                settingsProperty.SetValue(null, previousSettings);
+                previousSettings.hideFlags = previousFlags;
+                backgroundProperty.SetValue(null, previousBackground);
+                if (settings)
+                {
+                    Object.DestroyImmediate(settings);
+                }
+            };
+            // batchmode 没有 Game View 焦点；仅为自建设备克隆测试设置，不修改工程的输入资产。
+            var focus = settings.GetType().GetProperty("editorInputBehaviorInPlayMode");
+            var background = settings.GetType().GetProperty("backgroundBehavior");
+            focus.SetValue(settings, Enum.Parse(focus.PropertyType, "AllDeviceInputAlwaysGoesToGameView"));
+            background.SetValue(settings, Enum.Parse(background.PropertyType, "IgnoreFocus"));
+            // InputManager 会销毁精确 HideAndDontSave 的旧临时设置，先保留其身份再替换。
+            previousSettings.hideFlags = previousFlags | HideFlags.HideInInspector;
+            settingsProperty.SetValue(null, settings);
+            backgroundProperty.SetValue(null, true);
+#endif
         }
 
         [UnityTearDown]
@@ -169,8 +198,17 @@ namespace YLFramework.Core.Tests
                 }
                 finally
                 {
-                    ReleaseObjects();
-                    _updateHosts?.ReleaseOwnedIdleHosts();
+                    try
+                    {
+                        ReleaseObjects();
+                        _updateHosts?.ReleaseOwnedIdleHosts();
+                    }
+                    finally
+                    {
+                        var restoreInputFocus = _restoreInputFocus;
+                        _restoreInputFocus = null;
+                        restoreInputFocus?.Invoke();
+                    }
                 }
             }
             yield return null;

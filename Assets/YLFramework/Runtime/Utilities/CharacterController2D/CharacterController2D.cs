@@ -906,7 +906,7 @@ namespace YLFramework.Character2D
 
 #if UNITY_6000_0_OR_NEWER
             ContactFilter2D contactFilter = CreateLegacyFilter(CheckLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-            return Physics2D.defaultPhysicsScene.CircleCast(point, r, dir, DISTANCE, contactFilter, Hits);
+            return Physics2D.defaultPhysicsScene.CircleCast(point, r, dir, Distance, contactFilter, Hits);
 
 #else
             return Physics2D.CircleCastNonAlloc(point, r, dir, Hits, Distance, CheckLayerMask.value);
@@ -925,7 +925,7 @@ namespace YLFramework.Character2D
 
 #if UNITY_6000_0_OR_NEWER
             ContactFilter2D contactFilter = CreateLegacyFilter(CheckLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-            return Physics2D.defaultPhysicsScene.BoxCast(point, size, angle, dir, DISTANCE, contactFilter, Hits);
+            return Physics2D.defaultPhysicsScene.BoxCast(point, size, angle, dir, Distance, contactFilter, Hits);
 #else
             return Physics2D.BoxCastNonAlloc(point, size, angle, dir, Hits, Distance, CheckLayerMask.value);
 #endif
@@ -945,7 +945,7 @@ namespace YLFramework.Character2D
 
 #if UNITY_6000_0_OR_NEWER
             ContactFilter2D contactFilter = CreateLegacyFilter(CheckLayerMask.value, float.NegativeInfinity, float.PositiveInfinity);
-            return Physics2D.defaultPhysicsScene.CapsuleCast(point, size, d, angle, dir, DISTANCE, contactFilter, Hits);
+            return Physics2D.defaultPhysicsScene.CapsuleCast(point, size, d, angle, dir, Distance, contactFilter, Hits);
 #else
             return Physics2D.CapsuleCastNonAlloc(point, size, d, angle, dir, Hits, Distance, CheckLayerMask.value);
 #endif

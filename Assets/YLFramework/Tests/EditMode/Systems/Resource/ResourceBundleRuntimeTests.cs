@@ -364,7 +364,11 @@ namespace YLFramework.Tests.ResourceBuild
                 using var failed = system.AcquireAsync<GameObject>(Address(snapshot, "C.prefab"));
                 yield return Wait(failed);
                 Assert.That(failed.Status, Is.EqualTo(ResourceRequestStatus.Failed));
+                Assert.That(failed.Error.Kind, Is.EqualTo(ResourceError.LoadFailed));
                 Assert.That(failed.Error.ToString(), Does.Contain(shared.LogicalId));
+                var missing = failed.Error.GetBaseException() as FileNotFoundException;
+                Assert.That(missing, Is.Not.Null);
+                Assert.That(Path.GetFullPath(missing.FileName), Is.EqualTo(Path.GetFullPath(path)));
             }
             finally
             {

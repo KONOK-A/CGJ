@@ -150,9 +150,22 @@ namespace YLFramework.Tests.Integrations.HybridCLR
                     EditorSettings.enterPlayModeOptions = _oldOptions;
                     EditorSettings.enterPlayModeOptionsEnabled = _wasEnabled;
                 }
-                if (_originalScenes != null && _originalScenes.All(s => !string.IsNullOrEmpty(s.path)))
+                if (_originalScenes != null && _originalScenes.Length != 0 && _originalScenes.All(s => !string.IsNullOrEmpty(s.path)))
                 {
                     EditorSceneManager.RestoreSceneManagerSetup(_originalScenes);
+                }
+                else if (_originalScenes != null && _originalScenes.Length == 0 && _ownedFolder != null)
+                {
+                    for (var i = SceneManager.sceneCount - 1; i >= 0; i--)
+                    {
+                        var scene = SceneManager.GetSceneAt(i);
+                        if (!scene.path.StartsWith(_ownedFolder + "/", StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("An unknown scene cannot be closed to restore an originally empty setup.");
+                        }
+                        Assert.That(EditorSceneManager.CloseScene(scene, true), Is.True);
+                    }
+                    Assert.That(EditorSceneManager.GetSceneManagerSetup(), Is.Empty);
                 }
 
                 if (_ownedFolder != null && AssetDatabase.IsValidFolder(_ownedFolder))

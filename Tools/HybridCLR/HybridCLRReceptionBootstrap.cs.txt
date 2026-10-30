@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -25,6 +26,10 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
     {
         // Bound only by source-side Install/Sync; the unrendered template fails closed.
         private const string SourceRepository = "__YL_HYBRIDCLR_SOURCE_REPOSITORY__";
+        private const string ExpectedUnityVersion = "__YL_HYBRIDCLR_EXPECTED_UNITY_VERSION__";
+        private const string ExpectedUnityRevision = "__YL_HYBRIDCLR_EXPECTED_UNITY_REVISION__";
+        private const string ExpectedRoot = "__YL_HYBRIDCLR_EXPECTED_ROOT__";
+        private const string BoundOwnerSha256 = "__YL_HYBRIDCLR_OWNER_SHA256__";
         private const string AssetsRoot = "Assets/HCLRExample";
         private const string SampleRoot = "Assets/YLFramework/Integrations/HybridCLR/Samples";
         private const string SupportName = "YLFramework.HybridCLR.Sample.Support";
@@ -52,20 +57,44 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         {
             RequireSubset(IsExplicitReceiverPath(SourceRepository) && Directory.Exists(SourceRepository), "Install or sync this consumer from its trusted source repository before use.");
             RejectSubsetLinks(SourceRepository);
+            RequireSubset(SameSubsetPath(Root, ExpectedRoot), "Wrong installed consumer evidence root.");
             RejectSubsetLinks(Root + "/owner.json");
-            RejectSubsetLinks(Root + "/base-no-package-import.receipt.json");
-            RejectSubsetLinks(Root + "/optional-no-package-import.receipt.json");
             var owner = JObject.Parse(File.ReadAllText(Root + "/owner.json"));
+            var compatibility = BoundOwnerSha256.Length != 0;
+            RequireSubset(!compatibility || Sha(Root + "/owner.json") == BoundOwnerSha256, "The exact installed owner binding changed.");
+            var baseImport = compatibility ? owner.Value<string>("baseImportRun") : "base-no-package-import";
+            var optionalImport = compatibility ? owner.Value<string>("optionalImportRun") : "optional-no-package-import";
+            foreach (var name in new[] { baseImport, optionalImport })
+            {
+                RejectSubsetLinks(Root + "/" + name + ".receipt.json");
+                var receipt = JObject.Parse(File.ReadAllText(Root + "/" + name + ".receipt.json"));
+                RequireSubset(receipt.Value<bool>("passed") && !receipt.Value<bool>("testsPresent"), "Product-only imports are required before consumers.");
+                RequireBoundReceipt(owner, receipt);
+            }
             RequireSubset(IsExplicitReceiverPath(owner.Value<string>("repository")) && SameSubsetPath(owner.Value<string>("repository"), SourceRepository), "Receiver source repository does not match the installed consumer binding.");
-            if (!Application.isBatchMode || Application.unityVersion != "2022.3.62f3c1" ||
+            if (!Application.isBatchMode || Application.unityVersion != ExpectedUnityVersion ||
                 owner.Value<string>("purpose") != "YLFramework-HybridCLR-9.0.3-independent-reception" ||
-                !IsExplicitReceiverPath(owner.Value<string>("project")) || !SameSubsetPath(owner.Value<string>("project"), Project) || Directory.Exists(Project + "/.git") ||
-                !JObject.Parse(File.ReadAllText(Root + "/base-no-package-import.receipt.json")).Value<bool>("passed") ||
-                !JObject.Parse(File.ReadAllText(Root + "/optional-no-package-import.receipt.json")).Value<bool>("passed"))
+                !IsExplicitReceiverPath(owner.Value<string>("project")) || !SameSubsetPath(owner.Value<string>("project"), Project) || Directory.Exists(Project + "/.git"))
             {
                 throw new InvalidOperationException("Never run this acceptance consumer on the source project or before product-only imports.");
             }
 
+            if (compatibility)
+            {
+                RequireSubset(owner.Value<int>("schemaVersion") == 2 && !owner.Value<bool>("simulation") &&
+                    SameSubsetPath(owner.Value<string>("deliveryRoot"), "G:/Unity/U63-20261027-c63a1") &&
+                    SameSubsetPath(owner.Value<string>("evidenceRoot"), Root) &&
+                    SameSubsetPath(Project, Path.Combine(owner.Value<string>("deliveryRoot"), owner.Value<string>("receiver"))) &&
+                    SameSubsetPath(EditorApplication.applicationPath, owner.Value<string>("unity")) &&
+                    System.Diagnostics.FileVersionInfo.GetVersionInfo(EditorApplication.applicationPath).ProductVersion == ExpectedUnityVersion + "_" + ExpectedUnityRevision,
+                    "The live Editor/revision must match the immutable owned receiver, not a simulated owner.");
+                foreach (var name in new[] { "project", "baseline", "releaseBaseline", "playerRoot", "releasePlayerRoot", "runtimeCacheRoot", "subsetBaseline", "subsetPlayerRoot", "subsetCacheRoot" })
+                {
+                    RejectSubsetLinks(owner.Value<string>(name));
+                }
+                RejectSubsetLinks(Project);
+                return owner;
+            }
             var durable = SameSubsetPath(Root, "G:/Unity/YLStyleAcceptance/YS28");
             var approved = Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp/kilo")) + Path.DirectorySeparatorChar;
             RequireSubset(Root.StartsWith(approved, StringComparison.OrdinalIgnoreCase) || durable, "Expected an explicitly approved independent receiver root.");
@@ -112,7 +141,16 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         private static string ScopedOwnerValue(string name, string legacyValue)
         {
             var owner = Owned();
-            return owner.Property("nativePrefix") == null ? legacyValue : owner.Value<string>(name);
+            return BoundOwnerSha256.Length == 0 && owner.Property("nativePrefix") == null ? legacyValue : owner.Value<string>(name);
+        }
+        private static void RequireBoundReceipt(JObject owner, JObject receipt)
+        {
+            if (BoundOwnerSha256.Length != 0)
+            {
+                RequireSubset(receipt.Value<string>("UnityVersion") == ExpectedUnityVersion && receipt.Value<string>("UnityRevision") == ExpectedUnityRevision &&
+                    receipt.Value<string>("Receiver") == owner.Value<string>("receiver") && receipt.Value<string>("OwnerSha256") == BoundOwnerSha256,
+                    "Cross-engine or foreign-owner baseline/receipt rejected.");
+            }
         }
         private static string Sha(string path)
         {
@@ -140,9 +178,33 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             }
             File.Move(pending, path);
         }
+        private static string ProductPackageSha(JObject owner, bool optional)
+        {
+            if (BoundOwnerSha256.Length == 0)
+            {
+                return optional ? JObject.Parse(File.ReadAllText(Root + "/product-selection.json")).Value<string>("packageSha256") : Sha(Root + "/YLFramework.unitypackage");
+            }
+            var path = Path.Combine(owner.Value<string>("deliveryRoot"), owner.Value<string>(optional ? "optionalPackage" : "basePackage"));
+            var receiptPath = Root + "/" + owner.Value<string>(optional ? "optionalImportRun" : "baseImportRun") + ".receipt.json";
+            RejectSubsetLinks(path);
+            RejectSubsetLinks(receiptPath);
+            var proof = JObject.Parse(File.ReadAllText(receiptPath));
+            RequireBoundReceipt(owner, proof);
+            var sha = Sha(path);
+            RequireSubset(proof.Value<bool>("passed") && !proof.Value<bool>("testsPresent") && proof.Value<string>("action") == (optional ? "ImportOptional" : "ImportBase") &&
+                string.Equals(proof.Value<string>("packageSha256"), sha, StringComparison.OrdinalIgnoreCase),
+                "The formal frozen package must still match this receiver's product-only import proof.");
+            return sha;
+        }
+        public static void InspectPackageProvenance()
+        {
+            var owner = Owned();
+            Receipt(Run, new { passed = true, PackageSha256 = ProductPackageSha(owner, false), OptionalPackageSha256 = ProductPackageSha(owner, true) });
+        }
         public static void Install()
         {
-            Owned();
+            var owner = Owned();
+            RequireSubset(owner["nativeSourceManifest"] == null, "A maintained-native owner must use InstallLocal, never the default downloader.");
             var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.code-philosophy.hybridclr");
             var locked = JObject.Parse(File.ReadAllText("Packages/packages-lock.json"))["dependencies"]["com.code-philosophy.hybridclr"];
             if (package.version != "9.0.3" || package.source != UnityEditor.PackageManager.PackageSource.Git ||
@@ -168,6 +230,58 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 installed.InstalledLibil2cppVersion
             });
         }
+        private static JObject NativeSource(JObject owner, bool installed)
+        {
+            if (owner["nativeSourceManifest"] == null)
+            {
+                return null;
+            }
+            var path = owner.Value<string>("nativeSourceManifest");
+            RejectSubsetLinks(path);
+            RequireSubset(ExpectedUnityVersion == "6000.3.27f1" && Sha(path) == owner.Value<string>("nativeSourceManifestSha256") &&
+                Path.GetFullPath(path).StartsWith(Path.GetFullPath(Path.Combine(owner.Value<string>("deliveryRoot"), "B08Native")) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase),
+                "Foreign or changed maintained-native source receipt.");
+            var source = JObject.Parse(File.ReadAllText(path));
+            var patched = source.Value<string>("Variant") == "ParameterOwner";
+            RequireSubset(source.Value<string>("Schema") == "B08NativeSource-v1" && (patched || source.Value<string>("Variant") == "UnmodifiedControl") &&
+                source.Value<string>("SdkCommit") == "6cadd24d101f4cbd00cd80190106f6621132d24d" &&
+                source.Value<string>("Il2CppCommit") == "6eb38b29c3a7448b3ac6c4dee450de375b5d158d" &&
+                source.Value<string>("HybridClrCommit") == "bf01f8eed56a077781c3a7b25f418603c7645588" &&
+                source["ChangedFiles"].Values<string>().SequenceEqual(patched ? new[] { "vm/GlobalMetadata.cpp" } : Array.Empty<string>()), "Unapproved native variant.");
+            var directory = installed ? global::HybridCLR.SettingsUtil.LocalIl2CppDir + "/libil2cpp" : source.Value<string>("SourceDirectory");
+            RejectSubsetLinks(directory);
+            foreach (var file in source["Files"].OfType<JObject>())
+            {
+                var relative = file.Value<string>("Path");
+                RequireSubset(!Path.IsPathRooted(relative) && !relative.Contains("..") && !relative.Contains('\\') && !relative.Contains(':'), "Escaping native source file.");
+                if (installed && relative.StartsWith("hybridclr/generated/", StringComparison.Ordinal))
+                {
+                    continue; // The official Prepare stages own generated bridges; source implementation bytes must remain exact.
+                }
+                var actual = Path.Combine(directory, relative);
+                RejectSubsetLinks(actual);
+                RequireSubset(new FileInfo(actual).Length == file.Value<long>("Length") && Sha(actual) == file.Value<string>("Sha256"), "Maintained native source drift: " + relative);
+            }
+            return source;
+        }
+        public static void InstallLocal()
+        {
+            var owner = Owned();
+            var source = NativeSource(owner, false);
+            RequireSubset(source != null, "Explicit maintained-native owner required.");
+            var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.code-philosophy.hybridclr");
+            var locked = JObject.Parse(File.ReadAllText("Packages/packages-lock.json"))["dependencies"][package.name];
+            var installer = new global::HybridCLR.Installer.InstallerController();
+            RequireSubset(package.version == "9.0.3" && package.source == UnityEditor.PackageManager.PackageSource.Git &&
+                locked.Value<string>("hash") == source.Value<string>("SdkCommit") && !Directory.Exists(global::HybridCLR.SettingsUtil.LocalUnityDataDir) &&
+                !global::HybridCLR.Settings.HybridCLRSettings.instance.useGlobalIl2cpp, "A new receiver and exact fixed official SDK local installer are required.");
+            installer.InstallFromLocal(source.Value<string>("SourceDirectory"));
+            NativeSource(owner, true);
+            Receipt("native-source-binding", new { passed = true, Variant = source.Value<string>("Variant"), SourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256"),
+                OwnerSha256 = BoundOwnerSha256, Receiver = owner.Value<string>("receiver"), UnityVersion = Application.unityVersion, UnityRevision = ExpectedUnityRevision,
+                SourceDirectory = source.Value<string>("SourceDirectory"), InstalledDirectory = global::HybridCLR.SettingsUtil.LocalIl2CppDir + "/libil2cpp", OfficialUnmodified = false });
+            Receipt(Run, new { passed = true, Variant = source.Value<string>("Variant"), SourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256"), OfficialLocalInstaller = true });
+        }
         public static void Inspect()
         {
             Owned();
@@ -186,6 +300,7 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         public static void CompileExternal() => CompileSupport(false);
         public static void CompileExternalVTwo() => CompileSupport(true);
         public static void CompileExternalRelease() => CompileSupport(false, true);
+        public static void CompileExternalReleaseVTwo() => CompileSupport(true, true);
         public static void CompileExternalNewRequirement()
         {
             Owned();
@@ -217,6 +332,13 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         private static void CompileSupport(bool patch, bool release = false)
         {
             Owned();
+            if (BoundOwnerSha256.Length != 0 && (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 ||
+                PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) != ScriptingImplementation.IL2CPP ||
+                PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Standalone) != ApiCompatibilityLevel.NET_4_6))
+            {
+                // Unity 6.3 rebuilds AssemblyBuilder references from the actual PlayerSettings profile.
+                throw new InvalidOperationException("Configure the actual Windows64 IL2CPP/.NET Framework receiver before external compilation; compilerOptions do not override the active API profile.");
+            }
             var source = Root + "/ExternalSource/VersionInfo.cs";
             if (!File.Exists(source))
             {
@@ -286,7 +408,12 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         }
         public static void Configure()
         {
-            Owned();
+            var owner = Owned();
+            if (BoundOwnerSha256.Length != 0)
+            {
+                PlayerSettings.companyName = "YLFrameworkU63Acceptance";
+                PlayerSettings.productName = owner.Value<string>("runId") + "-" + ExpectedUnityVersion + "-" + owner.Value<string>("receiver");
+            }
             EditorUserBuildSettings.development = true;
             EditorUserBuildSettings.buildScriptsOnly = false;
             UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
@@ -324,6 +451,12 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             }
 
             var profile = HybridCLRExampleAssets.Create(AssetsRoot, owner.Value<string>("baseline"));
+            if (BoundOwnerSha256.Length != 0)
+            {
+                profile.recipe.appContentCompatibilityId = owner.Value<string>("compatibilityId");
+                EditorUtility.SetDirty(profile.recipe);
+                AssetDatabase.SaveAssetIfDirty(profile.recipe);
+            }
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var runner = new GameObject("HybridCLR Native Acceptance").AddComponent<HybridCLRReceptionRunner>();
             runner.projectId = profile.recipe.project.projectId;
@@ -594,7 +727,25 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         public static void Build()
         {
             var owner = Owned();
+            if (BoundOwnerSha256.Length != 0 && !AssetDatabase.IsValidFolder("Assets/StreamingAssets"))
+            {
+                throw new InvalidOperationException("Run PrepareDeployment explicitly before a native base build; the standard StreamingAssets parent must already exist.");
+            }
+            var native = NativeSource(owner, true);
+            if (native != null)
+            {
+                var binding = JObject.Parse(File.ReadAllText(Root + "/native-source-binding.json"));
+                RequireBoundReceipt(owner, binding);
+                RequireSubset(binding.Value<bool>("passed") && !binding.Value<bool>("OfficialUnmodified") && binding.Value<string>("SourceManifestSha256") == owner.Value<string>("nativeSourceManifestSha256"), "Custom native installation binding changed.");
+            }
+            var packageSha = ProductPackageSha(owner, false);
+            var optionalPackageSha = ProductPackageSha(owner, true);
             var profile = Profile();
+            if (BoundOwnerSha256.Length != 0)
+            {
+                RequireNewSubsetPath(owner.Value<string>(profile.development ? "playerRoot" : "releasePlayerRoot"));
+                RequireNewSubsetPath(profile.baselineDirectory);
+            }
             var report = HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
             {
                 target = BuildTarget.StandaloneWindows64,
@@ -616,9 +767,30 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 PlayerFingerprint = PlayerFingerprint(profile.development ? "PlayerDev" : "PlayerRelease"),
                 NativeBaselineSha256 = Sha(report.BaselineDirectory + "/baseline.json"),
                 Development = profile.development,
-                PackageSha256 = Sha(Root + "/YLFramework.unitypackage"),
-                OptionalPackageSha256 = JObject.Parse(File.ReadAllText(Root + "/product-selection.json")).Value<string>("packageSha256")
+                UnityVersion = Application.unityVersion,
+                UnityRevision = ExpectedUnityRevision,
+                Receiver = owner.Value<string>("receiver"),
+                OwnerSha256 = BoundOwnerSha256,
+                PlayerDirectory = owner.Value<string>(profile.development ? "playerRoot" : "releasePlayerRoot"),
+                RuntimeCacheDirectory = owner.Value<string>("runtimeCacheRoot"),
+                NegativeConsumerVersion = 1,
+                PackageSha256 = packageSha,
+                OptionalPackageSha256 = optionalPackageSha,
+                NativeVariant = native?.Value<string>("Variant"),
+                NativeSourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256"),
+                ParameterOracle = native != null ? ReadParameterOracle(report.BaselineDirectory) : null
             });
+        }
+        private static object ReadParameterOracle(string baseline)
+        {
+            var path = Path.Combine(baseline, "Aot/mscorlib.dll");
+            RejectSubsetLinks(path);
+            using var module = dnlib.DotNet.ModuleDefMD.Load(path);
+            var method = module.Types.Single(t => t.FullName == "System.Array").Methods.Single(m => m.Name.String == "InternalArray__RemoveAt" && m.MethodSig.Params.Count == 1);
+            var parameter = method.ParamDefs.Single(p => p.Sequence == 1);
+            RequireSubset(parameter.Name.String == "index" && method.MethodSig.Params[0].FullName == "System.Int32", "Final stripped AOT parameter oracle differs.");
+            return new { Name = parameter.Name.String, Type = method.MethodSig.Params[0].FullName, Token = parameter.MDToken.Raw,
+                MethodToken = method.MDToken.Raw, AssemblySha256 = Sha(path), Origin = "This run's frozen final stripped Aot/mscorlib.dll" };
         }
         public static void ConfigureBaseIdentity()
         {
@@ -655,8 +827,8 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             EditorUserBuildSettings.buildScriptsOnly = false;
             UnityEditor.WindowsStandalone.UserBuildSettings.createSolution = false;
             profile.development = false;
-            profile.recipe.appContentCompatibilityId = owner.Property("nativePrefix") == null ? "hybridclr-base-release" : owner.Value<string>("releaseCompatibilityId");
-            profile.baselineDirectory = owner.Value<string>("baseline") + "-Release";
+            profile.recipe.appContentCompatibilityId = BoundOwnerSha256.Length == 0 && owner.Property("nativePrefix") == null ? "hybridclr-base-release" : owner.Value<string>("releaseCompatibilityId");
+            profile.baselineDirectory = BoundOwnerSha256.Length == 0 ? owner.Value<string>("baseline") + "-Release" : owner.Value<string>("releaseBaseline");
             EditorUtility.SetDirty(profile);
             EditorUtility.SetDirty(profile.recipe);
             AssetDatabase.SaveAssetIfDirty(profile);
@@ -670,37 +842,54 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 throw new IOException("Release acceptance scene was not saved.");
             }
 
+            if (BoundOwnerSha256.Length != 0)
+            {
+                PlayerSettings.SetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone, string.Empty);
+            }
             Receipt(Run, new
             {
                 passed = true,
                 development = false,
                 BaselineDirectory = profile.baselineDirectory,
-                AppContentCompatibilityId = profile.recipe.appContentCompatibilityId
+                AppContentCompatibilityId = profile.recipe.appContentCompatibilityId,
+                DefineSymbols = PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone)
             });
         }
         public static void Patch()
         {
             var owner = Owned();
-            var baseline = JObject.Parse(File.ReadAllText(Root + "/" + owner.Value<string>("baseReceiptStem") + ".json"));
             var profile = Profile();
-            var oldPlayer = PlayerFingerprint();
+            var native = NativeSource(owner, true);
+            var baseline = JObject.Parse(File.ReadAllText(Root + "/" + (profile.development ? owner.Value<string>("baseReceiptStem") : "base-release-receipt") + ".json"));
+            RequireBoundReceipt(owner, baseline);
+            RequireSubset(baseline.Value<bool>("Development") == profile.development, "Patch must use its exact native base variant.");
+            var variant = profile.development ? "PlayerDev" : "PlayerRelease";
+            var oldPlayer = PlayerFingerprint(variant);
             var oldBaseline = Sha(profile.baselineDirectory + "/baseline.json");
             var report = HybridCLRBuildPipeline.PublishPatch(profile);
             WriteReport(report);
-            if (oldPlayer != PlayerFingerprint() || oldPlayer != baseline.Value<string>("PlayerFingerprint") || oldBaseline != Sha(profile.baselineDirectory + "/baseline.json"))
+            if (oldPlayer != PlayerFingerprint(variant) || oldPlayer != baseline.Value<string>("PlayerFingerprint") || oldBaseline != Sha(profile.baselineDirectory + "/baseline.json"))
             {
                 throw new InvalidDataException("Patch publication modified the frozen Player or baseline.");
             }
 
-            Sign(report.Release, "ServerV2", 2);
-            Receipt("patch-receipt", new
+            Sign(report.Release, profile.development ? "ServerV2" : "ServerReleaseV2", 2);
+            Receipt(profile.development ? "patch-receipt" : "release-patch-receipt", new
             {
                 passed = true,
+                UnityVersion = Application.unityVersion,
+                UnityRevision = ExpectedUnityRevision,
+                Receiver = owner.Value<string>("receiver"),
+                OwnerSha256 = BoundOwnerSha256,
                 report.Release.DirectoryPath,
                 CatalogDigest = report.Release.Catalog.CatalogDigest,
                 CodePackageId = report.Manifest.CodePackageId,
                 PlayerFingerprint = oldPlayer,
-                BaselineSha256 = oldBaseline
+                BaselineSha256 = oldBaseline,
+                Development = profile.development,
+                ProducerRun = Run,
+                NativeVariant = native?.Value<string>("Variant"),
+                NativeSourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256")
             });
         }
         public static void PrepareProjectSubsets()
@@ -828,8 +1017,11 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             try
             {
                 RequireSubsetEnvironment();
+                var native = ReadSubsetNative(owner);
                 var profiles = SubsetProfiles(owner);
                 var profile = profiles[0];
+                var profilePathBeforeNative = AssetDatabase.GetAssetPath(profile);
+                var profileGuidBeforeNative = AssetDatabase.AssetPathToGUID(profilePathBeforeNative);
                 report = HybridCLRBuildPipeline.BuildBasePlayer(profile, new BuildPlayerOptions
                 {
                     target = BuildTarget.StandaloneWindows64,
@@ -845,6 +1037,11 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                     File.Exists(SubsetPlayer + "/GameAssembly.dll"), "A successful native Development executable build is required.");
                 RequireSubset(new[] { "Il2CppDef", "LinkXml", "EmptyMethodBridge", "StripAot", "FullMethodBridge", "Player" }.All(SubsetNativeStages(report).Contains),
                     "The base must report its actual native generation, strip and Player stages.");
+                var cachedProfilePathAfterNative = AssetDatabase.GetAssetPath(profile);
+                profiles = SubsetProfiles(owner);
+                profile = profiles[0];
+                RequireSubset(AssetDatabase.GetAssetPath(profile) == profilePathBeforeNative && AssetDatabase.AssetPathToGUID(profilePathBeforeNative) == profileGuidBeforeNative,
+                    "The saved subset owner identity changed across native work.");
                 RequireSubsetManifest(report.Manifest, "hclr-sub-a", SupportName);
                 var published = ReadSubsetRelease(profile, report.Release);
                 RequireSubset(published.ToJson() == report.Manifest.ToJson(), "A's actual published manifest differs from the build report.");
@@ -858,6 +1055,10 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 Receipt("project-subsets-base", new
                 {
                     passed = true,
+                    UnityVersion = Application.unityVersion,
+                    UnityRevision = ExpectedUnityRevision,
+                    Receiver = owner.Value<string>("receiver"),
+                    OwnerSha256 = BoundOwnerSha256,
                     ProfileA = AssetDatabase.GetAssetPath(profile),
                     ProfileB = AssetDatabase.GetAssetPath(profiles[1]),
                     Scene = SubsetScene,
@@ -873,7 +1074,14 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                     ManifestA = JObject.Parse(published.ToJson()),
                     SharedSupport = support,
                     registeredAssemblies = registration.HotUpdateAssemblies.Select(p => p.Name).ToArray(),
-                    nativeStages = SubsetNativeStages(report)
+                    nativeStages = SubsetNativeStages(report),
+                    NativeVariant = native?.Value<string>("Variant") ?? "OfficialSdkLocal",
+                    NativeSourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256"),
+                    SubsetConsumerVersion = 2,
+                    ProfileReloadedAfterNative = true,
+                    CachedProfilePathAfterNative = cachedProfilePathAfterNative,
+                    SavedProfilePath = profilePathBeforeNative,
+                    SavedProfileGuid = profileGuidBeforeNative
                 });
             }
             catch (Exception error)
@@ -901,9 +1109,16 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             try
             {
                 RequireSubsetEnvironment();
+                var native = ReadSubsetNative(owner);
                 var profiles = SubsetProfiles(owner);
                 var profile = profiles[1];
                 var baseline = JObject.Parse(File.ReadAllText(Root + "/project-subsets-base.json"));
+                RequireBoundReceipt(owner, baseline);
+                if (native != null)
+                {
+                    RequireSubset(baseline.Value<string>("NativeVariant") == "ParameterOwner" &&
+                        baseline.Value<string>("NativeSourceManifestSha256") == owner.Value<string>("nativeSourceManifestSha256"), "Do not publish a subset against a foreign native source variant.");
+                }
                 RequireSubset(baseline.Value<bool>("passed") && baseline.Value<bool>("Development") && baseline.Value<string>("CompatibilityId") == SubsetCompatibility &&
                     SameSubsetPath(baseline.Value<string>("PlayerDirectory"), SubsetPlayer) && SameSubsetPath(baseline.Value<string>("Baseline"), profile.baselineDirectory) &&
                     baseline.Value<string>("ProfileA") == AssetDatabase.GetAssetPath(profiles[0]) && baseline.Value<string>("ProfileB") == AssetDatabase.GetAssetPath(profile),
@@ -933,6 +1148,8 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                         baselineSha == Sha(profile.baselineDirectory + "/baseline.json"), "Patch publication modified the frozen Player or any baseline file.");
                 }
                 RequireSubset(report.HasSucceeded, report.Summary);
+                profiles = SubsetProfiles(owner);
+                profile = profiles[1];
                 var allowed = new[] { "Preflight", "ReadBaseline", "Compile", "PatchCompatibility", "PayloadCommit", "ResourcePublish" };
                 RequireSubset(report.PlayerBuild == null && report.Deployment == null && SubsetNativeStages(report).Length == 0 && report.Stages.All(s => allowed.Contains(s.Name)),
                     "A subset patch must not build/strip a Player, regenerate native bridges/link data or deploy built-ins.");
@@ -947,6 +1164,10 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 Receipt("project-subsets-patch", new
                 {
                     passed = true,
+                    UnityVersion = Application.unityVersion,
+                    UnityRevision = ExpectedUnityRevision,
+                    Receiver = owner.Value<string>("receiver"),
+                    OwnerSha256 = BoundOwnerSha256,
                     ProfileA = AssetDatabase.GetAssetPath(profiles[0]),
                     ProfileB = AssetDatabase.GetAssetPath(profile),
                     Scene = SubsetScene,
@@ -966,7 +1187,10 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                     SharedSupport = support,
                     nativeStages = SubsetNativeStages(report),
                     unchangedPlayer = beforePlayer == afterPlayer,
-                    unchangedBaseline = beforeBaseline == afterBaseline
+                    unchangedBaseline = beforeBaseline == afterBaseline,
+                    NativeVariant = native?.Value<string>("Variant") ?? "OfficialSdkLocal",
+                    NativeSourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256"),
+                    SubsetConsumerVersion = 2
                 });
             }
             catch (Exception error)
@@ -979,11 +1203,178 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 WriteSubsetReport(report, failure);
             }
         }
+        private static object InvokeSubsetContract(MethodInfo method, params object[] arguments)
+        {
+            try { return method.Invoke(null, arguments); }
+            catch (TargetInvocationException error) when (error.InnerException != null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+                throw;
+            }
+        }
+        public static void VerifyProjectSubsetConstraints()
+        {
+            var owner = Owned();
+            RequireSubsetRun();
+            RequireSubsetEnvironment();
+            ReadSubsetNative(owner);
+            var profiles = SubsetProfiles(owner);
+            var beforePlayer = SubsetFingerprint(SubsetPlayer);
+            var beforeBaseline = SubsetFingerprint(SubsetBaseline(owner));
+            var pipeline = typeof(HybridCLRBuildPipeline);
+            var baselineType = pipeline.Assembly.GetType("YLFramework.Integrations.HybridCLR.Editor.HybridCLRBuildBaseline", true);
+            var frozen = InvokeSubsetContract(baselineType.GetMethod("Read", BindingFlags.Static | BindingFlags.NonPublic), SubsetBaseline(owner));
+            var descriptor = JObject.Parse(File.ReadAllText(SubsetBaseline(owner) + "/baseline.json"));
+            object CloneBaseline() => descriptor.ToObject(baselineType);
+            var binding = pipeline.GetMethod("ValidateBaselineBinding", BindingFlags.Static | BindingFlags.NonPublic);
+            var validateSet = pipeline.GetMethod("ValidatePatchSet", BindingFlags.Static | BindingFlags.NonPublic);
+            var aliases = InvokeSubsetContract(pipeline.GetMethod("UnityAotAliases", BindingFlags.Static | BindingFlags.NonPublic));
+            var analyze = typeof(HybridCLRAssemblyAnalysis).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static).Single(m => m.Name == "Analyze" && m.GetParameters().Length == 3);
+            var hot = descriptor["InitialManifest"]["HotUpdateAssemblies"].Select(p => SubsetBaseline(owner) + "/HotUpdate/" + p.Value<string>("Name") + ".dll").ToArray();
+            var aot = descriptor["Files"].Where(f => f.Value<string>("Path").StartsWith("Aot/", StringComparison.Ordinal)).Select(f => SubsetBaseline(owner) + "/" + f.Value<string>("Path")).ToArray();
+            var inputs = InvokeSubsetContract(analyze, hot, aot, aliases);
+            var fingerprint = descriptor.Value<string>("SettingsFingerprint");
+            InvokeSubsetContract(binding, profiles[1], frozen, fingerprint);
+            InvokeSubsetContract(validateSet, frozen, inputs);
+            var cases = new JArray { new JObject { ["Case"] = "valid-one-hop-binding", ["Passed"] = true }, new JObject { ["Case"] = "valid-global-metadata-native-set", ["Passed"] = true } };
+            void Reject(string name, Action action)
+            {
+                try { action(); }
+                catch (InvalidDataException error)
+                {
+                    cases.Add(new JObject { ["Case"] = name, ["Rejected"] = true, ["Message"] = error.Message });
+                    return;
+                }
+                throw new InvalidOperationException("A real subset constraint unexpectedly accepted: " + name);
+            }
+            foreach (var name in new[] { "unbound", "self", "chain", "directory", "compatibility", "development", "target" })
+            {
+                var child = UnityEngine.Object.Instantiate(profiles[1]);
+                var recipe = UnityEngine.Object.Instantiate(profiles[1].recipe);
+                var parent = UnityEngine.Object.Instantiate(profiles[0]);
+                try
+                {
+                    child.recipe = recipe;
+                    switch (name)
+                    {
+                        case "unbound": child.baseProfile = null; break;
+                        case "self": child.baseProfile = child; break;
+                        case "chain": parent.baseProfile = profiles[0]; child.baseProfile = parent; break;
+                        case "directory": child.baselineDirectory += "-foreign"; break;
+                        case "compatibility": recipe.appContentCompatibilityId += "-foreign"; break;
+                        case "development": child.development = !child.development; break;
+                        case "target": recipe.target = BuildTarget.Android; break;
+                    }
+                    Reject("binding-" + name, () => InvokeSubsetContract(binding, child, frozen, fingerprint));
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(child);
+                    UnityEngine.Object.DestroyImmediate(recipe);
+                    UnityEngine.Object.DestroyImmediate(parent);
+                }
+            }
+            var foreignOwner = CloneBaseline();
+            baselineType.GetField("ProfileGuid").SetValue(foreignOwner, Guid.NewGuid().ToString("N"));
+            Reject("foreign-owner-guid", () => InvokeSubsetContract(binding, profiles[1], foreignOwner, fingerprint));
+            Reject("foreign-settings-fingerprint", () => InvokeSubsetContract(binding, profiles[1], frozen, new string('0', 64)));
+            var registration = CloneBaseline();
+            ((HybridCLRManifest)baselineType.GetField("InitialManifest").GetValue(registration)).HotUpdateAssemblies = Array.Empty<HybridCLRPayload>();
+            Reject("outside-global-registration", () => InvokeSubsetContract(validateSet, registration, inputs));
+            var metadata = CloneBaseline();
+            ((HybridCLRManifest)baselineType.GetField("InitialManifest").GetValue(metadata)).AotMetadata = Array.Empty<HybridCLRPayload>();
+            Reject("unregistered-metadata", () => InvokeSubsetContract(validateSet, metadata, inputs));
+            RequireSubset(((string[])baselineType.GetField("NativeRequirements").GetValue(frozen)).Length > 0, "The real baseline must actually exercise native requirements.");
+            var nativeRequirements = CloneBaseline();
+            baselineType.GetField("NativeRequirements").SetValue(nativeRequirements, Array.Empty<string>());
+            Reject("unregistered-native-requirements", () => InvokeSubsetContract(validateSet, nativeRequirements, inputs));
+            RequireSubset(beforePlayer == SubsetFingerprint(SubsetPlayer) && beforeBaseline == SubsetFingerprint(SubsetBaseline(owner)), "Constraint probes changed a persistent native input.");
+            SubsetProfiles(owner);
+            Receipt(Run, new { passed = true, UnityVersion = Application.unityVersion, UnityRevision = ExpectedUnityRevision,
+                Receiver = owner.Value<string>("receiver"), OwnerSha256 = BoundOwnerSha256,
+                Cases = cases, PersistentFilesChanged = false, PlayerFingerprint = beforePlayer, BaselineFingerprint = beforeBaseline });
+        }
+        public static void PublishProjectSubsetConflict()
+        {
+            var owner = Owned();
+            RequireSubsetRun();
+            RequireSubsetEnvironment();
+            var native = ReadSubsetNative(owner);
+            var profiles = SubsetProfiles(owner);
+            var patch = JObject.Parse(File.ReadAllText(Root + "/project-subsets-patch.json"));
+            RequireBoundReceipt(owner, patch);
+            RequireNewSubsetPath(Root + "/project-subsets-conflict.json");
+            var beforePlayer = SubsetFingerprint(SubsetPlayer);
+            var beforeBaseline = SubsetFingerprint(SubsetBaseline(owner));
+            var manifestPath = profiles[1].generatedAssetDirectory + "/hybridclr/manifest.json";
+            var originalManifest = File.ReadAllBytes(manifestPath);
+            var manifest = HybridCLRManifest.Parse(Encoding.UTF8.GetString(originalManifest));
+            var support = manifest.HotUpdateAssemblies.Single(p => p.Name == SupportName);
+            var payloadPath = profiles[1].generatedAssetDirectory + "/" + support.Address;
+            var originalPayload = File.ReadAllBytes(payloadPath);
+            var originalDescriptor = JObject.FromObject(support);
+            try
+            {
+                byte[] changed;
+                using (var module = dnlib.DotNet.ModuleDefMD.Load(originalPayload))
+                using (var output = new MemoryStream())
+                {
+                    var identity = new AssemblyName(module.Assembly.FullName);
+                    if (identity.CultureInfo == null) { identity.CultureInfo = System.Globalization.CultureInfo.InvariantCulture; }
+                    RequireSubset(identity.FullName == support.Identity, "The real Support identity must be preserved.");
+                    module.Mvid = Guid.NewGuid();
+                    support.Mvid = module.Mvid.Value.ToString("D");
+                    module.Write(output);
+                    changed = output.ToArray();
+                }
+                support.Sha256 = HybridCLRManifest.Hash(changed);
+                support.Length = changed.LongLength;
+                manifest.Seal();
+                manifest.Validate("hclr-sub-b", SubsetCompatibility, Application.unityVersion, true);
+                File.WriteAllBytes(payloadPath, changed);
+                File.WriteAllText(manifestPath, manifest.ToJson(), new UTF8Encoding(false));
+                AssetDatabase.ImportAsset(payloadPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                var report = ResourceEditorOperations.ExecuteRecipe(profiles[1].recipe);
+                RequireSubset(report.Release != null && report.BuildError == null && report.PublicationError == null, "The conflict fixture must be a real published resource release.");
+                var published = ReadSubsetRelease(profiles[1], report.Release);
+                var actual = published.HotUpdateAssemblies.Single(p => p.Name == SupportName);
+                RequireSubset(actual.Identity == support.Identity && actual.Mvid == support.Mvid && actual.Sha256 == support.Sha256 && actual.Mvid != originalDescriptor.Value<string>("Mvid"), "Conflict must be a valid PE with the same name/identity and different MVID/bytes.");
+                Receipt("project-subsets-conflict", new { passed = true, UnityVersion = Application.unityVersion, UnityRevision = ExpectedUnityRevision,
+                    Receiver = owner.Value<string>("receiver"), OwnerSha256 = BoundOwnerSha256,
+                    ProducerRun = Run, Baseline = SubsetBaseline(owner), CompatibilityId = SubsetCompatibility,
+                    PlayerFingerprint = beforePlayer, BaselineFingerprint = beforeBaseline, ReleaseB = SubsetReleaseIdentity(report.Release, published),
+                    OriginalSupport = originalDescriptor, ChangedSupport = actual, NativeVariant = native?.Value<string>("Variant") ?? "OfficialSdkLocal",
+                    NativeSourceManifestSha256 = owner.Value<string>("nativeSourceManifestSha256"), SubsetConsumerVersion = 2, FixtureOnly = true });
+            }
+            finally
+            {
+                File.WriteAllBytes(payloadPath, originalPayload);
+                File.WriteAllBytes(manifestPath, originalManifest);
+                AssetDatabase.ImportAsset(payloadPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+                AssetDatabase.ImportAsset(manifestPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            }
+            RequireSubset(originalPayload.SequenceEqual(File.ReadAllBytes(payloadPath)) && originalManifest.SequenceEqual(File.ReadAllBytes(manifestPath)) &&
+                beforePlayer == SubsetFingerprint(SubsetPlayer) && beforeBaseline == SubsetFingerprint(SubsetBaseline(owner)), "Conflict fixture failed to restore original source/baseline bytes.");
+            Receipt(Run, new { passed = true, SourceRestored = true, PlayerFingerprint = beforePlayer, BaselineFingerprint = beforeBaseline });
+        }
+        private static JObject ReadSubsetNative(JObject owner)
+        {
+            var native = NativeSource(owner, true);
+            if (native != null)
+            {
+                var binding = JObject.Parse(File.ReadAllText(Root + "/native-source-binding.json"));
+                RequireBoundReceipt(owner, binding);
+                RequireSubset(native.Value<string>("Variant") == "ParameterOwner" && binding.Value<bool>("passed") && !binding.Value<bool>("OfficialUnmodified") &&
+                    binding.Value<string>("SourceManifestSha256") == owner.Value<string>("nativeSourceManifestSha256"), "A new explicitly installed maintained-native subset owner is required.");
+            }
+            return native;
+        }
         private static string SubsetBaseline(JObject owner)
         {
             var repository = owner.Value<string>("repository");
             RequireSubset(!string.IsNullOrEmpty(repository) && Path.IsPathRooted(repository) && Directory.Exists(repository) && !SameSubsetPath(repository, Project), "An explicit source repository outside the receiver is required.");
-            return owner.Property("nativePrefix") == null
+            return BoundOwnerSha256.Length == 0 && owner.Property("nativePrefix") == null
                 ? Path.GetFullPath(Path.Combine(repository, "Build/HybridCLR/Reception-20261022/ProjectSubsets"))
                 : Path.GetFullPath(owner.Value<string>("subsetBaseline"));
         }
@@ -1035,7 +1426,7 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
             var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.code-philosophy.hybridclr");
             var installer = new global::HybridCLR.Installer.InstallerController();
             RequireSubset(package.version == "9.0.3" && package.source == UnityEditor.PackageManager.PackageSource.Git && installer.HasInstalledHybridCLR() &&
-                installer.PackageVersion == "9.0.3" && installer.InstalledLibil2cppVersion == "9.0.3", "The exact official 9.0.3 runtime must already be installed; this consumer never installs an SDK.");
+                installer.PackageVersion == "9.0.3" && installer.InstalledLibil2cppVersion == "9.0.3", "The fixed official SDK/local runtime marker must exist; custom native content is verified separately.");
             var settings = global::HybridCLR.Settings.HybridCLRSettings.instance;
             RequireSubset(settings.enable && !settings.useGlobalIl2cpp && (settings.hotUpdateAssemblyDefinitions == null || settings.hotUpdateAssemblyDefinitions.Length == 0) &&
                 settings.hotUpdateAssemblies != null && settings.hotUpdateAssemblies.OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(new[] { EntryName, SupportName }) &&
@@ -1205,6 +1596,7 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
         {
             var owner = Owned();
             var baseline = JObject.Parse(File.ReadAllText(Root + "/" + owner.Value<string>("baseReceiptStem") + ".json"));
+            RequireBoundReceipt(owner, baseline);
             var profile = Profile();
             var priorPlayer = PlayerFingerprint();
             var baselinePath = owner.Value<string>("baseline");
@@ -1390,7 +1782,18 @@ namespace YLFramework.Tests.HybridCLRReception.Editor
                 }
             }
         }
-        private static HybridCLRBuildProfile Profile() => AssetDatabase.LoadAssetAtPath<HybridCLRBuildProfile>(AssetsRoot + "/Profile.asset") ?? throw new InvalidOperationException("Run explicit receiver Setup first.");
+        private static HybridCLRBuildProfile Profile()
+        {
+            var profile = AssetDatabase.LoadAssetAtPath<HybridCLRBuildProfile>(AssetsRoot + "/Profile.asset") ?? throw new InvalidOperationException("Run explicit receiver Setup first.");
+            if (BoundOwnerSha256.Length != 0)
+            {
+                var owner = Owned();
+                RequireSubset(SameSubsetPath(profile.baselineDirectory, owner.Value<string>(profile.development ? "baseline" : "releaseBaseline")) &&
+                    profile.recipe.appContentCompatibilityId == owner.Value<string>(profile.development ? "compatibilityId" : "releaseCompatibilityId"),
+                    "Profile must use this engine's exact new baseline and compatibility identity.");
+            }
+            return profile;
+        }
         private static void WriteReport(HybridCLRBuildReport report)
         {
             Receipt(Run, new

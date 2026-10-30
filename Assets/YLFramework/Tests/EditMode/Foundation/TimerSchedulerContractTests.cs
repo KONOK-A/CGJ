@@ -1,7 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine.TestTools;
 using YLFramework.Timing;
 
 namespace YLFramework.Foundation.Tests
@@ -442,11 +445,9 @@ namespace YLFramework.Foundation.Tests
             Assert.That(notifications, Is.EqualTo(3));
         }
 
-        [TestCase(TimerState.Completed)]
-        [TestCase(TimerState.Cancelled)]
-        [TestCase(TimerState.Faulted)]
-        [TestCase(TimerState.Invalidated)]
-        public void RetainedTerminalHandleDoesNotKeepUserCallbackTargetAlive(TimerState terminal)
+        [UnityTest]
+        public IEnumerator RetainedTerminalHandleDoesNotKeepUserCallbackTargetAlive(
+            [Values(TimerState.Completed, TimerState.Cancelled, TimerState.Faulted, TimerState.Invalidated)] TimerState terminal)
         {
             using var scheduler = new TimerScheduler(0, 0, 0);
             var handle = ScheduleCallbackTarget(scheduler, terminal == TimerState.Faulted, out var target);
@@ -467,12 +468,57 @@ namespace YLFramework.Foundation.Tests
                 scheduler.Advance(0, 0, 1);
             }
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-            Assert.That(target.IsAlive, Is.False);
-            Assert.That(handle.Status, Is.EqualTo(terminal));
-            GC.KeepAlive(handle);
+            // 在同一主线程的独立 Editor 回调收集，避开 Runner 深层调用栈的临时引用。
+            var collected = false;
+            void Collect()
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                collected = true;
+            }
+
+            EditorApplication.delayCall += Collect;
+            try
+            {
+                var deadline = EditorApplication.timeSinceStartup + 10;
+                while (!collected && EditorApplication.timeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+                Assert.That(collected, Is.True, "The main-thread collection callback must complete.");
+                Assert.That(target.IsAlive, Is.False);
+                Assert.That(handle.Status, Is.EqualTo(terminal));
+                GC.KeepAlive(handle);
+                GC.KeepAlive(scheduler);
+            }
+            finally
+            {
+                EditorApplication.delayCall -= Collect;
+            }
+        }
+
+        [Test]
+        public void RetainedTerminalHandleAfterInvalidationHasNoOwnedReferences()
+        {
+            using var scheduler = new TimerScheduler(0, 0, 0);
+            var handle = ScheduleCallbackTarget(scheduler, false, out _);
+            scheduler.Dispose();
+            const System.Reflection.BindingFlags Fields = System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+            var run = typeof(TimerHandle).GetField("_run", Fields).GetValue(handle);
+            Assert.That(handle.Status, Is.EqualTo(TimerState.Invalidated));
+            Assert.That(run.GetType().GetField("Generation", Fields).GetValue(run),
+                Is.EqualTo(typeof(TimerHandle).GetField("_generation", Fields).GetValue(handle)));
+            foreach (var field in new[] { "Owner", "Callback", "TickCallback", "OnCancelled" })
+            {
+                Assert.That(run.GetType().GetField(field, Fields).GetValue(run), Is.Null, field);
+            }
+            foreach (var field in new[] { "_owned", "_pending" })
+            {
+                var collection = typeof(TimerScheduler).GetField(field, Fields).GetValue(scheduler);
+                Assert.That(collection.GetType().GetProperty("Count").GetValue(collection), Is.EqualTo(0), field);
+            }
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

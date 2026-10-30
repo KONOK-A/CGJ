@@ -2,6 +2,9 @@ using System;
 using UnityEditor;
 using UnityEditor.IMGUI.Controls;
 using UnityEngine;
+#if UNITY_6000_2_OR_NEWER
+using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
+#endif
 
 namespace YLFramework.Tests.Extensions.Shared
 {

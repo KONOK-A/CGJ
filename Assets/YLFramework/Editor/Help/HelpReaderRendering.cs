@@ -165,15 +165,36 @@ namespace YLFramework.Editor.Help
         /// <summary>把字符区间转换成逐行的像素矩形；换行处不绘制，同一行的相邻片段合并。</summary>
         internal static Rect[] BuildFragments(string text, GUIStyle style, Rect rect, Range[] ranges)
         {
+            // 与缓存路径共用局部原点，避免 TextCore 的绝对坐标像素取整改变平移后的几何。
+            var origin = rect.position;
+            rect.position = Vector2.zero;
             var content = new GUIContent(text);
             var fragments = new List<Rect>();
             GUIStyle unwrapped = null;
+#if UNITY_6000_2_OR_NEWER
+            // TextCore 接收元素索引；CRLF 和有效 surrogate pair 各只占一个元素，原文区间仍保留 UTF-16 索引。
+            var cursorIndices = new int[text.Length + 1];
+            var cursorIndex = 0;
+            for (var i = 0; i < text.Length; i++)
+            {
+                cursorIndices[i] = cursorIndex;
+                if (i + 1 < text.Length && ((text[i] == '\r' && text[i + 1] == '\n') ||
+                    (char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))))
+                {
+                    cursorIndices[++i] = cursorIndex;
+                }
+                cursorIndices[i + 1] = ++cursorIndex;
+            }
+            int CursorIndex(int sourceIndex) => cursorIndices[sourceIndex];
+#else
+            int CursorIndex(int sourceIndex) => sourceIndex;
+#endif
             foreach (var range in ranges)
             {
-                var start = style.GetCursorPixelPosition(rect, content, range.Start);
+                var start = style.GetCursorPixelPosition(rect, content, CursorIndex(range.Start));
                 for (var i = range.Start; i < range.End; i++)
                 {
-                    var end = style.GetCursorPixelPosition(rect, content, i + 1);
+                    var end = style.GetCursorPixelPosition(rect, content, CursorIndex(i + 1));
                     if (text[i] != '\r' && text[i] != '\n')
                     {
                         var right = end.x;
@@ -185,11 +206,12 @@ namespace YLFramework.Editor.Help
                                 unwrapped = new GUIStyle(style) { wordWrap = false };
                             }
 
-                            right = start.x + unwrapped.GetCursorPixelPosition(rect, content, i + 1).x -
-                                unwrapped.GetCursorPixelPosition(rect, content, i).x;
+                            right = start.x + unwrapped.GetCursorPixelPosition(rect, content, CursorIndex(i + 1)).x -
+                                unwrapped.GetCursorPixelPosition(rect, content, CursorIndex(i)).x;
                         }
                         var fragment = Rect.MinMaxRect(Mathf.Max(rect.xMin, start.x), Mathf.Max(rect.yMin, start.y),
                             Mathf.Min(rect.xMax, right), Mathf.Min(rect.yMax, start.y + style.lineHeight));
+                        fragment.position += origin;
                         if (fragment.width > 0 && fragment.height > 0)
                         {
                             if (fragments.Count != 0 && Mathf.Abs(fragments[fragments.Count - 1].y - fragment.y) < 0.5f &&

@@ -46,6 +46,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(Directory.Exists(cache), Is.False);
             var store = new ArtifactStore(cache, new[] { new ResourceProjectMount(snapshot.Document.ProjectId, snapshot.Document.Platform, "fixture-v1", snapshot) });
             using var initialized = ResourceSystem.InitializeAsync(new ResourceConfiguration(store));
+            yield return Wait(initialized);
             Assert.That(initialized.Status, Is.EqualTo(ResourceRequestStatus.Succeeded), initialized.Error?.ToString());
             var system = initialized.TakeResult();
             Assert.That(system, Is.Not.Null, "Successful initialization must return the borrowed authority.");

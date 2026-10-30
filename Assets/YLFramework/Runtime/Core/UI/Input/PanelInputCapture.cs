@@ -26,6 +26,14 @@ namespace YLFramework.Core
             internal RaycastResult PressRaycast;
             internal Vector2 Position;
             internal Vector2 PressPosition;
+            internal Canvas Canvas;
+            internal RenderMode RenderMode;
+            internal Camera Camera;
+            internal Rect CameraViewport;
+            internal Matrix4x4 CameraView;
+            internal Matrix4x4 CameraProjection;
+            internal int ScreenWidth;
+            internal int ScreenHeight;
             internal bool IsInvalid;
             internal bool IsCleaned;
         }
@@ -53,6 +61,8 @@ namespace YLFramework.Core
         internal void Record(PointerEventData data)
         {
             var panel = GetComponentInParent<Panel>(true);
+            var canvas = _framePanel && _framePanel.Root ? _framePanel.Root.Canvas : null;
+            var camera = data.pointerCurrentRaycast.module ? data.pointerCurrentRaycast.module.eventCamera : null;
             var capture = new Capture
             {
                 Panel = _framePanel,
@@ -67,7 +77,15 @@ namespace YLFramework.Core
                 TouchId = InputSystemBridge.GetTouchId(data),
                 PressRaycast = data.pointerCurrentRaycast,
                 Position = data.position,
-                PressPosition = data.pressPosition
+                PressPosition = data.pressPosition,
+                Canvas = canvas,
+                RenderMode = canvas ? canvas.renderMode : default,
+                Camera = camera,
+                CameraViewport = camera ? camera.pixelRect : default,
+                CameraView = camera ? camera.worldToCameraMatrix : default,
+                CameraProjection = camera ? camera.projectionMatrix : default,
+                ScreenWidth = Screen.width,
+                ScreenHeight = Screen.height
             };
             capture.IsInvalid = _frame != Time.frameCount || _isFrameBlocked || !panel || panel != _framePanel ||
                 !ReferenceEquals(panel.Session, _frameSession) || !ReferenceEquals(_epoch, _frameEpoch) || panel.IsInputBlocked;
@@ -88,7 +106,35 @@ namespace YLFramework.Core
         /// <summary>确认面板仍加载、可接收输入且会话和捕获轮次均与接受时一致。</summary>
         private bool IsValid(Capture capture) => !capture.IsInvalid && capture.Panel && capture.Panel.IsLoaded &&
             !capture.Panel.IsInputBlocked && ReferenceEquals(capture.Panel.Session, capture.Session) &&
-            ReferenceEquals(capture.Epoch, _epoch);
+            ReferenceEquals(capture.Epoch, _epoch) && HasSameGeometry(capture);
+
+        /// <summary>坐标映射变化后旧按压不能在新映射下继续；只检查仍持有的手势，不轮询无捕获控件的相机矩阵。</summary>
+        private static bool HasSameGeometry(Capture capture)
+        {
+            if (!capture.Canvas || !capture.Panel.Root || capture.Panel.Root.Canvas != capture.Canvas ||
+                capture.Canvas.renderMode != capture.RenderMode || Screen.width != capture.ScreenWidth || Screen.height != capture.ScreenHeight)
+            {
+                return false;
+            }
+
+            var raycaster = capture.PressRaycast.module;
+            if (!ReferenceEquals(raycaster, null) && !raycaster)
+            {
+                return false;
+            }
+            var camera = raycaster ? raycaster.eventCamera : null;
+            if (camera != capture.Camera)
+            {
+                return false;
+            }
+            if (ReferenceEquals(capture.Camera, null))
+            {
+                return true;
+            }
+
+            return capture.Camera && capture.Camera.pixelRect.Equals(capture.CameraViewport) &&
+                capture.Camera.worldToCameraMatrix.Equals(capture.CameraView) && capture.Camera.projectionMatrix.Equals(capture.CameraProjection);
+        }
 
         /// <summary>先向模块撤销精确捕获，匹配成功后才对原标准控件执行取消收尾。</summary>
         private void Cancel(Capture capture, bool acceptingDown = false)

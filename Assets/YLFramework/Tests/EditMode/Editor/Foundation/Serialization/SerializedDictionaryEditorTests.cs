@@ -601,10 +601,20 @@ namespace YLFramework.Tests
             if (MenuPaths != null)
             {
                 var labels = new List<string>();
-                var method = typeof(EditorGUI).GetMethod("FillPropertyContextMenu", BindingFlags.Static | BindingFlags.NonPublic);
+#if UNITY_6000_2_OR_NEWER
+                var parameterTypes = new[] { typeof(SerializedProperty), typeof(SerializedProperty), typeof(GenericMenu) };
+#else
+                var parameterTypes = new[] { typeof(SerializedProperty), typeof(SerializedProperty), typeof(GenericMenu), typeof(VisualElement) };
+#endif
+                var method = typeof(EditorGUI).GetMethod("FillPropertyContextMenu", BindingFlags.Static | BindingFlags.NonPublic,
+                    null, parameterTypes, null);
+                Assert.That(method, Is.Not.Null, "The expected native property context-menu signature must exist.");
                 foreach (var path in MenuPaths)
                 {
-                    var menu = (GenericMenu)method.Invoke(null, new object[] { serializedObject.FindProperty(path), null, new GenericMenu(), null });
+                    var arguments = new object[parameterTypes.Length];
+                    arguments[0] = serializedObject.FindProperty(path);
+                    arguments[2] = new GenericMenu();
+                    var menu = (GenericMenu)method.Invoke(null, arguments);
                     var items = (IEnumerable)typeof(GenericMenu).GetProperty("menuItems", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(menu);
                     foreach (var item in items)
                     {

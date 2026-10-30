@@ -115,7 +115,7 @@ namespace YLFramework.Tests.ResourceBuild
             var scene = lease.Scene;
             var texture = scene.GetRootGameObjects().Single().GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
             var record = lease.Record;
-            Assert.That(record.Handle, Is.EqualTo(scene.handle));
+            Assert.That(record.Handle, Is.EqualTo((int)scene.handle));
             Assert.That(record.LoadSequence, Is.EqualTo(request.LoadSequence));
             Assert.That(record.CatalogDigest, Is.EqualTo(snapshot.Document.CatalogDigest));
             lease.Dispose();
@@ -161,7 +161,7 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(otherRecord.IsLoaded, Is.True);
             Assert.That(a.Scene.name, Is.EqualTo(b.Scene.name));
             Assert.That(otherRecord.Path, Is.Not.EqualTo(a.Record.Path));
-            Assert.That(new[] { a.Scene.handle, b.Scene.handle, otherRecord.Handle }.Distinct().Count(), Is.EqualTo(3));
+            Assert.That(new[] { (int)a.Scene.handle, (int)b.Scene.handle, otherRecord.Handle }.Distinct().Count(), Is.EqualTo(3));
             Assert.That(a.Record.LoadSequence, Is.Not.EqualTo(b.Record.LoadSequence));
             Assert.That(a.Record.SnapshotId, Is.EqualTo(b.Record.SnapshotId));
             var old = a.Record;

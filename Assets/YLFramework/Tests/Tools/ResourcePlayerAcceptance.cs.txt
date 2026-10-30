@@ -27,6 +27,28 @@ public sealed class ResourcePlayerAcceptance : MonoBehaviour
     [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, ExactSpelling = true)]
     private static extern uint GetModuleFileNameW(IntPtr module, System.Text.StringBuilder path, uint size);
     private static int ProcessId => checked((int)GetCurrentProcessId());
+    private static bool AcceptanceTestsCompiled
+    {
+        get
+        {
+#if YL_RESOURCE_ACCEPTANCE_TESTS
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
+    private static bool CandidateCompiled
+    {
+        get
+        {
+#if YL_RESOURCE_IL2CPP_CANDIDATE
+            return true;
+#else
+            return false;
+#endif
+        }
+    }
     private JObject _config;
     private JObject _result;
     private readonly Dictionary<string, string> _args = new(StringComparer.Ordinal);
@@ -77,9 +99,24 @@ public sealed class ResourcePlayerAcceptance : MonoBehaviour
             ["Development"] = Debug.isDebugBuild,
             ["Backend"] = Backend,
             ["LoopbackPinCompiled"] = typeof(ResourceRemoteSource).GetMethod("TrustLoopbackCertificate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) != null,
+            ["AcceptanceTestsCompiled"] = AcceptanceTestsCompiled,
+            ["CandidateCompiled"] = CandidateCompiled,
+            // 只记录音频设备上下文；本验收未播放 Clip，不能据此声称 DSP 已播放。
+            ["AudioPlayback"] = "ClipLoadedOnly",
             ["Command"] = _command,
             ["Mode"] = _mode,
             ["Store"] = _store,
+            ["Graphics"] = SystemInfo.graphicsDeviceType.ToString(),
+            ["GraphicsDevice"] = SystemInfo.graphicsDeviceName,
+            ["GraphicsVersion"] = SystemInfo.graphicsDeviceVersion,
+            ["Screen"] = new JObject { ["Width"] = Screen.width, ["Height"] = Screen.height },
+            ["AudioContext"] = new JObject
+            {
+                ["SampleRate"] = AudioSettings.outputSampleRate,
+                ["SpeakerMode"] = AudioSettings.speakerMode.ToString(),
+                ["DriverCapabilities"] = AudioSettings.driverCapabilities.ToString(),
+                ["DspTime"] = AudioSettings.dspTime
+            },
             ["Steps"] = new JArray()
         };
         _config = JObject.Parse(File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "r810-config.json")));
@@ -142,8 +179,13 @@ public sealed class ResourcePlayerAcceptance : MonoBehaviour
 
     private IEnumerator Run()
     {
-        Require(Application.unityVersion == "2022.3.62f3c1" && Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8,
-            "The actual Player must be Unity 2022.3.62f3c1 / Windows64.");
+        var expectedUnity = (string)_config["UnityVersion"] ?? "2022.3.62f3c1";
+        var expectedUgui = (string)_config["UguiVersion"] ?? "1.0.0";
+        Require((expectedUnity is "2022.3.62f3c1" or "6000.3.27f1") &&
+            (expectedUgui is "1.0.0" or "2.0.0") &&
+            (expectedUnity == "6000.3.27f1") == (expectedUgui == "2.0.0") &&
+            Application.unityVersion == expectedUnity && Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8,
+            "The actual Player must be the expected Unity / Windows64.");
         Require(Get("backend", Backend) == Backend, "Actual compiled backend differs from the requested backend.");
         _result["BeforeStoreExists"] = Directory.Exists(_store);
         _result["BeforeDisk"] = Disk();

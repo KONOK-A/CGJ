@@ -303,7 +303,7 @@ namespace YLFramework.Tests.ResourceBuild
                 Assert.That(module.ReadyAtStart, Is.True);
                 var scene = SceneManager.GetSceneByPath(snapshot.Document.Assets.Single(a => a.Address == "Owned.unity").LoadName);
                 Assert.That(scene.IsValid() && scene.isLoaded, Is.True);
-                Assert.That(system.GetSceneRecords().Single().Handle, Is.EqualTo(scene.handle));
+                Assert.That(system.GetSceneRecords().Single().Handle, Is.EqualTo((int)scene.handle));
                 var texture = scene.GetRootGameObjects().Single().GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
                 module.Close();
                 Assert.That(row.ExitCount, Is.EqualTo(1));

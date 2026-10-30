@@ -11,6 +11,9 @@ namespace YLFramework.Resource
     /// <remarks>仅接受受编译条件和运行检查约束的 Windows x64 后端；原生释放失败时保留所有者，不盲目重试。</remarks>
     internal sealed class CngSegmentAead : IDisposable
     {
+        /// <summary>IL2CPP 仅接收固定版本候选；候选须完成原生验收后才作为发行支持。</summary>
+        internal static bool IsAcceptedPlayerVersion(string version) => version is "2022.3.62f3c1" or "6000.3.27f1";
+
 #if UNITY_EDITOR_WIN || (!UNITY_EDITOR && UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP))
         private readonly object _gate = new();
         private IntPtr _algorithm;
@@ -29,7 +32,7 @@ namespace YLFramework.Resource
         internal static bool IsSupported => Environment.OSVersion.Platform == PlatformID.Win32NT && IntPtr.Size == 8
 #if ENABLE_IL2CPP && !UNITY_EDITOR
             // 该getter由Unity明确标记IsThreadSafe，可在认证worker中核对精确受测版本。
-            && UnityEngine.Application.unityVersion == "2022.3.62f3c1"
+            && IsAcceptedPlayerVersion(UnityEngine.Application.unityVersion)
 #endif
             ;
         internal static long ActiveAlgorithms => Interlocked.Read(ref _activeAlgorithms);

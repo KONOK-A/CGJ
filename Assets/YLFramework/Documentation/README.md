@@ -4,6 +4,16 @@ YLFramework 是整体交付、按需使用的 Unity 游戏框架。运行时主�
 
 本文档说明当前源码的接入方式与行为边界，不是完整 API Reference。方法签名以源码和 Editor 帮助为准，平台支持以各模块的限制为准。
 
+## Unity 兼容范围
+
+当前定点兼容环境为 Unity `2022.3.62f3c1` 与 `6000.3.27f1`，使用同一份框架源码、资产 GUID 和 C# 9 API。独立接收工程分别使用 UGUI `1.0.0` / `2.0.0`，共同依赖 Newtonsoft.Json `3.2.1`；不要把源码开发宿主的 Packages、ProjectSettings 或 Library 搬到接收工程。
+
+Windows64 的 Mono 与 IL2CPP Low 已按适用范围验证资源、正式 UI/输入和业务消费者。New/Both 的定点 Input System 分别为 `1.14.2` / `1.20.1`；Legacy 工程不需要额外安装 Input System。真实音频输出采样、原生输入、独立作者工具与程序集边界是分开的验证，不以初始化、metadata 存在或单元测试数量替代。
+
+可选 HybridCLR 的范围另外记录在其 [依赖说明](../Integrations/HybridCLR/Dependencies.json) 与 [接入说明](../Integrations/HybridCLR/README.md)：Unity 6.3 的原生结果依赖明确的维护 runtime，不是未修改官方 native 已修复。默认包不包含该可选叶子、官方 SDK、native、dnlib 或验收工具。DOTween 可选包只分发 wrapper，Standard 原包由使用者另取，不能混入 Pro 或据本地测试推断 vendor 再分发授权。
+
+这些结果不外推其它 Unity 补丁、移动端/WebGL、IL2CPP High、物理设备热插拔/触摸、任意动态泛型或共享 actions 配置。音频 PCM/RMS 结果不等于人工听音或 OS loopback。源码宿主专用与缺失历史制品的测试也不计独立接收已验证；准确支持范围与发行审计应和具体交付版本一起保存。
+
 ## 源码开发宿主
 
 源码仓库保留 `CGJ2024` 的目录、Git 历史与开发环境，当前产品身份为 `YLFrameworkDev`，默认构建与开发场景为 `Assets/Scenes/YLFrameworkDev.unity`。主游戏已迁入独立的 `SnakeUnbound` 工程和仓库，继续使用 XF/XFAB，不是 YL 的示例或产品依赖。

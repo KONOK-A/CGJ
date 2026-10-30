@@ -1,0 +1,12 @@
+diff --git a/libil2cpp/vm/GlobalMetadata.cpp b/libil2cpp/vm/GlobalMetadata.cpp
+--- a/libil2cpp/vm/GlobalMetadata.cpp
++++ b/libil2cpp/vm/GlobalMetadata.cpp
+@@ -1349,7 +1349,7 @@
+ 
+     IL2CPP_ASSERT(paramIndex >= 0 && paramIndex < methodDefinition.parameterCount);
+ 
+-    const Il2CppParameterDefinition parameterDefinition = GetParameterDefinitionFromIndex(klass->image, methodDefinition.parameterStart + paramIndex);
++    const Il2CppParameterDefinition parameterDefinition = GetParameterDefinitionFromIndex(methodDefinition, methodDefinition.parameterStart + paramIndex);
+ 
+     return {
+             GetStringFromIndex(parameterDefinition.nameIndex),

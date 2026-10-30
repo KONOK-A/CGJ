@@ -1,8 +1,9 @@
 #requires -Version 7.6
 [CmdletBinding()]
-param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021')
+param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021', [string]$Receiver)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+if ($Receiver) { throw 'Legacy-only relocation cannot change an immutable compatibility receiver; choose new short owner paths initially.' }
 $scope = . (Join-Path $PSScriptRoot 'Get-HybridCLRReceptionScope.ps1') -Root $Root
 $Root = $scope.Root
 $ownerPath = Join-Path $Root 'owner.json'

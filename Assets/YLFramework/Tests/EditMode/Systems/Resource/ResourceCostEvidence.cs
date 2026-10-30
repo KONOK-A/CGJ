@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.TestTools.TestRunner.Api;
 using UnityEngine;
+using YLFramework.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
@@ -19,23 +20,20 @@ namespace YLFramework.Tests.ResourceBuild
         private const string EnvironmentKey = "YL.Resource.B02F03.LoopbackEnvironment";
         private static readonly Observer _callback = new();
         public static string DirectoryPath => SessionState.GetString(StateKey, "");
+        private static string RepositoryPath => Path.GetFullPath(Application.dataPath + "/..")
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         /// <summary>仅配置本批自有非生产回环凭据；终态回调恢复原进程环境，原值从不进入证据。</summary>
-        public static void UseLoopbackEnvironment(string ownedRoot)
+        public static void UseLoopbackEnvironment(string ownedRoot, string scope, string purpose)
         {
             if (SessionState.GetString(EnvironmentKey, "").Length != 0)
             {
                 throw new InvalidOperationException("Loopback environment is already owned.");
             }
 
-            var owner = JObject.Parse(File.ReadAllText(Path.Combine(ownedRoot, "owner.json")));
-            if ((string)owner["scope"] != "B02+F03-20261017-0902" ||
-                !string.Equals(Path.GetFullPath(ownedRoot), Path.GetFullPath((string)owner["ownedRoot"]), StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException("Loopback owner mismatch.");
-            }
-
+            ownedRoot = ValidateOwner(ownedRoot, scope, purpose);
             var pfx = Path.Combine(ownedRoot, "loopback.pfx");
+            ResourceLocalSnapshot.RejectLinks(pfx);
             if (!File.Exists(pfx))
             {
                 throw new FileNotFoundException("Generate the owned loopback credential before measuring.");
@@ -75,6 +73,72 @@ namespace YLFramework.Tests.ResourceBuild
 
         public static bool OwnsLoopbackEnvironment => SessionState.GetString(EnvironmentKey, "").Length != 0;
 
+        private static string ValidateOwner(string ownedRoot, string scope, string purpose)
+        {
+            if (string.IsNullOrWhiteSpace(ownedRoot) || !Path.IsPathFullyQualified(ownedRoot) ||
+                string.IsNullOrWhiteSpace(scope) || string.IsNullOrWhiteSpace(purpose))
+            {
+                throw new ArgumentException("An absolute owned root and explicit scope and purpose are required.");
+            }
+
+            ownedRoot = Path.GetFullPath(ownedRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var repository = RepositoryPath;
+            if (string.Equals(ownedRoot, repository, StringComparison.OrdinalIgnoreCase) ||
+                ownedRoot.StartsWith(repository + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Evidence and loopback credentials must stay outside the repository.");
+            }
+
+            var ownerPath = Path.Combine(ownedRoot, "owner.json");
+            ResourceLocalSnapshot.RejectLinks(ownerPath);
+            var owner = JObject.Parse(File.ReadAllText(ownerPath));
+            var declaredRoot = (string)owner["ownedRoot"];
+            var declaredRepository = (string)owner["repository"];
+            if ((string)owner["scope"] != scope || (string)owner["purpose"] != purpose ||
+                string.IsNullOrWhiteSpace(declaredRoot) || !Path.IsPathFullyQualified(declaredRoot) ||
+                string.IsNullOrWhiteSpace(declaredRepository) || !Path.IsPathFullyQualified(declaredRepository) ||
+                !string.Equals(ownedRoot, Path.GetFullPath(declaredRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(repository, Path.GetFullPath(declaredRepository).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Evidence repository, root, scope or purpose does not match the caller.");
+            }
+
+            return ownedRoot;
+        }
+
+        /// <summary>发布fixture仅使用已验证的调用方身份和本次run，清理时复核同一标记，不推断历史归属。</summary>
+        public static string RequireRunOwner()
+        {
+            var path = DirectoryPath;
+            if (string.IsNullOrEmpty(path) || !Path.IsPathFullyQualified(path) || !Directory.Exists(path) ||
+                File.Exists(Path.Combine(path, "finished.json")))
+            {
+                throw new InvalidOperationException("An active explicit evidence run is required.");
+            }
+
+            var requestPath = Path.Combine(path, "request.json");
+            ResourceLocalSnapshot.RejectLinks(requestPath);
+            var request = JObject.Parse(File.ReadAllText(requestPath));
+            var root = ValidateOwner((string)request["OwnedRoot"], (string)request["Scope"], (string)request["Purpose"]);
+            var runId = (string)request["RunId"];
+            if (!string.Equals((string)request["Repository"], RepositoryPath, StringComparison.OrdinalIgnoreCase) ||
+                runId != Path.GetFileName(path) ||
+                !string.Equals(path, Path.Combine(root, runId), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("The request does not own this repository and run directory.");
+            }
+
+            return new JObject
+            {
+                ["repository"] = RepositoryPath,
+                ["ownedRoot"] = root,
+                ["scope"] = request["Scope"],
+                ["purpose"] = request["Purpose"],
+                ["runId"] = runId,
+                ["runDirectory"] = path
+            }.ToString(Formatting.None);
+        }
+
         static ResourceCostEvidence()
         {
             if (DirectoryPath.Length != 0 && !File.Exists(Path.Combine(DirectoryPath, "finished.json")))
@@ -85,8 +149,43 @@ namespace YLFramework.Tests.ResourceBuild
             AssemblyReloadEvents.beforeAssemblyReload += () => TestRunnerApi.UnregisterTestCallback(_callback);
         }
 
-        /// <summary>不保存场景、不覆盖已有run，不并发测试；路径须属于明确B02/F03 owner。</summary>
-        public static string Run(string ownedRoot, string runId, string[] testNames)
+        /// <summary>不保存场景、不覆盖已有run，不并发测试；路径、scope、purpose及测试选择均由调用方明确绑定。</summary>
+        public static string Run(string ownedRoot, string runId, string[] testNames, string scope, string purpose)
+        {
+            if (IsRunnerActive())
+            {
+                throw new InvalidOperationException("Never nest an evidence runner inside an active TestRunner.");
+            }
+            PrepareRun(ownedRoot, runId, testNames, scope, purpose);
+            var api = ScriptableObject.CreateInstance<TestRunnerApi>();
+            try
+            {
+                return api.Execute(new ExecutionSettings(new Filter { testMode = TestMode.EditMode, testNames = testNames }));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(api);
+            }
+        }
+
+        /// <summary>为已由官方CLI启动的同一次运行准备证据与终态观察者，不嵌套启动TestRunner。</summary>
+        public static void BeginRun(string ownedRoot, string runId, string[] testNames, string scope, string purpose)
+        {
+            if (!IsRunnerActive())
+            {
+                throw new InvalidOperationException("Only the active official runner may attach evidence without starting a new run.");
+            }
+            PrepareRun(ownedRoot, runId, testNames, scope, purpose);
+        }
+
+        private static bool IsRunnerActive()
+        {
+            var method = typeof(TestRunnerApi).GetMethod("IsRunActive", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+                null, Type.EmptyTypes, null) ?? throw new MissingMethodException("The fixed Test Framework has no active-run query.");
+            return (bool)method.Invoke(null, null);
+        }
+
+        private static void PrepareRun(string ownedRoot, string runId, string[] testNames, string scope, string purpose)
         {
             if (DirectoryPath.Length != 0 && !File.Exists(Path.Combine(DirectoryPath, "finished.json")))
             {
@@ -101,39 +200,38 @@ namespace YLFramework.Tests.ResourceBuild
                 throw new InvalidOperationException("A settled Editor with saved scenes and no active tests is required.");
             }
 
-            if (string.IsNullOrEmpty(runId) || runId.Any(x => !(x >= 'a' && x <= 'z' || x >= '0' && x <= '9' || x == '-')) || testNames == null || testNames.Length == 0)
+            if (string.IsNullOrEmpty(runId) || runId.Any(x => !(x >= 'a' && x <= 'z' || x >= '0' && x <= '9' || x == '-')) ||
+                testNames == null || testNames.Length == 0 || testNames.Any(string.IsNullOrWhiteSpace))
             {
                 throw new ArgumentException("An explicit run id and test selection are required.");
             }
 
-            ownedRoot = Path.GetFullPath(ownedRoot);
-            var owner = JObject.Parse(File.ReadAllText(Path.Combine(ownedRoot, "owner.json")));
-            if ((string)owner["scope"] != "B02+F03-20261017-0902" ||
-                !string.Equals(ownedRoot, Path.GetFullPath((string)owner["ownedRoot"]), StringComparison.OrdinalIgnoreCase))
+            ownedRoot = ValidateOwner(ownedRoot, scope, purpose);
+            if (OwnsLoopbackEnvironment &&
+                (!string.Equals(Environment.GetEnvironmentVariable("YL_RESOURCE_TEST_PFX"), Path.Combine(ownedRoot, "loopback.pfx"), StringComparison.OrdinalIgnoreCase) ||
+                    Environment.GetEnvironmentVariable("YL_RESOURCE_TEST_PASSWORD") != "b02f03-loopback-only"))
             {
-                throw new InvalidOperationException("Evidence owner mismatch.");
+                throw new InvalidOperationException("The owned loopback environment must belong to this evidence root.");
             }
 
             var path = Path.Combine(ownedRoot, runId);
-            if (Directory.Exists(path))
+            if (Directory.Exists(path) || File.Exists(path))
             {
                 throw new IOException("Refusing an existing run directory.");
             }
 
-            for (var cursor = new DirectoryInfo(ownedRoot); cursor != null; cursor = cursor.Parent)
-            {
-                if (cursor.Exists && (cursor.Attributes & FileAttributes.ReparsePoint) != 0)
-                {
-                    throw new IOException("Linked evidence root refused.");
-                }
-            }
-
+            ResourceLocalSnapshot.RejectLinks(path);
             Directory.CreateDirectory(path);
             SessionState.SetString(StateKey, path);
             Write("request", new
             {
                 StartedAtUtc = DateTime.UtcNow,
                 Unity = Application.unityVersion,
+                Repository = RepositoryPath,
+                OwnedRoot = ownedRoot,
+                Scope = scope,
+                Purpose = purpose,
+                RunId = runId,
                 TestNames = testNames
             });
             using (var sha = SHA256.Create())
@@ -183,15 +281,6 @@ namespace YLFramework.Tests.ResourceBuild
                 });
             }
             Register();
-            var api = ScriptableObject.CreateInstance<TestRunnerApi>();
-            try
-            {
-                return api.Execute(new ExecutionSettings(new Filter { testMode = TestMode.EditMode, testNames = testNames }));
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(api);
-            }
         }
 
         public static void Write(string name, object value)
@@ -229,9 +318,27 @@ namespace YLFramework.Tests.ResourceBuild
             }
             public void TestStarted(ITestAdaptor test)
             {
+                if (!test.IsSuite)
+                {
+                    Write("test-start-" + Guid.NewGuid().ToString("N"), new
+                    {
+                        ObservedAtUtc = DateTime.UtcNow,
+                        Name = test.FullName
+                    });
+                }
             }
             public void TestFinished(ITestResultAdaptor result)
             {
+                if (!result.Test.IsSuite)
+                {
+                    Write("test-finish-" + Guid.NewGuid().ToString("N"), new
+                    {
+                        ObservedAtUtc = DateTime.UtcNow,
+                        Name = result.FullName,
+                        Status = result.TestStatus.ToString(),
+                        result.ResultState
+                    });
+                }
             }
             public void RunFinished(ITestResultAdaptor result)
             {

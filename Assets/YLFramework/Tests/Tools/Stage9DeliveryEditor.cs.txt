@@ -40,7 +40,9 @@ public static class Stage9DeliveryEditor
             throw new InvalidOperationException("Wrong independent project identity.");
         }
 
-        if (Application.unityVersion != "2022.3.62f3c1" || EditorApplication.isPlayingOrWillChangePlaymode ||
+        var expectedUnity = (string)owner["UnityVersion"];
+        if ((expectedUnity != "2022.3.62f3c1" && expectedUnity != "6000.3.27f1") ||
+            Application.unityVersion != expectedUnity || EditorApplication.isPlayingOrWillChangePlaymode ||
             EditorUtility.scriptCompilationFailed || EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64)
         {
             throw new InvalidOperationException("Wrong actual Unity state.");
@@ -201,7 +203,11 @@ public static class Stage9DeliveryEditor
         camera.GetComponent<Camera>().clearFlags = CameraClearFlags.SolidColor;
         camera.GetComponent<Camera>().backgroundColor = new Color(.025f, .04f, .07f);
         EditorSceneManager.SaveScene(scene, Root + "/Bootstrap.unity");
-        var config = new JObject { ["Projects"] = new JArray() };
+        var neutral = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        new GameObject("Neutral camera", typeof(Camera), typeof(AudioListener));
+        EditorSceneManager.SaveScene(neutral, Root + "/Stage9Neutral.unity");
+        scene = EditorSceneManager.OpenScene(Root + "/Bootstrap.unity", OpenSceneMode.Single);
+        var config = new JObject { ["UnityVersion"] = Application.unityVersion, ["Projects"] = new JArray() };
         var publications = new JArray();
         foreach (var encrypted in new[] { false, true })
         {
@@ -214,6 +220,18 @@ public static class Stage9DeliveryEditor
             Wave(folder + "/Text/Tone.wav");
             PanelPrefab(folder + "/Visual/Panel.prefab", new Vector2(-240, 0));
             PanelPrefab(folder + "/Visual/Modal.prefab", new Vector2(240, 0));
+            if (!encrypted)
+            {
+                AssetDatabase.CreateFolder(folder, "Scenes");
+                foreach (var name in new[] { "A", "B" })
+                {
+                    var target = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                    new GameObject("Stage9 scene " + name, typeof(Camera));
+                    EditorSceneManager.SaveScene(target, folder + "/Scenes/Stage9" + name + ".unity");
+                }
+
+                scene = EditorSceneManager.OpenScene(Root + "/Bootstrap.unity", OpenSceneMode.Single);
+            }
             var project = ScriptableObject.CreateInstance<ResourceProject>();
             project.projectId = id;
             project.displayName = "Stage 9 independent " + id;
@@ -225,6 +243,11 @@ public static class Stage9DeliveryEditor
             project.groups.Add(Group("text", (folder + "/Text/Message.txt", "message"), (folder + "/Text/Tone.wav", "tone")));
             project.groups.Add(Group("ui", (folder + "/Visual/Panel.prefab", "panel"), (folder + "/Visual/Modal.prefab", "modal")));
             project.groups.Add(new ResourceGroup { id = "atlases", packing = ResourcePacking.Together });
+            if (!encrypted)
+            {
+                project.sourceDirectories.Add(new ResourceSourceDirectory { guid = AssetDatabase.AssetPathToGUID(folder + "/Scenes"), addressPrefix = "scenes" });
+                project.groups.Add(Group("scenes", (folder + "/Scenes/Stage9A.unity", "scene-a"), (folder + "/Scenes/Stage9B.unity", "scene-b")));
+            }
             AssetDatabase.CreateAsset(project, folder + "/Project.asset");
             var atlases = ResourceAtlasGenerator.CreateConfiguration(project, folder, "Generated");
             atlases.rules.Add(new ResourceAtlasRule
@@ -364,6 +387,72 @@ public static class Stage9DeliveryEditor
         CleanBatchScene();
     }
 
+    public static void ConfigureUrp()
+    {
+        Verify();
+        var package = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
+            .SingleOrDefault(item => item.name == "com.unity.render-pipelines.universal");
+        if (Application.unityVersion != "6000.3.27f1" || package == null || package.version != "17.3.0" ||
+            UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline || QualitySettings.renderPipeline)
+        {
+            throw new InvalidOperationException("Only the exact new 6.3/URP17.3.0 Built-in predecessor may be configured.");
+        }
+        var folder = Root + "/Urp";
+        if (Directory.Exists(folder) || File.Exists(folder + ".meta"))
+        {
+            throw new IOException("Never adopt or overwrite a prior URP configuration.");
+        }
+        var scene = EditorSceneManager.OpenScene(Root + "/Bootstrap.unity", OpenSceneMode.Single);
+        var type = AppDomain.CurrentDomain.GetAssemblies()
+            .Select(assembly => assembly.GetType("UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset"))
+            .Single(item => item != null);
+        var factory = type.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+            .Single(method => method.Name == "CreateRendererAsset" && method.GetParameters().Length == 4 &&
+                method.GetParameters()[0].ParameterType == typeof(string) && method.GetParameters()[1].ParameterType.IsEnum &&
+                method.GetParameters()[2].ParameterType == typeof(bool) && method.GetParameters()[3].ParameterType == typeof(string));
+        AssetDatabase.CreateFolder(Root, "Urp");
+        var path = folder + "/Pipeline.asset";
+        var renderer = (ScriptableObject)factory.Invoke(null, new object[]
+        {
+            path, Enum.Parse(factory.GetParameters()[1].ParameterType, "UniversalRenderer"), true, "Renderer"
+        });
+        var create = type.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public)
+            .Single(method => method.Name == "Create" && method.GetParameters().Length == 1 &&
+                method.GetParameters()[0].ParameterType.IsInstanceOfType(renderer));
+        var pipeline = (UnityEngine.Rendering.RenderPipelineAsset)create.Invoke(null, new object[] { renderer });
+        AssetDatabase.CreateAsset(pipeline, path);
+        var shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (!shader)
+        {
+            throw new InvalidOperationException("Official URP Unlit shader is missing.");
+        }
+        var material = new Material(shader);
+        material.SetColor("_BaseColor", Color.white);
+        AssetDatabase.CreateAsset(material, folder + "/Display.mat");
+        var consumer = Object.FindObjectOfType<Stage9DeliveryProbe>();
+        consumer.urpMaterial = material;
+        EditorUtility.SetDirty(consumer);
+        EditorSceneManager.SaveScene(scene, Root + "/Bootstrap.unity");
+        UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = pipeline;
+        QualitySettings.renderPipeline = pipeline;
+        AssetDatabase.SaveAssetIfDirty(renderer);
+        AssetDatabase.SaveAssetIfDirty(pipeline);
+        var paths = new[] { path, folder + "/Pipeline_Renderer.asset", folder + "/Display.mat", Root + "/Bootstrap.unity" };
+        Write("urp-configuration-" + Run + ".json", JObject.FromObject(new
+        {
+            Project, Unity = Application.unityVersion, Package = package.version,
+            GraphicsPipeline = AssetDatabase.GetAssetPath(UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline),
+            QualityPipeline = AssetDatabase.GetAssetPath(QualitySettings.renderPipeline),
+            QualityLevel = QualitySettings.GetQualityLevel(),
+            OfficialFactory = factory.ToString(),
+            Files = paths.Select(item => new { Path = item, Guid = AssetDatabase.AssetPathToGUID(item), Sha256 = Sha(item), MetaSha256 = Sha(item + ".meta") }),
+            EditorSha256 = Sha(Root + "/Editor/Stage9DeliveryEditor.cs"), ProbeSha256 = Sha(Root + "/Stage9DeliveryProbe.cs"),
+            ConfigurationOnly = true, VisualPassed = false
+        }));
+        CleanBatchScene();
+        Debug.Log("STAGE9_URP_CONFIGURED");
+    }
+
     public static void BuildMono() => Build(ScriptingImplementation.Mono2x, "Mono");
     public static void BuildIl2Cpp() => Build(ScriptingImplementation.IL2CPP, "Il2Cpp");
     private static void Build(ScriptingImplementation backend, string name)
@@ -373,6 +462,15 @@ public static class Stage9DeliveryEditor
         if (Directory.Exists(output))
         {
             throw new IOException("Never overwrite an existing Player.");
+        }
+
+        foreach (var source in Directory.GetFiles("Assets/StreamingAssets", "*", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(output, "Stage9Delivery_Data/StreamingAssets", Path.GetRelativePath("Assets/StreamingAssets", source));
+            if (Path.DirectorySeparatorChar == '\\' && destination.Length >= 260)
+            {
+                throw new PathTooLongException("Use a shorter build Run id before copying native StreamingAssets: " + destination);
+            }
         }
 
         Directory.CreateDirectory(output);
@@ -410,8 +508,8 @@ public static class Stage9DeliveryEditor
         consumer.optionalLogger = optional != null;
         EditorUtility.SetDirty(consumer);
         EditorSceneManager.SaveScene(scene, Root + "/Bootstrap.unity");
-        PlayerSettings.companyName = "YLFramework-Independent-Acceptance";
-        PlayerSettings.productName = "Stage9-" + name;
+        PlayerSettings.companyName = Path.GetFileName(Delivery);
+        PlayerSettings.productName = Path.GetFileName(Project) + "-" + name;
         PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_Standard);
         PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, backend);
         PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, backend == ScriptingImplementation.IL2CPP ? ManagedStrippingLevel.Low : ManagedStrippingLevel.Disabled);
@@ -422,7 +520,7 @@ public static class Stage9DeliveryEditor
 
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
-            scenes = new[] { Root + "/Bootstrap.unity" },
+            scenes = new[] { Root + "/Bootstrap.unity", Root + "/Stage9Neutral.unity" },
             locationPathName = Path.Combine(output, "Stage9Delivery.exe"),
             target = BuildTarget.StandaloneWindows64,
             options = BuildOptions.None

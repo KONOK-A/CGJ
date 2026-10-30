@@ -142,7 +142,14 @@ namespace YLFramework.Tests.ResourceBuild
             }
             finally
             {
-                EditorSceneManager.RestoreSceneManagerSetup(setup);
+                if (setup.Length != 0)
+                {
+                    EditorSceneManager.RestoreSceneManagerSetup(setup);
+                }
+                else
+                {
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                }
             }
             var project = ScriptableObject.CreateInstance<ResourceProject>();
             project.projectId = "yl-release-" + Guid.NewGuid().ToString("N");

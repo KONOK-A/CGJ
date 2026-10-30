@@ -258,8 +258,7 @@ namespace YLFramework.Tests.ResourceBuild
             using (var old = system.Acquire<TextAsset>(Address()))
             {
                 using var blocked = system.ActivatePreparedUpdateAsync(prepared);
-                yield return Wait(blocked);
-                Busy(blocked);
+                yield return Busy(blocked);
                 Assert.That(old.Asset.text, Is.EqualTo("first release content"));
             }
             Assert.That(File.Exists(ProjectPath(store)), Is.False, "Busy cannot advance active or release history.");

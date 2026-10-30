@@ -15,6 +15,11 @@ using YLFramework.Skill;
 using YLFramework.Editor.Buff;
 using YLFramework.Editor.Mission;
 using YLFramework.Editor.Skill;
+#if UNITY_6000_2_OR_NEWER
+using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
+#else
+using TreeView = UnityEditor.IMGUI.Controls.TreeView;
+#endif
 
 namespace YLFramework.Tests.Extensions.Domain
 {
@@ -375,7 +380,7 @@ namespace YLFramework.Tests.Extensions.Domain
                 buff.effects.Add(effect);
             }
             var treeType = controller.Assembly.GetType("YLFramework.Editor." + module + "." + module + "ListTree");
-            var tree = (UnityEditor.IMGUI.Controls.TreeView)Activator.CreateInstance(treeType, new UnityEditor.IMGUI.Controls.TreeViewState(), root);
+            var tree = (TreeView)Activator.CreateInstance(treeType, new UnityEditor.IMGUI.Controls.TreeViewState(), root);
             var previousFocus = EditorWindow.focusedWindow;
             var window = ScriptableObject.CreateInstance<YLFramework.Tests.Extensions.Shared.E0ReorderableTestWindow>();
             window.Tree = tree;
@@ -406,7 +411,7 @@ namespace YLFramework.Tests.Extensions.Domain
                         type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).SetValue(args, value);
                     }
                 }
-                Set("parentItem", typeof(UnityEditor.IMGUI.Controls.TreeView).GetProperty("rootItem", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tree));
+                Set("parentItem", typeof(TreeView).GetProperty("rootItem", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tree));
                 Set("insertAtIndex", 2);
                 Set("performDrop", true);
                 window.Dispatch(EventType.DragPerform, () =>

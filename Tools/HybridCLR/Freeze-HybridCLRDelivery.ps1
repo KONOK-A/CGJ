@@ -2,10 +2,15 @@
 [CmdletBinding()]
 param(
     [string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021',
-    [string]$Delivery = 'G:\Unity\H26Delivery'
+    [string]$Delivery = 'G:\Unity\H26Delivery',
+    [string]$Receiver
 )
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+if ($Receiver -or [IO.Path]::GetFullPath($Root).StartsWith('G:\Unity\U63-20261027-c63a1', [StringComparison]::OrdinalIgnoreCase) -or
+    [IO.Path]::GetFullPath($Delivery).StartsWith('G:\Unity\U63-20261027-c63a1', [StringComparison]::OrdinalIgnoreCase)) { throw 'Legacy-only freeze has fixed runs and Plan; it cannot freeze Unity 6.3 compatibility evidence.' }
+$receptionOwner = [IO.File]::ReadAllText((Join-Path $Root 'owner.json')) | ConvertFrom-Json -AsHashtable
+if ($receptionOwner.ContainsKey('schemaVersion')) { throw 'Legacy-only freeze rejects versioned compatibility owners.' }
 $owner = [IO.File]::ReadAllText((Join-Path $Delivery 'owner.json')) | ConvertFrom-Json
 if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-final-delivery' -or -not (Test-Path -LiteralPath $Delivery)) { throw 'Explicit persistent delivery ownership required.' }
 $native = [IO.File]::ReadAllText((Join-Path $Root 'native-final-audit.json')) | ConvertFrom-Json

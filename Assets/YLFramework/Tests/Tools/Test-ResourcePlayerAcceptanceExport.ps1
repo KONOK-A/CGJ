@@ -47,11 +47,11 @@ foreach ($pair in $records.GetEnumerator()) {
     } elseif ($record.ContainsKey('asset') -and $record['asset'].Length -ne 0) { throw 'Directory has an unexpected payload.' }
     if ($path -match '/Tests/|/R810/|^Packages/|/StreamingAssets/|^Temp/|^Library/|XFAB|DOTween\.dll$|/(bcrypt|ncrypt|crypt32|Newtonsoft\.Json)\.dll$|\.(pfx|p12|pem|key)$') { throw "Excluded delivery path: $path" }
 }
-# 原Exporter显式导出六根和LICENSE；其共同父目录身份用于载体，但不是必导出的第七根。
+# 原Exporter显式导出六根、LICENSE和AGENTS；其共同父目录身份用于载体，但不是必导出的第七根。
 $required = [Collections.Generic.HashSet[string]]::new($expected,[StringComparer]::Ordinal)
 $null = $required.Remove('Assets/YLFramework')
 if (-not $required.IsSubsetOf($paths)) { throw ('The exact export-root/meta closure is incomplete: ' + (($required | Where-Object { -not $paths.Contains($_) }) -join ', ')) }
-foreach ($required in @('Assets/YLFramework/LICENSE.md','Assets/YLFramework/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll',
+foreach ($required in @('Assets/YLFramework/LICENSE.md','Assets/YLFramework/AGENTS.md','Assets/YLFramework/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll',
     'Assets/YLFramework/Plugins/BouncyCastle/SOURCE.txt')) {
     if (-not $paths.Contains($required)) { throw "Applicable notice missing: $required" }
 }

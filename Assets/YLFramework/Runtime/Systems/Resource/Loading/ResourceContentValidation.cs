@@ -206,7 +206,8 @@ namespace YLFramework.Resource
             }
             catch (Exception error)
             {
-                throw Failure(error, "Content header validation failed for " + file.RelativeFile + ".");
+                var identity = file is ResourceCatalogBundle bundle ? bundle.LogicalId + " (" + file.RelativeFile + ")" : file.RelativeFile;
+                throw Failure(error, "Content header validation failed for " + identity + ".");
             }
         }
 

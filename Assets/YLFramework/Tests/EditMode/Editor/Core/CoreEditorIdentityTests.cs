@@ -136,7 +136,7 @@ namespace YLFramework.Core.Editor.Tests
         public IEnumerator NewUsageRulesHaveActualUnityPlayerPositiveAndNegativeWitnesses()
             => CompileNewUsageWitnesses(AssemblyBuilderFlags.DevelopmentBuild);
 
-        private static IEnumerator CompileNewUsageWitnesses(AssemblyBuilderFlags flags)
+        internal static IEnumerator CompileNewUsageWitnesses(AssemblyBuilderFlags flags)
         {
             var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
             var runtime = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player)

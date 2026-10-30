@@ -14,6 +14,7 @@ using UnityEditor.U2D;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.U2D;
+using UnityEngine.UI;
 using YLFramework.Editor.Resource;
 using YLFramework.Resource;
 using Object = UnityEngine.Object;
@@ -23,7 +24,16 @@ public static class ResourcePlayerAcceptanceBuild
 {
     private const string Root = "Assets/R810";
     private static string Carrier => Path.GetDirectoryName(Application.dataPath);
-    private static string Evidence => (string)JObject.Parse(File.ReadAllText(Path.Combine(Carrier, "r810-owner.json")))["Evidence"];
+    private static JObject Owner => JObject.Parse(File.ReadAllText(Path.Combine(Carrier, "r810-owner.json")));
+    private static string Evidence => (string)Owner["Evidence"];
+    private static string ExpectedUnity => (string)Owner["UnityVersion"] ?? "2022.3.62f3c1";
+    private static string ExpectedUgui => (string)Owner["UguiVersion"] ?? "1.0.0";
+    private static string Argument(string name, string fallback)
+    {
+        var args = Environment.GetCommandLineArgs();
+        var index = Array.IndexOf(args, name);
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : fallback;
+    }
 
     public static void Generate()
     {
@@ -37,7 +47,7 @@ public static class ResourcePlayerAcceptanceBuild
         PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_Standard);
         EditorSettings.spritePackerMode = SpritePackerMode.SpriteAtlasV2;
         var bootstrap = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        new GameObject("Acceptance Camera").AddComponent<Camera>();
+        new GameObject("Acceptance Camera", typeof(Camera), typeof(AudioListener));
         EditorSceneManager.SaveScene(bootstrap, Root + "/Bootstrap.unity");
         AssetDatabase.CreateFolder(Root, "Content");
         // Deployer只管理YLFrameworkResources，载体显式创建自己的StreamingAssets父目录。
@@ -47,6 +57,8 @@ public static class ResourcePlayerAcceptanceBuild
         }
 
         var config = JObject.Parse(File.ReadAllText(Path.Combine(Evidence, "public-config.json")));
+        config["UnityVersion"] = ExpectedUnity;
+        config["UguiVersion"] = ExpectedUgui;
         config["None"] = new JArray();
         config["Encrypted"] = new JArray();
         var publications = new JArray();
@@ -172,39 +184,50 @@ public static class ResourcePlayerAcceptanceBuild
     {
         Verify();
         var args = Environment.GetCommandLineArgs();
-        var index = Array.IndexOf(args, "-r810-build");
-        var name = index >= 0 ? args[index + 1] : "Original";
+        var name = Argument("-r810-build", "Original");
         var output = Path.Combine(Carrier, "Builds", name);
         if (Directory.Exists(output))
         {
             throw new IOException("Refusing to overwrite Player evidence.");
         }
 
-        Directory.CreateDirectory(output);
-        var backendIndex = Array.IndexOf(args, "-r810-backend");
-        var backend = backendIndex >= 0 ? (ScriptingImplementation)Enum.Parse(typeof(ScriptingImplementation), args[backendIndex + 1]) : ScriptingImplementation.Mono2x;
+        var backend = (ScriptingImplementation)Enum.Parse(typeof(ScriptingImplementation), Argument("-r810-backend", "Mono2x"));
         if (backend != ScriptingImplementation.Mono2x && backend != ScriptingImplementation.IL2CPP)
         {
             throw new InvalidOperationException("Unsupported acceptance backend.");
         }
 
+        var profile = Argument("-r810-profile", "auto");
+        if (profile != "auto" && profile != "development" && profile != "nondevelopment")
+        {
+            throw new InvalidOperationException("Unsupported acceptance development profile.");
+        }
+
+        var acceptance = name.StartsWith("C", StringComparison.Ordinal);
+        var development = profile == "auto" ? !name.StartsWith("R", StringComparison.Ordinal) : profile == "development";
+        if (acceptance && !development)
+        {
+            throw new InvalidOperationException("The acceptance pin is Development only; do not weaken it for a non-Development build.");
+        }
+
+        var candidate = args.Contains("-r810-il2cpp-candidate");
+        if (candidate && (backend != ScriptingImplementation.IL2CPP || !development || !acceptance))
+        {
+            throw new InvalidOperationException("Candidate policy is isolated C-prefixed IL2CPP Development only.");
+        }
+
+        PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_Standard);
         PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, backend);
+        PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, backend == ScriptingImplementation.IL2CPP ? ManagedStrippingLevel.Low : ManagedStrippingLevel.Disabled);
         if (backend == ScriptingImplementation.IL2CPP)
         {
-            PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, ManagedStrippingLevel.Low);
             PlayerSettings.SetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone, Il2CppCompilerConfiguration.Release);
         }
         PlayerSettings.companyName = "YL-Resource-Acceptance";
         PlayerSettings.productName = "R810-" + name;
-        var development = !name.StartsWith("R", StringComparison.Ordinal);
-        var candidate = args.Contains("-r810-il2cpp-candidate");
-        if (candidate && backend != ScriptingImplementation.IL2CPP)
-        {
-            throw new InvalidOperationException("Candidate policy is isolated IL2CPP only; pin still requires Development and acceptance defines.");
-        }
 
         var defines = new List<string>();
-        if (name.StartsWith("C", StringComparison.Ordinal))
+        if (acceptance)
         {
             defines.Add("YL_RESOURCE_ACCEPTANCE_TESTS");
         }
@@ -214,6 +237,7 @@ public static class ResourcePlayerAcceptanceBuild
             defines.Add("YL_RESOURCE_IL2CPP_CANDIDATE");
         }
 
+        Directory.CreateDirectory(output);
         File.Copy(Path.Combine(Carrier, "source-identity.json"), Path.Combine(Evidence, "build-" + name + "-source.json"));
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
@@ -264,12 +288,15 @@ public static class ResourcePlayerAcceptanceBuild
             ["Warnings"] = report.summary.totalWarnings,
             ["Seconds"] = report.summary.totalTime.TotalSeconds,
             ["Unity"] = Application.unityVersion,
+            ["UguiVersion"] = ExpectedUgui,
             ["Backend"] = PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone).ToString(),
             ["Options"] = report.summary.options.ToString(),
             ["Development"] = development,
+            ["DevelopmentProfile"] = profile,
             ["ManagedStripping"] = PlayerSettings.GetManagedStrippingLevel(BuildTargetGroup.Standalone).ToString(),
             ["CppConfiguration"] = backend == ScriptingImplementation.IL2CPP ? PlayerSettings.GetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone).ToString() : null,
             ["CandidateValidation"] = candidate,
+            ["BuildGuid"] = report.summary.guid.ToString(),
             ["ExtraDefines"] = new JArray(defines),
             ["SourceIdentitySha256"] = Sha(Path.Combine(Carrier, "source-identity.json")),
             ["Target"] = report.summary.platform.ToString(),
@@ -302,10 +329,19 @@ public static class ResourcePlayerAcceptanceBuild
             throw new InvalidOperationException("Not an owned isolated carrier.");
         }
 
-        if (Application.unityVersion != "2022.3.62f3c1" || EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 ||
+        if ((ExpectedUnity != "2022.3.62f3c1" && ExpectedUnity != "6000.3.27f1") ||
+            (ExpectedUgui != "1.0.0" && ExpectedUgui != "2.0.0") ||
+            (ExpectedUnity == "6000.3.27f1") != (ExpectedUgui == "2.0.0") ||
+            Application.unityVersion != ExpectedUnity || EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 ||
             EditorApplication.isPlayingOrWillChangePlaymode || EditorUtility.scriptCompilationFailed)
         {
             throw new InvalidOperationException("Wrong actual Unity state.");
+        }
+
+        var ugui = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(Button).Assembly);
+        if (ugui == null || ugui.version != ExpectedUgui)
+        {
+            throw new InvalidOperationException("The actual UGUI package does not match the carrier identity.");
         }
 
         var identity = JArray.Parse(File.ReadAllText(Path.Combine(Carrier, "source-identity.json")));

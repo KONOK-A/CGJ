@@ -764,7 +764,14 @@ namespace YLFramework.Tests.Http
             Pre(native => evidence.Add(new NativeEvidence(native)));
             var first = Start(() => HttpManager.Get(_server.Url("/slow"), null, null));
             var second = Start(() => HttpManager.PostBody(_server.Url("/slow"), "{}", null));
-            yield return WaitUntil(() => _server.RequestCount == 2, 5);
+            var deadline = Time.realtimeSinceStartup + 5;
+            while (_server.RequestCount != 2 && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            _server.AssertHealthy();
+            Assert.That(_server.RequestCount, Is.EqualTo(2),
+                $"Both owned slow requests must reach the server before closing execution; first={first.Status}/{first.ResponseCode}/{first.Error}, second={second.Status}/{second.ResponseCode}/{second.Error}.");
             var completed = 0;
             first.AddCompleteEvent(_ =>
             {

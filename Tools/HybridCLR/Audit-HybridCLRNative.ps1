@@ -1,8 +1,11 @@
 #requires -Version 7.6
 [CmdletBinding()]
-param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021', [switch]$RequireRelease)
+param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021', [switch]$RequireRelease, [string]$Receiver)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+if ($Receiver -or [IO.Path]::GetFullPath($Root).StartsWith('G:\Unity\U63-20261027-c63a1', [StringComparison]::OrdinalIgnoreCase)) { throw 'Legacy-only native audit has fixed historical runs, not the new compatibility matrix.' }
+$receptionOwner = [IO.File]::ReadAllText((Join-Path $Root 'owner.json')) | ConvertFrom-Json -AsHashtable
+if ($receptionOwner.ContainsKey('schemaVersion')) { throw 'Legacy-only native audit rejects versioned compatibility owners.' }
 function Read-Receipt([string]$Name) { [IO.File]::ReadAllText((Join-Path $Root ($Name + '.json'))) | ConvertFrom-Json }
 $owner = Read-Receipt 'owner'
 if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-independent-reception') { throw 'Wrong native acceptance owner.' }

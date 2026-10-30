@@ -520,8 +520,21 @@ namespace YLFramework.Tests.Help
                         alignment = TextAnchor.UpperLeft,
                         padding = new RectOffset(0, 0, 3, 4)
                     };
-                    foreach (var text in new[] { "屏幕屏幕屏幕屏幕屏幕", "Delay\r\n屏幕 Delay", "Task<T> a+b <color>" })
+                    foreach (var text in new[] { "屏幕屏幕屏幕屏幕屏幕", "Delay\r\n屏幕 Delay", "Delay\n屏幕 Delay", "A\r\nB\r\nC", "A\U0001F600B", "Task<T> a+b <color>" })
                     {
+#if UNITY_6000_2_OR_NEWER
+                        // 明确列出预期元素索引，不复用被测产品的转换算法。
+                        var cursorIndices = text switch
+                        {
+                            "Delay\r\n屏幕 Delay" => new[] { 0, 1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 },
+                            "A\r\nB\r\nC" => new[] { 0, 1, 1, 2, 3, 3, 4, 5 },
+                            "A\U0001F600B" => new[] { 0, 1, 1, 2, 3 },
+                            _ => null
+                        };
+                        int CursorIndex(int sourceIndex) => cursorIndices == null ? sourceIndex : cursorIndices[sourceIndex];
+#else
+                        int CursorIndex(int sourceIndex) => sourceIndex;
+#endif
                         foreach (var width in new[] { 32f, 71f, 240f })
                         {
                             var rect = new Rect(12, 12, width, style.CalcHeight(new GUIContent(text), width));
@@ -539,14 +552,49 @@ namespace YLFramework.Tests.Help
                             var content = new GUIContent(text);
                             for (var i = 0; i < text.Length; i++)
                             {
-                                if (char.IsWhiteSpace(text[i]))
+                                if (char.IsWhiteSpace(text[i]) || (i > 0 && char.IsLowSurrogate(text[i]) && char.IsHighSurrogate(text[i - 1])))
                                 {
                                     continue;
                                 }
 
-                                var cursor = style.GetCursorPixelPosition(rect, content, i);
-                                Assert.That(fragments.Any(fragment => Mathf.Abs(fragment.y - cursor.y) < 0.5f &&
-                                    cursor.x >= fragment.xMin - 0.5f && cursor.x < fragment.xMax), Is.True, $"Missing glyph {i} at {width}");
+                                var cursor = style.GetCursorPixelPosition(rect, content, CursorIndex(i));
+                                var covered = fragments.Any(fragment => Mathf.Abs(fragment.y - cursor.y) < 0.5f &&
+                                    cursor.x >= fragment.xMin - 0.5f && cursor.x < fragment.xMax);
+                                if (!covered)
+                                {
+                                    var unwrapped = new GUIStyle(style) { wordWrap = false };
+                                    var first = Math.Max(0, i - 1);
+                                    var carets = Enumerable.Range(first, Math.Min(text.Length, i + 1) - first + 1)
+                                        .Select(index => $"{index}->{CursorIndex(index)}:wrapped={style.GetCursorPixelPosition(rect, content, CursorIndex(index)):F3},unwrapped={unwrapped.GetCursorPixelPosition(rect, content, CursorIndex(index)):F3}");
+                                    Assert.Fail($"Missing glyph {i} at {width}; text={text.Replace("\r", "\\r").Replace("\n", "\\n")}; rect={rect:F3}; lineHeight={style.lineHeight}; font={style.font}; clipping={style.clipping}; fixed={style.fixedWidth}/{style.fixedHeight}; dpi={EditorGUIUtility.pixelsPerPoint}\n" +
+                                        string.Join("; ", carets) + "\nfragments=" + string.Join("; ", fragments.Select(fragment => fragment.ToString("F3"))));
+                                }
+                            }
+
+                            var singleRanges = text switch
+                            {
+                                "Delay\r\n屏幕 Delay" => new[] { new Editor.HelpSearchHighlight.Range(7, 8), new Editor.HelpSearchHighlight.Range(14, 15) },
+                                "A\r\nB\r\nC" => new[] { new Editor.HelpSearchHighlight.Range(3, 4), new Editor.HelpSearchHighlight.Range(6, 7) },
+                                "A\U0001F600B" => new[] { new Editor.HelpSearchHighlight.Range(3, 4) },
+                                _ => Array.Empty<Editor.HelpSearchHighlight.Range>()
+                            };
+                            foreach (var range in singleRanges)
+                            {
+                                var single = Editor.HelpSearchHighlight.BuildFragments(text, style, rect, new[] { range });
+                                Assert.That(single, Has.Length.EqualTo(1), $"Single match [{range.Start},{range.End}) at {width}");
+                                var start = style.GetCursorPixelPosition(rect, content, CursorIndex(range.Start));
+                                var end = style.GetCursorPixelPosition(rect, content, CursorIndex(range.End));
+                                Assert.That(single[0].width, Is.GreaterThan(0));
+                                Assert.That(single[0].xMin, Is.EqualTo(start.x).Within(0.5f));
+                                Assert.That(single[0].yMin, Is.EqualTo(start.y).Within(0.5f));
+                                Assert.That(single[0].xMax, Is.EqualTo(end.x).Within(0.5f));
+                            }
+
+                            var lineBreak = text.IndexOf("\r\n", StringComparison.Ordinal);
+                            if (lineBreak >= 0)
+                            {
+                                Assert.That(Editor.HelpSearchHighlight.BuildFragments(text, style, rect,
+                                    new[] { new Editor.HelpSearchHighlight.Range(lineBreak, lineBreak + 2) }), Is.Empty);
                             }
                         }
                     }

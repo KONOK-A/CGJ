@@ -177,7 +177,7 @@ namespace YLFramework.Integrations.DomainExcel.Editor
                         throw new InvalidOperationException($"任务 {change.Key} 的条件必须为数组。");
                     foreach (var condition in conditions)
                     {
-                        var name = (string)condition["paramName"];
+                        var name = (string)condition["param_name"];
                         if (!missions.parameters.Exists(parameter => parameter.name == name))
                             throw new InvalidOperationException($"任务 {change.Key} 的参数不存在: {name}，请先显式导入参数。");
                     }

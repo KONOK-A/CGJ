@@ -129,6 +129,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
             _isBusy = true;
             try
             {
+                HybridCLRBuildInputs inputs = null;
                 if (!Run(report, "PlayerPreflight", () =>
                 {
                     if (profile.baseProfile)
@@ -137,6 +138,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                     }
 
                     ValidatePlayerOptions(profile, options);
+                    inputs = HybridCLRBuildInputs.Capture(profile);
                 }, cancellation))
                 {
                     return report;
@@ -161,7 +163,11 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                     return report;
                 }
 
-                if (!Run(report, "EmptyMethodBridge", () => global::HybridCLR.Commands.MethodBridgeGeneratorCommand.GenerateEmptyMethodBridgeAndReversePInvokeWrapper(profile.recipe.target), cancellation))
+                if (!Run(report, "EmptyMethodBridge", () =>
+                {
+                    profile = inputs.Reload();
+                    global::HybridCLR.Commands.MethodBridgeGeneratorCommand.GenerateEmptyMethodBridgeAndReversePInvokeWrapper(profile.recipe.target);
+                }, cancellation))
                 {
                     return report;
                 }
@@ -176,6 +182,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
 
                 if (!Run(report, "FullMethodBridge", () =>
                 {
+                    profile = inputs.Reload();
                     prepared = AnalyzeStripped(profile, compiled.HotUpdate);
                     GenerateBridge(prepared, profile.development, SettingsUtil.GeneratedCppDir + "/MethodBridge.inc");
                 }, cancellation))
@@ -198,12 +205,21 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                     return report;
                 }
 
-                if (!Run(report, "ResourcePublish", () => PublishResources(report, profile, cancellation, provider), cancellation))
+                if (!Run(report, "ResourcePublish", () =>
+                {
+                    profile = inputs.Reload();
+                    PublishResources(report, profile, cancellation, provider);
+                    profile = inputs.Reload();
+                }, cancellation))
                 {
                     return report;
                 }
 
-                if (!Run(report, "Deploy", () => report.Deployment = ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(report.Release), cancellation), cancellation))
+                if (!Run(report, "Deploy", () =>
+                {
+                    report.Deployment = ResourceBuiltInDeployer.Deploy(ResourceBuiltInDeployer.Preflight(report.Release), cancellation);
+                    profile = inputs.Reload();
+                }, cancellation))
                 {
                     return report;
                 }
@@ -219,6 +235,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
                         }
 
                         ValidatePlayerOutputs(options.locationPathName, report.PlayerBuild.summary.outputPath);
+                        profile = inputs.Reload();
                     }, cancellation))
                     {
                         return report;
@@ -227,6 +244,7 @@ namespace YLFramework.Integrations.HybridCLR.Editor
 
                 Run(report, "Baseline", () =>
                 {
+                    profile = inputs.Reload();
                     var final = AnalyzeStripped(profile, compiled.HotUpdate);
                     VerifyFinalAot(prepared, final, registration);
                     var baseline = new HybridCLRBuildBaseline

@@ -12,7 +12,10 @@
         "assemblyEntry": "lib/netstandard2.0/MiniExcel.dll",
         "assemblySha256": "0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e",
         "packageDependencies": [],
-        "binaryModified": false
+        "binaryModified": false,
+        "license": "Apache-2.0",
+        "licenseFile": "Licenses/MiniExcel-LICENSE.txt",
+        "attributionFile": "Licenses/MiniExcel-ATTRIBUTION.txt"
     },
     "adaptedSource": {
         "name": "XF ExcelSystem",
@@ -21,6 +24,8 @@
         "upstream": "https://gitee.com/xianfengkeji/xfgame-framework.excel-system.git",
         "file": "Editor/ExcelManager.cs",
         "sha256": "ebe70a2ed0484d4f967af189be17fac8b134da19ea3adcab8b6c265f27a9e496",
+        "license": "MIT",
+        "licenseFile": "Licenses/XF-ExcelSystem-LICENSE.txt",
         "excluded": ["EPPlus.dll", "old XF identity", "installation tooling", "logos", "old metadata"]
     }
 }

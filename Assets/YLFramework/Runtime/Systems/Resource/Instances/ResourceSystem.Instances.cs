@@ -152,13 +152,13 @@ namespace YLFramework.Resource
                 throw new ArgumentNullException(nameof(prefab));
             }
 
+            var asset = prefab.Asset;
             RequireContentAdmission(prefab.Record.Entry);
             if (IsProjectBlocked(prefab.Address.ProjectId))
             {
                 throw new ResourceException(ResourceError.Busy, "The project is inside its activation barrier.");
             }
 
-            var asset = prefab.Asset;
             if (!ReferenceEquals(prefab.Record.Owner, this) || asset.scene.IsValid())
             {
                 throw new ArgumentException("An asset Prefab lease from this authority is required.", nameof(prefab));
@@ -178,7 +178,7 @@ namespace YLFramework.Resource
 
                 InstanceCache.TargetScene(null, scene);
             }
-            var key = (prefab.Record, policy, policy == InstanceCachePolicy.Persistent ? 0 : scene.handle);
+            var key = (prefab.Record, policy, policy == InstanceCachePolicy.Persistent ? 0 : (int)scene.handle);
             if (_openInstanceCaches.TryGetValue(key, out var cache))
             {
                 cache.Prune(8);
@@ -239,7 +239,7 @@ namespace YLFramework.Resource
         /// <summary>从开放桶索引移除指定旧缓存，保留其尚未销毁实例的清理责任。</summary>
         internal void RetireInstanceCache(InstanceCache cache)
         {
-            var key = (cache.AssetRecord, cache.Policy, cache.Policy == InstanceCachePolicy.Persistent ? 0 : cache.ScopeScene.handle);
+            var key = (cache.AssetRecord, cache.Policy, cache.Policy == InstanceCachePolicy.Persistent ? 0 : (int)cache.ScopeScene.handle);
             if (_openInstanceCaches.TryGetValue(key, out var current) && ReferenceEquals(current, cache))
             {
                 _openInstanceCaches.Remove(key);

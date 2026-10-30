@@ -1,8 +1,11 @@
 #requires -Version 7.6
 [CmdletBinding()]
-param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021\Final')
+param([string]$Root = 'C:\Users\Kano\AppData\Local\Temp\kilo\H26-20261021\Final', [string]$Receiver)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
+if ($Receiver -or [IO.Path]::GetFullPath($Root).StartsWith('G:\Unity\U63-20261027-c63a1', [StringComparison]::OrdinalIgnoreCase)) { throw 'Legacy-only final audit has fixed package/run names, not the new compatibility imports.' }
+$receptionOwner = [IO.File]::ReadAllText((Join-Path $Root 'owner.json')) | ConvertFrom-Json -AsHashtable
+if ($receptionOwner.ContainsKey('schemaVersion')) { throw 'Legacy-only final audit rejects versioned compatibility owners.' }
 $owner = [IO.File]::ReadAllText((Join-Path $Root 'owner.json')) | ConvertFrom-Json
 if ($owner.purpose -ne 'YLFramework-HybridCLR-9.0.3-independent-reception') { throw 'Wrong final import receiver.' }
 $project = [IO.Path]::GetFullPath($owner.project)

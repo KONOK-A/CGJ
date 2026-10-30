@@ -288,18 +288,41 @@ namespace YLFramework.Tests.Integrations.HybridCLR
         }
 
         [UnityTest]
+        public IEnumerator AnExplicitPlayerLoopUpdatePumpsTheEditorContextWithinTheOriginalBudget()
+        {
+            var context = System.Threading.SynchronizationContext.Current;
+            Assert.That(context, Is.Not.Null);
+            var pumped = 0;
+            context.Post(_ => pumped++, null);
+            var startedFrame = Time.frameCount;
+            for (var i = 0; i < 240 && pumped == 0; i++)
+            {
+                EditorApplication.QueuePlayerLoopUpdate();
+                yield return null;
+            }
+
+            Assert.That(pumped, Is.EqualTo(1), $"context={context.GetType().FullName}; frameDelta={Time.frameCount - startedFrame}.");
+        }
+
+        [UnityTest]
         public IEnumerator TheSampleSupportExercisesAnActualAsyncContinuation()
         {
             var assembly = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "YLFramework.HybridCLR.Sample.Support");
             var method = assembly.GetType("YLFramework.Samples.HybridCLR.HotUpdate.VersionInfo", true).GetMethod("DescribeAsync");
             Assert.That(method, Is.Not.Null);
+            var context = System.Threading.SynchronizationContext.Current?.GetType().FullName ?? "none";
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            var startedFrame = Time.frameCount;
+            var startedEditorTime = EditorApplication.timeSinceStartup;
             var task = (System.Threading.Tasks.Task<string>)method.Invoke(null, null);
             for (var i = 0; i < 240 && !task.IsCompleted; i++)
             {
+                EditorApplication.QueuePlayerLoopUpdate();
                 yield return null;
             }
 
-            Assert.That(task.IsCompleted, Is.True);
+            Assert.That(task.IsCompleted, Is.True,
+                $"Async status={task.Status}; context={context}; elapsedMs={elapsed.Elapsed.TotalMilliseconds:F3}; editorSeconds={EditorApplication.timeSinceStartup - startedEditorTime:F6}; frameDelta={Time.frameCount - startedFrame}.");
             Assert.That(task.IsFaulted, Is.False);
             Assert.That(task.Result, Is.EqualTo("v1-async"));
         }

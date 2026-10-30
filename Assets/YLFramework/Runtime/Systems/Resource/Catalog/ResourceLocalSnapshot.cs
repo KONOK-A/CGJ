@@ -6,6 +6,9 @@ using System.Security.Cryptography;
 using System.Threading;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
+#if !UNITY_6000_0_OR_NEWER
+using PhysicsMaterial = UnityEngine.PhysicMaterial;
+#endif
 
 namespace YLFramework.Resource
 {
@@ -166,7 +169,7 @@ namespace YLFramework.Resource
         {
             var types = new Dictionary<(string, string), Type>();
             foreach (var type in new[] { typeof(TextAsset), typeof(GameObject), typeof(Texture2D), typeof(Sprite), typeof(UnityEngine.U2D.SpriteAtlas), typeof(Material), typeof(Shader),
-                typeof(AudioClip), typeof(AnimationClip), typeof(Mesh), typeof(Font), typeof(RuntimeAnimatorController), typeof(PhysicMaterial), typeof(PhysicsMaterial2D) }
+                typeof(AudioClip), typeof(AnimationClip), typeof(Mesh), typeof(Font), typeof(RuntimeAnimatorController), typeof(PhysicsMaterial), typeof(PhysicsMaterial2D) }
                 .Concat(assetTypes ?? Array.Empty<Type>()))
             {
                 if (type == null || !typeof(UnityEngine.Object).IsAssignableFrom(type) || type.ContainsGenericParameters)

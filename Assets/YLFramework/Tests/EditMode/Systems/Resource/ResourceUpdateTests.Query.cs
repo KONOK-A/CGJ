@@ -42,15 +42,30 @@ namespace YLFramework.Tests.ResourceBuild
             var store = NewStore(true);
             yield return Initialize(store);
             var system = ResourceSystem.Current;
-            Assert.That(Take(system.ActivatePreparedUpdateAsync(Prepare(system, 2, true))), Is.True);
-            Assert.That(Take(system.ActivatePreparedUpdateAsync(Prepare(system, 3, true))), Is.True);
+            foreach (var version in new[] { 2, 3 })
+            {
+                using var check = system.CheckUpdatesAsync(new[] { Snapshot("a", version), Snapshot("b", Math.Min(version, 2)) });
+                yield return Wait(check);
+                using var preparation = system.PrepareUpdateAsync(Take(check));
+                yield return Wait(preparation);
+                yield return Succeed(system.ActivatePreparedUpdateAsync(Take(preparation)));
+            }
             var obsolete = VersionPath(store, 1);
             var preview = QueryArtifacts(store);
             Assert.That(preview.Status, Is.EqualTo(ArtifactQueryStatus.Ready), string.Join("\n", preview.Issues));
             Assert.That(preview.Entries.Single(x => x.Path == obsolete).IsCleanupCandidate, Is.True);
-            Prepare(system, 1, true);
+            using (var check = system.CheckUpdatesAsync(new[] { Snapshot("a", 1), Snapshot("b", 1) }))
+            {
+                yield return Wait(check);
+                using var preparation = system.PrepareUpdateAsync(Take(check));
+                yield return Wait(preparation);
+                Take(preparation);
+            }
             using var text = system.Acquire<TextAsset>(Address());
             using var loading = system.AcquireAsync<GameObject>(Address("B.prefab"));
+            Assert.That(system.GetContentDiagnosticsSnapshot().WorkCount, Is.GreaterThan(0), "The cold Bundle must begin with real content I/O.");
+            Assert.That(QueryArtifacts(store).Status, Is.EqualTo(ArtifactQueryStatus.Busy));
+            yield return WaitForUpdates(system);
             var before = system.GetDiagnosticsSnapshot();
             var files = ResourceReleaseFixture.Snapshot(store.RootPath);
             var report = QueryArtifacts(store);
@@ -63,7 +78,9 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(after.BundleRootPinCount, Is.EqualTo(before.BundleRootPinCount));
             Assert.That(after.BundleRecordCount, Is.EqualTo(before.BundleRecordCount));
             CollectionAssert.AreEqual(files, ResourceReleaseFixture.Snapshot(store.RootPath));
-            var cleanup = Take(system.CleanupVersionsAsync());
+            using var cleanupRequest = system.CleanupVersionsAsync();
+            yield return Wait(cleanupRequest);
+            var cleanup = Take(cleanupRequest);
             Assert.That(cleanup.ProtectedVersions, Does.Contain(obsolete));
             Assert.That(Directory.Exists(obsolete), Is.True, "A prior candidate snapshot must not authorize deletion after Prepare changes protection.");
             loading.Cancel();
@@ -73,7 +90,7 @@ namespace YLFramework.Tests.ResourceBuild
             ArtifactStoreReport changed = null;
             var pending = store.QueryAsync(value => changed = value);
             Assert.That(pending.MoveNext(), Is.True);
-            Assert.That(Take(system.ShutdownAsync()), Is.True);
+            yield return Succeed(system.ShutdownAsync());
             try
             {
                 while (pending.MoveNext())

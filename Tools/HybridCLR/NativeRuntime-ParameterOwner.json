@@ -1,0 +1,39 @@
+{
+  "schema": "YLFramework-NativeRuntime-ParameterOwner-v1",
+  "unityVersion": "6000.3.27f1",
+  "target": "StandaloneWindows64",
+  "sdk": {
+    "version": "9.0.3",
+    "url": "https://gitee.com/focus-creative-games/hybridclr_unity.git#v9.0.3",
+    "commit": "6cadd24d101f4cbd00cd80190106f6621132d24d",
+    "bundled": false
+  },
+  "sources": [
+    { "repository": "https://gitee.com/focus-creative-games/il2cpp_plus", "tag": "v6000.3.x-9.0.1", "commit": "6eb38b29c3a7448b3ac6c4dee450de375b5d158d", "license": "MIT", "notice": "Copyright (c) 2022 walon" },
+    { "repository": "https://gitee.com/focus-creative-games/hybridclr", "tag": "v6000.3.x-9.0.1", "commit": "bf01f8eed56a077781c3a7b25f418603c7645588", "license": "MIT", "notice": "Copyright (c) 2023 Code Philosophy Technology Ltd." }
+  ],
+  "patch": {
+    "file": "GlobalMetadata-ParameterOwner.patch",
+    "sha256": "1f71c7594819834bde8367cffb4f945b3c40e951da518b467b98ea8c5285b1b2",
+    "path": "libil2cpp/vm/GlobalMetadata.cpp",
+    "approvedChanges": 1,
+    "beforeCrLfSha256": "6c2902bfcbdbaf253486d5af13c0e2b1e372af5c5a934a74c1a172fe8f2b823f",
+    "afterCrLfSha256": "069213cf9fb4c5a07033a8d0bba25d53b4b986b6ba3eba98185e8c1e444bf4a1",
+    "verifiedWorkingFileLineEndings": "CRLF",
+    "behavior": "Select the parameter definition by methodDefinition ownership, not the runtime synthetic array klass image."
+  },
+  "installation": {
+    "method": "Official InstallerController.InstallFromLocal on an independent maintained source tree and a new receiver",
+    "useGlobalIl2cpp": false,
+    "manualLibraryPackageCacheEditorPatching": false,
+    "versionTextAloneIsProof": false
+  },
+  "distribution": {
+    "sourcePatchOnly": true,
+    "fullNativeSourceBundled": false,
+    "sdkOrNativeBinariesBundled": false,
+    "includeOriginalLicenses": true,
+    "officialUnmodifiedNativeDeclaredFixed": false
+  },
+  "excludedClaims": ["Unity2022-native-patch", "High-stripping", "other-platforms", "ordinary-Release-remote-TLS", "arbitrary-dynamic-generics"]
+}

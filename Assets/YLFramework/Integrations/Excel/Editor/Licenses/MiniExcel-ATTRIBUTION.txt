@@ -1,0 +1,15 @@
+MiniExcel 1.31.2
+
+Copyright: LIN,WEI-HAN, 2021 onwards
+Authors: LIN,WEI-HAN, Mini-Software team, eynarhaji
+License: Apache-2.0 (full text in MiniExcel-LICENSE.txt)
+
+The copyright and author information above is retained from the official
+MiniExcel 1.31.2 NuGet package metadata. This attribution file is supplied
+by YLFramework; it is not an upstream NOTICE file.
+
+Upstream: https://github.com/mini-software/MiniExcel
+Package: https://api.nuget.org/v3-flatcontainer/miniexcel/1.31.2/miniexcel.1.31.2.nupkg
+Package SHA256: f11a54c1bd5b3fb3332dc5d4e40ade59a3539cb8de6d087a245575457d66379a
+Unmodified assembly: lib/netstandard2.0/MiniExcel.dll
+Assembly SHA256: 0a49b66224bef9fdcec12800e4660267a993b1ece87727d9fe15c7dabf58ba1e

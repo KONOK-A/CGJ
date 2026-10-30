@@ -1289,9 +1289,9 @@ namespace YLFramework.Editor.Resource
             var serialized = JObject.Parse(EditorJsonUtility.ToJson(project));
             // EditorJsonUtility 在当前Unity为 ScriptableObject 输出 MonoBehaviour 包装层。
             var definition = serialized["MonoBehaviour"] as JObject ?? serialized;
-            definition["SourceDirectories"] = new JArray(project.sourceDirectories.OrderBy(x => x.guid, StringComparer.Ordinal)
+            definition[nameof(ResourceProject.sourceDirectories)] = new JArray(project.sourceDirectories.OrderBy(x => x.guid, StringComparer.Ordinal)
                 .ThenBy(x => x.addressPrefix ?? "", StringComparer.Ordinal)
-                .Select(x => new JObject { ["Guid"] = x.guid, ["AddressPrefix"] = x.addressPrefix ?? "" }));
+                .Select(x => new JObject { [nameof(ResourceSourceDirectory.guid)] = x.guid, [nameof(ResourceSourceDirectory.addressPrefix)] = x.addressPrefix ?? "" }));
             return serialized.ToString(Formatting.None);
         }
 
@@ -1302,12 +1302,12 @@ namespace YLFramework.Editor.Resource
             var raw = File.ReadAllBytes(path);
             bytes += raw.LongLength;
             var text = Encoding.UTF8.GetString(raw);
-            var fields = Regex.Matches(text, @"(?m)^  SourceDirectories:[^\r\n]*(?:\r?\n|$)(?:  -[^\r\n]*(?:\r?\n|$)(?:    [^\r\n]*(?:\r?\n|$))*)*");
+            var fields = Regex.Matches(text, @"(?m)^  (?:sourceDirectories|SourceDirectories):[^\r\n]*(?:\r?\n|$)(?:  -[^\r\n]*(?:\r?\n|$)(?:    [^\r\n]*(?:\r?\n|$))*)*");
             if (raw.SequenceEqual(Encoding.UTF8.GetBytes(text)) && fields.Count == 1)
             {
                 var sources = fields[0];
-                var header = Regex.Match(sources.Value, @"\A  SourceDirectories:\r?\n").Value;
-                var records = Regex.Matches(sources.Value, @"(?m)^  - Guid: [0-9a-fA-F]{32}\r?\n    AddressPrefix:(?: (?:""(?:[^""\\\r\n]|\\(?:[""\\/bfnrt]|u[0-9a-fA-F]{4}))*""|[A-Za-z0-9_./-]*))?\r?\n")
+                var header = Regex.Match(sources.Value, @"\A  (?:sourceDirectories|SourceDirectories):\r?\n").Value;
+                var records = Regex.Matches(sources.Value, @"(?m)^  - (?:guid|Guid): [0-9a-fA-F]{32}\r?\n    (?:addressPrefix|AddressPrefix):(?: (?:""(?:[^""\\\r\n]|\\(?:[""\\/bfnrt]|u[0-9a-fA-F]{4}))*""|[A-Za-z0-9_./-]*))?\r?\n")
                     .Cast<Match>().Select(x => x.Value).ToArray();
                 var end = sources.Index + sources.Length;
                 // 只排序完整识别的当前记录；未知记录布局回退原始字节，其余 YAML 字节不作删减或规范化。

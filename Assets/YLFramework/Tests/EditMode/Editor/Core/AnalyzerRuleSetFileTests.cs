@@ -399,6 +399,14 @@ class Caller{[RestrictedCall(""Allowed"")]void Restricted(){}void Wrong(){Restri
             }
         }
 
+        [UnityTest]
+        public IEnumerator FormalRuntimeUsageHasActualEditorConsumerWitnesses()
+            => CoreEditorIdentityTests.CompileNewUsageWitnesses(AssemblyBuilderFlags.EditorAssembly);
+
+        [UnityTest]
+        public IEnumerator FormalRuntimeUsageHasActualPlayerConsumerWitnesses()
+            => CoreEditorIdentityTests.CompileNewUsageWitnesses(AssemblyBuilderFlags.DevelopmentBuild);
+
         private void WriteLeaf(string content) => File.WriteAllText(_target,
             "<RuleSet Name='Existing' ToolsVersion='12.0'>" + Rules + content + "</Rules></RuleSet>");
 

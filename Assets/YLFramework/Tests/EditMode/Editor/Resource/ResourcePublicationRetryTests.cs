@@ -7,9 +7,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using YLFramework.Editor.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
@@ -192,9 +192,9 @@ namespace YLFramework.Tests.ResourceBuild
 
         private sealed class OwnedCase : IDisposable
         {
-            private const string Scope = "1175-followup-20261017-1215";
             private readonly string _id;
             private readonly string _root;
+            private readonly string _owner;
             private readonly List<OrderedEvent> _events = new();
             private Exception _terminal;
             private bool _isComplete;
@@ -220,13 +220,13 @@ namespace YLFramework.Tests.ResourceBuild
             internal OwnedCase(string id)
             {
                 this._id = id;
+                _owner = ResourceCostEvidence.RequireRunOwner();
                 var run = ResourceCostEvidence.DirectoryPath;
-                var owner = JObject.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(run), "owner.json")));
-                Assert.That((string)owner["purpose"], Is.EqualTo(Scope));
                 _root = Path.Combine(run, "files", id);
-                Assert.That(Directory.Exists(_root), Is.False);
+                Assert.That(Directory.Exists(_root) || File.Exists(_root), Is.False);
+                ResourceLocalSnapshot.RejectLinks(_root);
                 Directory.CreateDirectory(_root);
-                File.WriteAllText(Path.Combine(_root, "owner.txt"), Scope);
+                File.WriteAllText(Path.Combine(_root, "owner.txt"), _owner);
                 Write(Target, _old);
             }
 
@@ -287,11 +287,16 @@ namespace YLFramework.Tests.ResourceBuild
 
             internal Exception Invoke(Action<string, string> replace, Action<int> backoff, CancellationToken cancellation = default)
             {
-                var method = typeof(ResourcePublisher).GetMethod("AtomicWriteCore", BindingFlags.Static | BindingFlags.NonPublic);
+                var method = typeof(ResourcePublisher).GetMethod("AtomicWriteCore",
+                    BindingFlags.Static | BindingFlags.NonPublic, null, new[]
+                    {
+                        typeof(string), typeof(string), typeof(byte[]), typeof(CancellationToken),
+                        typeof(Action<string, string>), typeof(Action<int>), typeof(Action)
+                    }, null);
                 Assert.That(method, Is.Not.Null, "A scoped boundary seam is needed to prove the existing retry path deterministically; this is not a product-failure assertion.");
                 try
                 {
-                    method.Invoke(null, new object[] { _root, "release-index.json", _next, cancellation, replace, backoff });
+                    method.Invoke(null, new object[] { _root, "release-index.json", _next, cancellation, replace, backoff, null });
                     Record("ReturnedSuccess");
                     return null;
                 }
@@ -354,7 +359,8 @@ namespace YLFramework.Tests.ResourceBuild
                     handlesClosed = true;
                     if (_isComplete)
                     {
-                        Assert.That(File.ReadAllText(Path.Combine(_root, "owner.txt")), Is.EqualTo(Scope));
+                        Assert.That(ResourceCostEvidence.RequireRunOwner(), Is.EqualTo(_owner));
+                        Assert.That(File.ReadAllText(Path.Combine(_root, "owner.txt")), Is.EqualTo(_owner));
                         var allowed = new HashSet<string>(new[] { "owner.txt", "release-index.json", "release-index.json.next", "default-probe.json", "default-probe.json.next" });
                         Assert.That(Directory.GetDirectories(_root), Is.Empty);
                         foreach (var path in Directory.GetFiles(_root))

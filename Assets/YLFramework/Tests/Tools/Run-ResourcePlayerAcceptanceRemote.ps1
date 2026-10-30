@@ -1,10 +1,22 @@
 #requires -Version 7.6
 [CmdletBinding()]
-param([Parameter(Mandatory)][string] $EvidenceRoot, [string] $BuildName = 'C3', [ValidateSet('Security','Resume','Recovery','Encrypted','Encoding')][string] $Group = 'Security', [string] $RunPrefix = 'net-', [string] $StartAt = '', [string] $PriorPrefixes = '', [ValidateSet('Mono2x','IL2CPP')][string] $Backend = 'Mono2x')
+param(
+    [Parameter(Mandatory)][string] $EvidenceRoot,
+    [string] $BuildName = 'C3',
+    [ValidateSet('Security','Resume','Recovery','Encrypted','Encoding')][string] $Group = 'Security',
+    [string] $RunPrefix = 'net-',
+    [string] $StartAt = '',
+    [string] $PriorPrefixes = '',
+    [ValidateSet('Mono2x','IL2CPP')][string] $Backend = 'Mono2x',
+    [switch] $CandidateValidation,
+    [ValidateSet('','2022.3.62f3c1','6000.3.27f1')][string] $ExpectedUnityVersion = '',
+    [string] $StorePrefix = ''
+)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath($EvidenceRoot)
 $invoke = Join-Path $PSScriptRoot 'Invoke-ResourcePlayerAcceptance.ps1'
+if ($StorePrefix -and $StorePrefix -notmatch '^[a-z0-9-]+$') { throw 'Simple lowercase StorePrefix required.' }
 $script:Skipping = -not [string]::IsNullOrEmpty($StartAt)
 function Policy([string] $Mode, [string] $Run) {
     [IO.File]::WriteAllText((Join-Path $root 'server-mode.json'), (@{ mode=$Mode; run=$Run } | ConvertTo-Json -Compress))
@@ -13,10 +25,11 @@ function Run([string] $Id, [string] $Command, [string] $Store='remote-main', [in
     [string] $Mode='valid', [string] $ErrorKind='', [string] $Trust='pin', [string] $Checkpoint='', [string] $Fault='', [string] $Key='valid') {
     if ($script:Skipping) { if ($Id -cne $StartAt) { return }; $script:Skipping = $false }
     $run = $RunPrefix + $Id
+    $storeName = $StorePrefix + $Store
     Policy $Mode $run
     $contentMode = if ($Group -eq 'Encrypted') { 'encrypted' } else { 'none' }
     $reason = if ($Id -eq 'encoding') { 'Encoded release responses are not accepted.' } else { '' }
-    & $invoke -EvidenceRoot $root -BuildName $BuildName -Backend $Backend -RunId $run -Command $Command -StoreName $Store -RemoteMounts -Expect $Expect -Target $Target -ErrorKind $ErrorKind -ErrorReason $reason -Trust $Trust -Checkpoint $Checkpoint -Fault $Fault -Mode $contentMode -Key $Key
+    & $invoke -EvidenceRoot $root -ExpectedUnityVersion $ExpectedUnityVersion -BuildName $BuildName -Backend $Backend -CandidateValidation:$CandidateValidation -RunId $run -Command $Command -StoreName $storeName -RemoteMounts -Expect $Expect -Target $Target -ErrorKind $ErrorKind -ErrorReason $reason -Trust $Trust -Checkpoint $Checkpoint -Fault $Fault -Mode $contentMode -Key $Key
     if ($Id -eq 'signature') {
         $result = Get-Content -LiteralPath (Join-Path $root ('Runs/' + $run + '/result.json')) -Raw | ConvertFrom-Json
         if ($result.Rejection -notlike '*Release signature rejected.*') { throw 'The actual RSA signature rejection was not exercised.' }
@@ -59,19 +72,29 @@ if ($Group -eq 'Security') {
 } elseif ($Group -eq 'Resume') {
     foreach ($case in @('range206','kill','ignore-range','changed-etag','bad-range','weak')) {
         if ($script:Skipping -and -not $StartAt.StartsWith($case + '-', [StringComparison]::Ordinal)) { continue }
+        $resumeEvidence = Join-Path $root ('resume-' + $StorePrefix + $case + '-before.json')
+        if ((Test-Path -LiteralPath $resumeEvidence) -and $StartAt -cne ($case + '-complete')) { throw 'Never overwrite prior resume evidence.' }
         $store = 'remote-r-' + $case
+        $storeName = $StorePrefix + $store
         $firstMode = if ($case -eq 'weak') { 'weak' } else { 'valid' }
         $command = if ($case -eq 'kill') { 'remote-kill-partial' } else { 'remote-partial' }
         Run ($case + '-partial') $command $store -Mode $firstMode
         $first = Get-Content -LiteralPath (Join-Path $root ('Runs/' + $RunPrefix + $case + '-partial/result.json')) -Raw | ConvertFrom-Json
         $partPath = [IO.Path]::GetFullPath($first.PartialAtCancel.Path)
-        if (-not $partPath.StartsWith((Join-Path $root ('Stores/' + $store)) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Partial ownership mismatch.' }
+        if (-not $partPath.StartsWith((Join-Path $root ('Stores/' + $storeName)) + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Partial ownership mismatch.' }
         $part = Get-Item -LiteralPath $partPath
         $metadata = Get-Content -LiteralPath ([IO.Path]::ChangeExtension($partPath,'.json')) -Raw | ConvertFrom-Json
         if ($part.Length -lt 1MB -or $part.Length -ge $metadata.Length -or $metadata.State -cne 'Partial') { throw 'The real incomplete partial did not survive the Player exit.' }
         $partialLength = $part.Length
         $snapshot = @{ Path=$part.FullName; Length=$partialLength; Sha256=(Get-FileHash -LiteralPath $part.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); Metadata=$metadata }
-        [IO.File]::WriteAllText((Join-Path $root ('resume-' + $case + '-before.json')), ($snapshot | ConvertTo-Json))
+        $snapshotJson = $snapshot | ConvertTo-Json
+        if (Test-Path -LiteralPath $resumeEvidence) {
+            $previous = Get-Content -LiteralPath $resumeEvidence -Raw | ConvertFrom-Json
+            if ($previous.Path -cne $snapshot.Path -or $previous.Length -ne $snapshot.Length -or $previous.Sha256 -cne $snapshot.Sha256 -or
+                ($previous.Metadata | ConvertTo-Json -Depth 10 -Compress) -cne ($metadata | ConvertTo-Json -Depth 10 -Compress)) { throw 'Prior resume evidence differs from the actual partial.' }
+        } else {
+            [IO.File]::WriteAllText($resumeEvidence, $snapshotJson)
+        }
         $secondMode = if ($case -in @('ignore-range','changed-etag','bad-range')) { $case } else { 'valid' }
         Run ($case + '-complete') 'remote' $store -Mode $secondMode
         $requests = Requests ($case + '-complete')

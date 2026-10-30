@@ -159,14 +159,120 @@ namespace YLFramework.Core.Editor.Tests
             Assert.That(mixed.hasMultipleDifferentValues, Is.True);
             single.FindProperty("number").CopyToClipboard();
             string before = EditorGUIUtility.systemCopyBuffer;
+            const string expected = "GenericPropertyJSON:{\"name\":\"number\",\"type\":0,\"val\":1}";
+            ObserveClipboardRead("mixed-before", before, expected);
+            Assert.That(before, Is.EqualTo(expected), "Native copy did not establish the owned clipboard baseline before mixed rejection.");
             Assert.Throws<InvalidOperationException>(() => mixed.CopyToClipboard());
-            Assert.That(EditorGUIUtility.systemCopyBuffer, Is.EqualTo(before));
+            string after = EditorGUIUtility.systemCopyBuffer;
+            ObserveClipboardRead("mixed-after", after, expected);
+            Assert.That(after, Is.EqualTo(before));
             Assert.That(mixed.IsCanPaste(), Is.False);
             Assert.Throws<InvalidOperationException>(() => mixed.PasteFromClipboard());
             Assert.That(_first.number, Is.EqualTo(1));
             Assert.That(_second.number, Is.EqualTo(2));
             Assert.That(multiple.hasModifiedProperties, Is.False);
         }
+
+        [Test]
+        public void NativeClipboardCopyAfterMalformedHistoryEstablishesImmediateOwnedBaseline()
+        {
+            var clipboard = typeof(UnityEditor.Editor).Assembly.GetType("UnityEditor.Clipboard");
+            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            var has = clipboard.GetMethod("HasSerializedProperty", flags, null, Type.EmptyTypes, null);
+            var copy = clipboard.GetMethod("SetSerializedProperty", flags, null, new[] { typeof(SerializedProperty) }, null);
+            Assert.That(has, Is.Not.Null);
+            Assert.That(copy, Is.Not.Null);
+            using var source = new SerializedObject(_first);
+            const string SeedPayload = "GenericPropertyJSON:{}";
+            const string Expected = "GenericPropertyJSON:{\"name\":\"number\",\"type\":0,\"val\":1}";
+            EditorGUIUtility.systemCopyBuffer = SeedPayload;
+            bool hasPayload = (bool)has.Invoke(null, null);
+            var state = clipboard.GetField("m_State", flags).GetValue(null);
+            string nativeSnapshot = (string)state.GetType().GetField("m_RawContents", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).GetValue(state);
+            string snapshotObservation = CaptureClipboardRead("native-has-snapshot", nativeSnapshot, SeedPayload);
+            EditorGUIUtility.systemCopyBuffer = string.Empty;
+            string cleared = EditorGUIUtility.systemCopyBuffer;
+            string clearedObservation = CaptureClipboardRead("native-cleared", cleared, string.Empty);
+            copy.Invoke(null, new object[] { source.FindProperty("number") });
+            string actual = EditorGUIUtility.systemCopyBuffer;
+            string copyObservation = CaptureClipboardRead("native-copy", actual, Expected);
+            TestContext.Out.WriteLine(snapshotObservation);
+            TestContext.Out.WriteLine(clearedObservation);
+            TestContext.Out.WriteLine(copyObservation);
+            // NUnit 3.5 has no Assert.Multiple; booleans also keep unknown clipboard text out of failure output.
+            Assert.That(new[]
+            {
+                hasPayload,
+                nativeSnapshot == SeedPayload,
+                cleared == string.Empty,
+                actual == Expected
+            }, Is.All.True, "Native clipboard checks in order: Has=true, cached owned payload, empty cleared buffer, copied owned number=1.");
+        }
+
+        [Test]
+        public void NativeClipboardParserRoundTripsOwnedScalarWithoutSystemClipboard()
+        {
+            var assembly = typeof(UnityEditor.Editor).Assembly;
+            var parser = assembly.GetType("UnityEditor.ClipboardParser");
+            var json = assembly.GetType("UnityEditor.Json");
+            var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+            var dictionary = typeof(System.Collections.Generic.Dictionary<string, object>);
+            var deserialize = json.GetMethod("Deserialize", flags, null, new[] { typeof(string) }, null);
+            var serialize = json.GetMethod("Serialize", flags, null, new[] { typeof(object), typeof(bool), typeof(string) }, null);
+            var parse = parser.GetMethod("ParseGenericSerializedProperty", flags, null, new[] { typeof(SerializedProperty), dictionary }, null);
+            var write = parser.GetMethod("WriteGenericSerializedProperty", flags, null, new[] { typeof(SerializedProperty) }, null);
+            Assert.That(deserialize, Is.Not.Null);
+            Assert.That(serialize, Is.Not.Null);
+            Assert.That(parse, Is.Not.Null);
+            Assert.That(write, Is.Not.Null);
+            using var destination = new SerializedObject(_second);
+            var property = destination.FindProperty("number");
+            var expected = deserialize.Invoke(null, new object[] { "{\"name\":\"number\",\"type\":0,\"val\":42}" });
+            parse.Invoke(null, new[] { property, expected });
+            Assert.That(property.intValue, Is.EqualTo(42));
+            Assert.That(_second.number, Is.EqualTo(1), "Parser control must not apply the staged buffer.");
+            var encoded = write.Invoke(null, new object[] { property });
+            var text = (string)serialize.Invoke(null, new[] { encoded, false, "" });
+            var actual = (System.Collections.Generic.Dictionary<string, object>)deserialize.Invoke(null, new object[] { text });
+            Assert.That(actual["val"], Is.EqualTo(42L));
+            Assert.That(actual["name"], Is.EqualTo("number"));
+        }
+
+        private static string CaptureClipboardRead(string phase, string value, string ownedValue)
+        {
+            bool owned = value == ownedValue;
+            string state = value == string.Empty ? "Empty" : owned ? "KnownExpected" : "Other";
+            int length = owned || value == string.Empty ? value.Length : -1;
+            string native = "not-windows";
+#if UNITY_EDITOR_WIN
+            var window = GetOpenClipboardWindow();
+            GetWindowThreadProcessId(window, out uint process);
+            native = $"sequence={GetClipboardSequenceNumber()} openWindow={window.ToInt64()} openPid={process}";
+#endif
+            return $"YL_CLIPBOARD_READ phase={phase} state={state} ownedLength={length} {native}";
+        }
+
+        internal static void ObserveClipboardRead(string phase, string value, string ownedValue)
+        {
+            bool owned = value == ownedValue;
+            int length = owned || value == string.Empty ? value.Length : -1;
+            string native = "not-windows";
+#if UNITY_EDITOR_WIN
+            var window = GetOpenClipboardWindow();
+            GetWindowThreadProcessId(window, out uint process);
+            native = $"sequence={GetClipboardSequenceNumber()} openWindow={window.ToInt64()} openPid={process}";
+#endif
+            TestContext.Out.WriteLine($"YL_CLIPBOARD_READ phase={phase} owned={owned} empty={value == string.Empty} ownedLength={length} {native}");
+        }
+
+#if UNITY_EDITOR_WIN
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetClipboardSequenceNumber();
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetOpenClipboardWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+#endif
 
         [Test]
         public void SameValueMultiObjectPasteSupportsActualUndoAndRedo()

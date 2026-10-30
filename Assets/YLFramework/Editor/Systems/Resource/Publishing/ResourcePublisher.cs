@@ -1216,11 +1216,11 @@ namespace YLFramework.Editor.Resource
         }
         /// <summary>经同目录暂存提交单个元数据文件，不把多份发布文件视为同一原子操作。</summary>
         private static void AtomicWrite(string root, string name, byte[] bytes, CancellationToken cancellation = default)
-            => AtomicWriteCore(root, name, bytes, cancellation, null, null);
+            => AtomicWriteCore(root, name, bytes, cancellation, null, null, null);
 
-        // 逐次调用接点只控制系统调用边界；正式入口不注入，所有校验与重试始终共用此实现。
+        // 逐次调用接点只控制 IO 边界；正式入口不注入，所有校验与重试始终共用此实现。
         private static void AtomicWriteCore(string root, string name, byte[] bytes, CancellationToken cancellation,
-            Action<string, string> replace, Action<int> backoff)
+            Action<string, string> replace, Action<int> backoff, Action afterNextWritten)
         {
             cancellation.ThrowIfCancellationRequested();
             var path = Path.Combine(root, name);
@@ -1233,6 +1233,7 @@ namespace YLFramework.Editor.Resource
                 stream.Write(bytes, 0, bytes.Length);
                 stream.Flush(true);
             }
+            afterNextWritten?.Invoke();
             if (previous == null)
             {
                 cancellation.ThrowIfCancellationRequested();

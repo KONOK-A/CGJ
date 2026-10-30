@@ -15,10 +15,27 @@ namespace YLFramework.Tests.Resource
                 throw new System.IO.IOException("Preserve prior server evidence; do not replace a ready receipt.");
             }
             var files = new System.Collections.Generic.Dictionary<string, byte[]>(System.StringComparer.Ordinal);
-            foreach (var file in System.IO.Directory.GetFiles(directory, "*", System.IO.SearchOption.AllDirectories))
+            var pending = new System.Collections.Generic.Stack<string>();
+            pending.Push(directory);
+            while (pending.Count != 0)
             {
-                files.Add("/" + file.Substring(directory.Length + 1).Replace((char)92, (char)47), System.IO.File.ReadAllBytes(file));
+                var current = pending.Pop();
+                RejectLinks(current);
+                foreach (var file in System.IO.Directory.EnumerateFileSystemEntries(current))
+                {
+                    RejectLinks(file);
+                    if (System.IO.Directory.Exists(file))
+                    {
+                        pending.Push(file);
+                    }
+                    else
+                    {
+                        files.Add("/" + file.Substring(directory.Length + 1).Replace((char)92, (char)47), System.IO.File.ReadAllBytes(file));
+                    }
+                }
             }
+            RejectLinks(root + "/TestCredentials/local-only.pfx");
+            RejectLinks(ready);
             using (var certificate = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12FromFile(root + "/TestCredentials/local-only.pfx", "hclr-local-fixture",
                 System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.DefaultKeySet))
             using (var server = new ResourceTlsServer(certificate, request => files.TryGetValue(request.Path, out var body)
@@ -43,6 +60,17 @@ namespace YLFramework.Tests.Resource
                     stopping.WaitForChanged(System.IO.WatcherChangeTypes.Created | System.IO.WatcherChangeTypes.Renamed);
                 }
                 System.Console.WriteLine("Accepted requests=" + server.RequestCount + "; fixture errors=" + server.Errors.Count);
+            }
+        }
+        private static void RejectLinks(string path)
+        {
+            for (var current = System.IO.Path.GetFullPath(path); !string.IsNullOrEmpty(current); current = System.IO.Path.GetDirectoryName(current))
+            {
+                if ((System.IO.File.Exists(current) || System.IO.Directory.Exists(current)) &&
+                    (System.IO.File.GetAttributes(current) & System.IO.FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new System.IO.IOException("Linked TLS fixture paths are not supported.");
+                }
             }
         }
     }

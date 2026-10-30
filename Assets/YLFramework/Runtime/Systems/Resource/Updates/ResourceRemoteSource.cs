@@ -163,6 +163,8 @@ namespace YLFramework.Resource
             return uri;
         }
 
+        internal static bool IsAcceptedPlayerVersion(string version) => version is "2022.3.62f3c1" or "6000.3.27f1";
+
         /// <summary>拒绝尚未开放的传输与密码运行时组合。</summary>
         internal static void RequireSupportedRuntime()
         {
@@ -171,10 +173,10 @@ namespace YLFramework.Resource
                 return;
             }
 #if UNITY_STANDALONE_WIN && (ENABLE_MONO || ENABLE_IL2CPP) && !UNITY_EDITOR
-            // 只开放8.10实际受测的引擎、架构及脚本后端，不由平台枚举推断其他组合。
-            if (Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8 && Application.unityVersion == "2022.3.62f3c1") return;
+            // 固定已验/候选引擎、架构及脚本后端；候选须完成对应原生链后才作为发行支持。
+            if (Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8 && IsAcceptedPlayerVersion(Application.unityVersion)) return;
 #endif
-            throw new ResourceException(ResourceError.Unsupported, "Release schema v1 transport/crypto requires Windows Editor or the validated Unity 2022.3.62f3c1 Windows64 Mono/IL2CPP Player backend.");
+            throw new ResourceException(ResourceError.Unsupported, "Release schema v1 transport/crypto requires Windows Editor or the fixed Unity 2022.3.62f3c1/6000.3.27f1 Windows64 Mono/IL2CPP Player candidate backend.");
         }
 
         /// <summary>仅在隔离验收配置中创建回环证书处理器，普通路径交由平台验证。</summary>

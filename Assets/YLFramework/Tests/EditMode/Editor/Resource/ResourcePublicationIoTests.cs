@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using YLFramework.Editor.Resource;
+using YLFramework.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
@@ -15,11 +16,15 @@ namespace YLFramework.Tests.ResourceBuild
         [Test]
         public void AtomicReplacementRetriesOnlyStableMetadataAndPreservesBlockingAndCancellationFailures()
         {
+            var owner = ResourceCostEvidence.RequireRunOwner();
             var root = Path.GetFullPath("AssetBundles/YLFramework/f3-io-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            ResourceLocalSnapshot.RejectLinks(root);
+            // 独立发布回归不依赖成本基线先生成标准输出父目录。
+            Directory.CreateDirectory(Path.GetDirectoryName(root));
             Assert.That(Directory.Exists(Path.GetDirectoryName(root)), Is.True);
-            Assert.That(Directory.Exists(root), Is.False);
+            Assert.That(Directory.Exists(root) || File.Exists(root), Is.False);
             Directory.CreateDirectory(root);
-            File.WriteAllText(Path.Combine(root, "owner.txt"), "B02+F03-20261017-0902");
+            File.WriteAllText(Path.Combine(root, "owner.txt"), owner);
             var write = typeof(ResourcePublisher).GetMethod("AtomicWrite", BindingFlags.Static | BindingFlags.NonPublic);
             var index = Path.Combine(root, "release-index.json");
             var attempts = new List<object>();
@@ -122,35 +127,44 @@ namespace YLFramework.Tests.ResourceBuild
                 using (var reader = File.Open(index, FileMode.Open, FileAccess.Read, FileShare.Read))
                 using (var cancellation = new CancellationTokenSource())
                 {
-                    var stop = Task.Run(() =>
-                    {
-                        if (!SpinWait.SpinUntil(() => File.Exists(index + ".next"), TimeSpan.FromSeconds(3)))
+                    var core = typeof(ResourcePublisher).GetMethod("AtomicWriteCore",
+                        BindingFlags.Static | BindingFlags.NonPublic, null, new[]
                         {
-                            throw new TimeoutException("No next metadata appeared.");
-                        }
-
+                            typeof(string), typeof(string), typeof(byte[]), typeof(CancellationToken),
+                            typeof(Action<string, string>), typeof(Action<int>), typeof(Action)
+                        }, null);
+                    Assert.That(core, Is.Not.Null, "The post-write checkpoint must use the formal AtomicWriteCore signature.");
+                    var afterNextWrittenCalls = 0;
+                    Action afterNextWritten = () =>
+                    {
+                        afterNextWrittenCalls++;
+                        CollectionAssert.AreEqual(old, File.ReadAllBytes(index + ".next"));
                         cancellation.Cancel();
-                    });
+                    };
                     Exception rejected = null;
                     try
                     {
-                        write.Invoke(null, new object[] { root, "release-index.json", old, cancellation.Token });
+                        core.Invoke(null, new object[] { root, "release-index.json", old, cancellation.Token, null, null, afterNextWritten });
                     }
                     catch (TargetInvocationException error)
                     {
                         rejected = error.InnerException;
                     }
-                    finally
-                    {
-                        stop.GetAwaiter().GetResult();
-                    }
-                    Assert.That(rejected, Is.InstanceOf<OperationCanceledException>());
-                    CollectionAssert.AreEqual(foreign, File.ReadAllBytes(index));
                     attempts.Add(new
                     {
                         Step = "late-cancellation-refused",
-                        Error = rejected.ToString()
+                        Source = "Synchronous post-write checkpoint; cancellation is checked by formal AtomicWriteCore",
+                        AfterNextWrittenCalls = afterNextWrittenCalls,
+                        CancellationRequested = cancellation.IsCancellationRequested,
+                        Error = rejected?.ToString(),
+                        HResult = rejected?.HResult,
+                        NextExists = File.Exists(index + ".next")
                     });
+                    Assert.That(afterNextWrittenCalls, Is.EqualTo(1));
+                    Assert.That(rejected, Is.InstanceOf<OperationCanceledException>());
+                    Assert.That(((OperationCanceledException)rejected).CancellationToken, Is.EqualTo(cancellation.Token));
+                    CollectionAssert.AreEqual(foreign, File.ReadAllBytes(index));
+                    CollectionAssert.AreEqual(old, File.ReadAllBytes(index + ".next"));
                 }
             }
             finally
@@ -162,7 +176,8 @@ namespace YLFramework.Tests.ResourceBuild
                     Observations = attempts,
                     Boundary = "Real Unity Mono File.Replace on the original G: publication volume. The explicit reader has its own HRESULT (32 observed); it is not proof of the owner/cause of the intermittent 1175."
                 });
-                Assert.That(File.ReadAllText(Path.Combine(root, "owner.txt")), Is.EqualTo("B02+F03-20261017-0902"));
+                Assert.That(ResourceCostEvidence.RequireRunOwner(), Is.EqualTo(owner));
+                Assert.That(File.ReadAllText(Path.Combine(root, "owner.txt")), Is.EqualTo(owner));
                 Directory.Delete(root, true);
             }
         }

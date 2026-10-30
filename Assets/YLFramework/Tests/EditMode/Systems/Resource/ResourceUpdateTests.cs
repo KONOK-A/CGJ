@@ -203,7 +203,7 @@ namespace YLFramework.Tests.ResourceBuild
         }
 
         [Test]
-        public void CheckIsPurePrepareIsPersistentAndRepeatDoesNotCopyOrVerifyAgain()
+        public void CheckIsPureAndRepeatedPrepareRevalidatesWithoutRewriting()
         {
             var store = NewStore();
             var current = store.Mount();
@@ -217,10 +217,28 @@ namespace YLFramework.Tests.ResourceBuild
             var prepared = store.Prepare(check, CancellationToken.None);
             Assert.That(File.Exists(ProjectPath(store)), Is.False);
             var before = ResourceReleaseFixture.Snapshot(store.RootPath);
+            var modifiedTimes = Directory.GetFiles(store.RootPath, "*", SearchOption.AllDirectories)
+                .ToDictionary(path => path, File.GetLastWriteTimeUtc);
             store.Check(current, new[] { Snapshot("a", 3) });
-            store.Checkpoint = _ => Assert.Fail("Repeat Prepare must not write, copy or replace any Complete metadata.");
+            var checkpoints = new List<string>();
+            store.Checkpoint = checkpoints.Add;
             var repeated = store.Prepare(check, CancellationToken.None);
+            var expectedCheckpoints = new List<string> { "ReceiptShaStarted", "ReceiptShaFinished" };
+            var contentFiles = check.Projects.Sum(project => project.Target.Document.Bundles.Count +
+                project.Target.Document.SupportFiles.Count(file => file.RelativeFile == project.Target.Document.ManifestFile));
+            Assert.That(contentFiles, Is.GreaterThan(0));
+            for (var i = 0; i < contentFiles; i++)
+            {
+                expectedCheckpoints.Add("ContentShaStarted");
+                expectedCheckpoints.Add("ContentShaFinished");
+            }
+            CollectionAssert.AreEqual(expectedCheckpoints, checkpoints,
+                "Repeat Prepare must fully validate again, without installation or metadata-write checkpoints.");
             CollectionAssert.AreEqual(before, ResourceReleaseFixture.Snapshot(store.RootPath));
+            foreach (var file in modifiedTimes)
+            {
+                Assert.That(File.GetLastWriteTimeUtc(file.Key), Is.EqualTo(file.Value), file.Key);
+            }
             Assert.That(repeated.Projects[0].ToDigest, Is.EqualTo(prepared.Projects[0].ToDigest));
             var restarted = Store(store.RootPath);
             var restored = restarted.GetPreparedUpdates().Single();
@@ -290,6 +308,39 @@ namespace YLFramework.Tests.ResourceBuild
 
                 Assert.That(File.Exists(ProjectPath(store, "commit-journal.json", string.CompareOrdinal(Snapshot().Document.ProjectId, Snapshot("b").Document.ProjectId) < 0 ? "a" : "b")), Is.False);
                 Assert.That(restarted.Mount().Select(x => x.Document.CatalogDigest), Is.EqualTo(selected.Select(x => x.Document.CatalogDigest)));
+            }
+        }
+
+        [Test]
+        public void PostDecisionCorruptionAfterReceiptReleaseRecoversOneCompleteClosure()
+        {
+            var store = NewStore(true);
+            var prepared = Prepare(store, 2, true);
+            var decided = false;
+            store.Checkpoint = stage =>
+            {
+                if (stage == "CommitDecided")
+                {
+                    decided = true;
+                    throw new IOException("interrupted after the durable decision, before recovery");
+                }
+            };
+            Assert.Throws<IOException>(() => store.Commit(prepared));
+            Assert.That(decided, Is.True);
+            var leader = string.CompareOrdinal(Snapshot().Document.ProjectId, Snapshot("b").Document.ProjectId) < 0 ? "a" : "b";
+            Assert.That(File.Exists(ProjectPath(store, "commit-journal.json", leader)), Is.True);
+
+            var target = Path.Combine(VersionPath(store, 2), Snapshot("a", 2).Document.Bundles[0].RelativeFile);
+            Assert.That(new FileInfo(target).Length, Is.GreaterThan(1));
+            File.WriteAllBytes(target, new byte[] { 1 });
+            CollectionAssert.AreEqual(new byte[] { 1 }, File.ReadAllBytes(target));
+
+            var selected = Store(store.RootPath, true).Mount();
+            Assert.That(selected.Count, Is.EqualTo(2));
+            foreach (var project in new[] { "a", "b" })
+            {
+                Assert.That(selected.Single(snapshot => snapshot.Document.ProjectId == Snapshot(project).Document.ProjectId).Document.CatalogDigest,
+                    Is.EqualTo(Snapshot(project).Document.CatalogDigest), "One invalid decided target must recover the whole From closure.");
             }
         }
 

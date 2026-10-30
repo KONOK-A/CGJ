@@ -385,7 +385,7 @@ public static class ApplicationResourceBuild
 - 正式 payload 的闭合文件集合连 `.meta` 也不忽略。安全部署与 Unity 元数据边界见下节，不以工程外导出或导入前复制成功冒充真实 StreamingAssets 验证。
 - 更新要求已配置 ArtifactStore。顺序为 CheckUpdatesAsync（本地完整项目闭包）或 CheckRemoteUpdatesAsync -> PrepareUpdateAsync -> 应用归还责任 -> ActivatePreparedUpdateAsync；Prepared 可查询/续用，但 **Prepare 不等于激活**。
 - Check 纯读，Prepare/取消不写 active；激活 Busy 后旧版仍可用，from 变化返回 StaleBase。RollbackAsync 显式选 LKG 并走同一闸门，不是随意激活旧 prepared。CleanupVersionsAsync 安全清理 owned 内容；清理前查询见下节。
-- 远端由应用注入受信公钥、端点、channel 与最低序号，沿签名、HTTPS、ETag/Range 和事务链处理。签名不证明最新，不防本地状态恶意回滚；历史导出不等于 Runtime 回滚。除 WindowsEditor 及 Unity `2022.3.62f3c1` Windows64 Mono/IL2CPP Player 外，远端入口明确 Unsupported。
+- 远端由应用注入受信公钥、端点、channel 与最低序号，沿签名、HTTPS、ETag/Range 和事务链处理。签名不证明最新，不防本地状态恶意回滚；历史导出不等于 Runtime 回滚。仅开放 WindowsEditor 及精确 Unity `2022.3.62f3c1` / `6000.3.27f1` 的 Windows64 Mono/IL2CPP 固定候选入口，其他 Player、位数或版本明确 Unsupported。
 - 普通 Player 使用 Unity 默认 TLS 证书链校验，不提供生产忽略证书或测试 pin 配置。仅 Editor，或同时具备 `UNITY_STANDALONE_WIN`、`ENABLE_MONO/ENABLE_IL2CPP` 后端、`DEVELOPMENT_BUILD`、`YL_RESOURCE_ACCEPTANCE_TESTS` 的隔离验收构建保留内部 loopback 精确 pin，不修改系统信任。正常应用不得加入验收符号；loopback 结果不能代替默认 CA 链正向联网验证。
 - partial 续传以强 ETag/If-Range 精确绑定实际 offset；200 忽略 Range 或 ETag 变化从零获取，失配 Content-Range 拒绝后重头重试，弱 ETag 不用于续传。最终仍须逐文件 length/SHA 和内容认证，不能盲目追加后提交。
 - 公开请求错误沿用现有合同：元数据传输、签名/摘要及确认序号拒绝通常包装为`UpdateFailed`，内层异常保留具体原因；不能把“任意失败”当作某个特定拒绝门禁通过。
@@ -613,7 +613,7 @@ Unity `2022.3.62f3c1` 的 Windows Mono 文件 API 仍有 260 字符限制，原�
 
 - Project 的 `contentEncryption` 默认 `None`，旧明文发布不需重写。`None` 继续 `LoadFromFile`/`LoadFromFileAsync`，Editor Simulation、Resources 和直接图片来源不改变。新增默认字段不进入 None 的 build settings 身份；正常保存 SO/代码输入变化仍可能使旧 input fingerprint 自然失效一次。
 - 启用 `Aes256GcmHkdfSegmentedV1` 时，填写仅为标识的 `contentKeyId`，覆盖该 Project 的内容包、共享依赖包和二进制 root manifest。`.manifest` 文本旁车不加密。正式后端固定为 Windows CNG `Microsoft Primitive Provider` AES-256-GCM，官方 BC 2.7.0 netstandard2.0 仅提供 HKDF-SHA256；不复制系统 DLL，不静默软件 GCM fallback。
-- 实现仅开放 Windows x64 CNG 后端；Windows64 IL2CPP 还硬性核对 Unity `2022.3.62f3c1`。本指南基于该 Unity 版本的 Editor/Mono/IL2CPP 配置，不因 None 可编译就推断加密在其他引擎、主机或移动平台受支持。远端另有精确版本门禁，见 [共存与范围](#共存与范围)。
+- 实现仅开放 Windows x64 CNG 后端；Windows64 IL2CPP 还硬性核对精确 Unity `2022.3.62f3c1` / `6000.3.27f1`。本指南的固定候选为上述版本的 Editor/Mono/IL2CPP 配置，不因 None 可编译或 Mono 路径未拦截某个版本就推断其他引擎、主机或移动平台已验证。远端另有精确版本门禁，见 [共存与范围](#共存与范围)。
 
 Editor 使用显式进程 secret 名或调用方 provider，不在 SO、Inspector、EditorPrefs、指纹或日志中保存 key。工作台默认进程变量为 `YL_RESOURCE_CONTENT_KEY`，严格接受 Base64 编码的 32 字节；非秘密 KeyId 与环境变量名不是密钥材料。
 
@@ -669,7 +669,7 @@ using (var stop = startup.StopAsync())
 - 同步取得如实承担完整 SHA/输入准备成本；异步入口的纯 IO/SHA/认证可取消并在 worker 执行，应用须等待请求终态后 `TakeResult`，不能假设方法名为 Async 却总是即时完成。native 开始后不靠提前关闭输入抢占取消。
 - 每个共享 BundleRecord 只有一个输入。输入与 CNG owner/预算保持到真实 native unload；SceneLease 归还不等于 Scene 卸载，实例 destroy-pending、Audio 尾轨及缓存仍沿原责任图结算。实例化、Ready 复用、Group、Scene、Audio 缓存的新借出均执行依赖闭包故障准入；旧已交付对象不因首 fault 被强销毁。
 - 64KiB 分段、两个明文缓存槽和 32KiB native read buffer；单输入固定数据缓冲为 196576B，默认 128MiB 预算不预分配整笔。新增闭包先原子预留，全部 live 输入与在途预留计量，共享不双计；不足明确失败后显式重试。`GetContentDiagnosticsSnapshot()` 与 `GetDiagnosticsReport().Content` 分列数据预算、native bridge 声明值及进程内该适配器的 CNG provider/key/key-object 成本，绝不是整个密码模块或进程总内存上限。
-- 初始化成功前只对当前所选项目/KeyId 集合做一次轻量认证，同配置 join 不重复；不要求未选历史 key，不以创建 native Bundle 代替探针，全 None 不执行额外密码工作。Prepare 全 To 闭包、激活/回滚在提交前完整认证，持有稳定输入到提交结束。恢复、Mount、Check 和只读 Store 查询不取 key、不解密；缺 key 不隐式重下载或切 LKG。
+- 初始化成功前只对当前所选项目/KeyId 集合做一次轻量认证，同配置 join 不重复；不要求未选历史 key，不以创建 native Bundle 代替探针，全 None 不执行额外密码工作。每次 Prepare（包括重复调用）仍完整验证 To 闭包的 SHA/内容；幂等复用已安装版本及相同准备记录不代表跳过复验。激活/回滚在提交前完整认证，持有稳定输入到提交结束。恢复、Mount、Check 和只读 Store 查询不取 key、不解密；缺 key 不隐式重下载或切 LKG。
 - Catalog v1 不变不代表旧客户端支持密文。签发加密 release 前须确认渠道仅投放给支持此编码的客户端；签名 payload 不增加能力协商字段，不能继续投放给不支持加密的旧客户端。远端仍只开放上述精确版本的 Windows64 Mono/IL2CPP，不因加密配置放宽平台或密码后端。
 
 ### 轮换与交付
@@ -689,7 +689,7 @@ using (var stop = startup.StopAsync())
 |---|---|
 | Editor Simulation | 仅 Editor 工厂，必须显式选择，不作为 Bundle 失败回退 |
 | 普通本地 Bundle / 内置快照 | mount/Catalog 接受 StandaloneWindows64、StandaloneOSX、StandaloneLinux64；挂载时须与当前平台及完整 Unity 版本匹配。构建还要求已激活、安装且主机可读回，不表示三平台都完成实际运行验证 |
-| Windows 远端更新 | WindowsEditor，或精确 Unity `2022.3.62f3c1`、x64、Mono/IL2CPP Windows Player；其他 Player/32 位/引擎版本明确拒绝 |
+| Windows 远端更新 | WindowsEditor，或精确 Unity `2022.3.62f3c1` / `6000.3.27f1` 的 x64 Mono/IL2CPP Windows Player 固定候选；其他 Player/32 位/引擎版本明确拒绝；loopback pin 不代替默认 CA 链正向联网验证 |
 | 加密内容 | Windows x64 CNG；IL2CPP 额外硬检查上述 Unity 版本。其他主机没有软件 GCM 回退 |
 | Windows64 IL2CPP 应用 | 基线为上述版本、Low 裁剪/C++ Release；不同裁剪与新增反射/泛型入口须目标验证 |
 | Android / iOS / WebGL Bundle | 当前 mount/Catalog 不开放，JAR/WebGL 提取未实现，不只是缺设备测试 |

@@ -252,7 +252,8 @@ namespace YLFramework.Tests.ResourceBuild
             selections = new List<ResourceSelection> { new() { guid = AssetDatabase.AssetPathToGUID(Content(state) + "/" + file), address = address } }
         };
 
-        [Test, Order(1)]
+        // 21 次真实 Recipe 采样包含完整指纹/认证；执行预算不是单次构建的性能门槛。
+        [Test, Order(1), Timeout(15 * 60 * 1000)]
         public void ARecipeBuildAndPublicationBaseline()
         {
             var state = State;

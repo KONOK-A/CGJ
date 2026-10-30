@@ -1,6 +1,13 @@
 #requires -Version 7.6
 [CmdletBinding()]
-param([Parameter(Mandatory)][string] $EvidenceRoot, [string] $BuildName = 'B1', [ValidateSet('None','Encrypted')][string] $Group = 'None', [ValidateSet('Mono2x','IL2CPP')][string] $Backend = 'Mono2x', [string] $RunPrefix = '')
+param(
+    [Parameter(Mandatory)][string] $EvidenceRoot,
+    [string] $BuildName = 'B1',
+    [ValidateSet('None','Encrypted')][string] $Group = 'None',
+    [ValidateSet('Mono2x','IL2CPP')][string] $Backend = 'Mono2x',
+    [ValidateSet('','2022.3.62f3c1','6000.3.27f1')][string] $ExpectedUnityVersion = '',
+    [string] $RunPrefix = ''
+)
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $invoke = Join-Path $PSScriptRoot 'Invoke-ResourcePlayerAcceptance.ps1'
@@ -9,7 +16,7 @@ $mode = if ($Group -eq 'None') { 'none' } else { 'encrypted' }
 $store = 'local-' + $mode
 $prefix = if ($RunPrefix) { $RunPrefix } else { $mode + '-' }
 function Run([string] $Id, [string] $Command, [int] $Expect = 1, [int] $Target = 2, [string] $Checkpoint = '', [string] $Fault = '', [string] $Key = 'valid') {
-    & $invoke -EvidenceRoot $root -BuildName $BuildName -Backend $Backend -RunId ($prefix + $Id) -Command $Command -StoreName $store -Mode $mode -Expect $Expect -Target $Target -Checkpoint $Checkpoint -Fault $Fault -Key $Key
+    & $invoke -EvidenceRoot $root -ExpectedUnityVersion $ExpectedUnityVersion -BuildName $BuildName -Backend $Backend -RunId ($prefix + $Id) -Command $Command -StoreName $store -Mode $mode -Expect $Expect -Target $Target -Checkpoint $Checkpoint -Fault $Fault -Key $Key
 }
 if ($Group -eq 'Encrypted') {
     Run 'missing-key' 'probe' -Key missing

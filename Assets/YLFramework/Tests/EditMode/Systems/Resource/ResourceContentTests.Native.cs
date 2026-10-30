@@ -11,6 +11,36 @@ namespace YLFramework.Tests.ResourceBuild
 {
     public partial class ResourceContentTests
     {
+        [TestCase("2022.3.62f3c1", true)]
+        [TestCase("6000.3.27f1", true)]
+        [TestCase("2022.3.62f1", false)]
+        [TestCase("6000.3.27f2", false)]
+        [TestCase("6000.3.28f1", false)]
+        [TestCase("6000.3.27f1-beta", false)]
+        [TestCase("", false)]
+        [TestCase(null, false)]
+        public void Il2CppPlayerVersionGateAcceptsOnlyExactCandidateVersions(string version, bool expected)
+        {
+            var method = ContentType("CngSegmentAead").GetMethod("IsAcceptedPlayerVersion", Members);
+            Assert.That(method, Is.Not.Null, "The native gate needs a directly testable exact-version decision.");
+            Assert.That((bool)method.Invoke(null, new object[] { version }), Is.EqualTo(expected));
+        }
+
+        [TestCase("2022.3.62f3c1", true)]
+        [TestCase("6000.3.27f1", true)]
+        [TestCase("2022.3.62f1", false)]
+        [TestCase("6000.3.27f2", false)]
+        [TestCase("6000.3.28f1", false)]
+        [TestCase("6000.3.27f1-beta", false)]
+        [TestCase("", false)]
+        [TestCase(null, false)]
+        public void RemotePlayerVersionGateAcceptsOnlyExactCandidateVersions(string version, bool expected)
+        {
+            var method = typeof(ResourceRemoteSource).GetMethod("IsAcceptedPlayerVersion", Members);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { version }), Is.EqualTo(expected));
+        }
+
         [Test]
         public void OptionsFreezeProviderWithoutCallingOrOwningIt()
         {

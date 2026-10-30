@@ -6,6 +6,9 @@ using UnityEditor.IMGUI.Controls;
 using UnityEngine;
 using YLFramework.DataAssets;
 using YLFramework.Editor.Common;
+#if UNITY_6000_2_OR_NEWER
+using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
+#endif
 
 namespace YLFramework.Editor.DataAssets
 {

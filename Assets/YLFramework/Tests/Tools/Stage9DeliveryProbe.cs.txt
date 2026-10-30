@@ -10,6 +10,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using GraphicsSettings = UnityEngine.Rendering.GraphicsSettings;
+using RenderPipelineManager = UnityEngine.Rendering.RenderPipelineManager;
+using UnityEngine.SceneManagement;
 using UnityEngine.U2D;
 using YLFramework;
 using YLFramework.Actions;
@@ -36,6 +39,7 @@ public sealed class Stage9DeliveryProbe : MonoBehaviour
     public GameObject panelPrefab;
     [global::UnityEngine.Serialization.FormerlySerializedAs("ModalPrefab")]
     public GameObject modalPrefab;
+    public Material urpMaterial;
     [global::UnityEngine.Serialization.FormerlySerializedAs("OptionalLogger")]
     public bool optionalLogger;
     private JObject _result;
@@ -194,12 +198,28 @@ public sealed class Stage9DeliveryProbe : MonoBehaviour
     }
     private IEnumerator Run()
     {
-        Require(Application.unityVersion == "2022.3.62f3c1" && Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8 && !Debug.isDebugBuild,
+        var expectedUnity = (string)_config["UnityVersion"];
+        Require((expectedUnity == "2022.3.62f3c1" || expectedUnity == "6000.3.27f1") &&
+            Application.unityVersion == expectedUnity && Application.platform == RuntimePlatform.WindowsPlayer && IntPtr.Size == 8 && !Debug.isDebugBuild,
             "Real Windows64 non-Development Player required.");
         var assemblies = AppDomain.CurrentDomain.GetAssemblies().Select(a => a.GetName().Name).ToArray();
         Require(!assemblies.Any(name => name.Contains("MCP") || name.StartsWith("XF", StringComparison.Ordinal) && !(optionalLogger && name == "XFGameFramework.LoggerSystem")),
             "Only the explicitly declared optional standalone Logger may coexist; no original XF framework or MCP is permitted.");
         _result["LoadedAssemblies"] = new JArray(assemblies);
+        if (_command == "urp")
+        {
+            yield return null;
+            yield return new WaitForEndOfFrame();
+            Require(GraphicsSettings.currentRenderPipeline && RenderPipelineManager.currentPipeline != null &&
+                GraphicsSettings.currentRenderPipeline.GetType().FullName == "UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset" &&
+                RenderPipelineManager.currentPipeline.GetType().FullName == "UnityEngine.Rendering.Universal.UniversalRenderPipeline",
+                "Actual URP asset and live pipeline required; a Built-in frame is not URP evidence.");
+        }
+        if (_command == "scene-loop")
+        {
+            DontDestroyOnLoad(gameObject);
+        }
+
         yield return Foundation();
         if (_command == "sample")
         {
@@ -243,6 +263,14 @@ public sealed class Stage9DeliveryProbe : MonoBehaviour
             StoreExisted = storeExisted,
             Digest = _resources.GetActiveCatalogDigest(id)
         });
+        if (_command == "scene-loop")
+        {
+            yield return SceneLoop(id);
+            yield return StopResources();
+            yield return FinalCleanup();
+            yield break;
+        }
+
         if (_command == "update")
         {
             using var check = _resources.CheckUpdatesAsync(new[] { Snapshot(selected, 2) });
@@ -284,7 +312,17 @@ public sealed class Stage9DeliveryProbe : MonoBehaviour
             using var lease = request.TakeResult();
             var sprite = lease.Asset.GetSprite("icon");
             Require(sprite && sprite.texture && sprite.rect.width == 16, "Newly generated automatic Atlas did not materialize.");
+            if (_command == "urp")
+            {
+                yield return UrpVisual(sprite, id);
+            }
             Destroy(sprite);
+        }
+        if (_command == "urp")
+        {
+            yield return StopResources();
+            yield return FinalCleanup();
+            yield break;
         }
         using (var sound = AudioKit.PlaySoundAsync(new AudioClipAddress(_startup.AudioProviders[id], "tone"), new AudioSoundOptions { Loop = true }))
         {
@@ -321,6 +359,189 @@ public sealed class Stage9DeliveryProbe : MonoBehaviour
         }
 
         yield return FinalCleanup();
+    }
+
+    private IEnumerator UrpVisual(Sprite sprite, string project)
+    {
+        Require(urpMaterial && urpMaterial.shader && urpMaterial.shader.isSupported &&
+            urpMaterial.shader.name == "Universal Render Pipeline/Unlit", "A serialized supported URP material is required.");
+        _result["UrpVisual"] = new JObject
+        {
+            ["Asset"] = GraphicsSettings.currentRenderPipeline.GetType().FullName,
+            ["Pipeline"] = RenderPipelineManager.currentPipeline.GetType().FullName,
+            ["NormalEndOfFrame"] = true,
+            ["CameraRenderCalled"] = false,
+            ["InputInjected"] = false,
+            ["Passed"] = false,
+            ["Samples"] = new JArray()
+        };
+        var camera = FindObjectsOfType<Camera>().Single(item => item.enabled && item.gameObject.activeInHierarchy);
+        var previousPosition = camera.transform.position;
+        var previousRotation = camera.transform.rotation;
+        var previousOrthographic = camera.orthographic;
+        var previousSize = camera.orthographicSize;
+        var previousFlags = camera.clearFlags;
+        var previousBackground = camera.backgroundColor;
+        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        var material = new Material(urpMaterial);
+        try
+        {
+            camera.transform.SetPositionAndRotation(new Vector3(0, 0, -10), Quaternion.identity);
+            camera.orthographic = true;
+            camera.orthographicSize = 4;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = Color.black;
+            quad.name = "Owned URP resource Atlas display";
+            quad.transform.position = new Vector3(-3, 2, 0);
+            quad.transform.localScale = Vector3.one;
+            var uv = sprite.uv;
+            material.SetTexture("_BaseMap", sprite.texture);
+            material.SetTextureOffset("_BaseMap", new Vector2(uv.Min(item => item.x), uv.Min(item => item.y)));
+            material.SetTextureScale("_BaseMap", new Vector2(uv.Max(item => item.x) - uv.Min(item => item.x), uv.Max(item => item.y) - uv.Min(item => item.y)));
+            quad.GetComponent<MeshRenderer>().sharedMaterial = material;
+            var worldPoint = (Vector2)camera.WorldToScreenPoint(quad.transform.position);
+            var atlasColor = new Color(.1f, .8f, .5f, 1);
+            yield return UrpPixels("resource-atlas", new[] { worldPoint }, atlasColor);
+
+            _full = Instantiate(fullTemplate);
+            yield return null;
+            var root = _full.GetComponentInChildren<UIRootContext>(true);
+            Require(root && root.GetLayer(4), "Formal complete UI root and layers required.");
+            _module = new Stage9DeliveryModule { ProjectName = project, PanelRoot = root };
+            yield return ModuleManager.StartUpModule(_module);
+            var color = _module.LoadPanel<ColorSelectorWindow>(colorPrefab, ColorSelectorWindow.Arguments(Color.cyan));
+            Require(color && color.CurrentColor == Color.cyan, "Formal ColorSelector bindings required.");
+            yield return new WaitForSecondsRealtime(.25f);
+            Canvas.ForceUpdateCanvases();
+            var selector = color.GetComponentInChildren<ColorSelector>(true);
+            Require(selector, "Formal ColorSelector graphic missing.");
+            var rect = (RectTransform)selector.transform;
+            var canvas = selector.GetComponentInParent<Canvas>();
+            var local = rect.rect.center + Vector2.right * (.44f * Mathf.Min(rect.rect.width, rect.rect.height));
+            var uiPoint = RectTransformUtility.WorldToScreenPoint(canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera, rect.TransformPoint(local));
+            yield return UrpPixels("formal-color-ring", new[] { uiPoint }, Color.red);
+            color.Close();
+            yield return null;
+
+            var finished = false;
+            ActionKit.ScreenTransition.FadeIn().Color(Color.blue).Duration(.1f).StartGlobal(() => finished = true);
+            var deadline = Time.realtimeSinceStartup + 10;
+            while (!finished && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Require(finished, "Formal screen fade-in action did not complete.");
+            yield return UrpPixels("formal-screen-fade-in", new[]
+            {
+                new Vector2(Screen.width * .5f, Screen.height * .5f), new Vector2(10, 10), new Vector2(Screen.width - 11, Screen.height - 11)
+            }, Color.blue);
+            finished = false;
+            ActionKit.ScreenTransition.FadeOut().Color(Color.blue).Duration(.1f).StartGlobal(() => finished = true);
+            deadline = Time.realtimeSinceStartup + 10;
+            while (!finished && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Require(finished, "Formal screen fade-out action did not complete.");
+            yield return UrpPixels("formal-screen-fade-out", new[] { worldPoint }, atlasColor);
+            _module.Close();
+            Require(_module.State == ModuleState.Closed && ModuleManager.AllModules.Count == 0, "URP consumer must release its Module.");
+            _result["UrpVisual"]["Passed"] = true;
+        }
+        finally
+        {
+            Destroy(quad);
+            Destroy(material);
+            camera.transform.SetPositionAndRotation(previousPosition, previousRotation);
+            camera.orthographic = previousOrthographic;
+            camera.orthographicSize = previousSize;
+            camera.clearFlags = previousFlags;
+            camera.backgroundColor = previousBackground;
+        }
+    }
+
+    private IEnumerator UrpPixels(string name, Vector2[] points, Color expected)
+    {
+        yield return null;
+        yield return new WaitForEndOfFrame();
+        var frame = ScreenCapture.CaptureScreenshotAsTexture();
+        Require(frame && frame.width == Screen.width && frame.height == Screen.height, "Actual normal-frame backbuffer capture required.");
+        try
+        {
+            var path = Path.Combine(Path.GetDirectoryName(_output), name + ".png");
+            Require(!File.Exists(path), "Never replace an earlier URP frame.");
+            File.WriteAllBytes(path, frame.EncodeToPNG());
+            var pixels = new JArray();
+            var maximum = 0f;
+            foreach (var point in points)
+            {
+                var x = Mathf.FloorToInt(point.x);
+                var y = Mathf.FloorToInt(point.y);
+                Require(x >= 1 && y >= 1 && x < frame.width - 1 && y < frame.height - 1, "Expected visual target must lie inside the captured frame.");
+                var actual = frame.GetPixel(x, y);
+                maximum = Mathf.Max(maximum, Mathf.Abs(actual.r - expected.r), Mathf.Abs(actual.g - expected.g), Mathf.Abs(actual.b - expected.b));
+                pixels.Add(new JObject { ["X"] = x, ["Y"] = y, ["R"] = actual.r, ["G"] = actual.g, ["B"] = actual.b });
+            }
+            using var sha = SHA256.Create();
+            var row = new JObject
+            {
+                ["Name"] = name, ["Frame"] = Time.frameCount, ["Width"] = frame.width, ["Height"] = frame.height,
+                ["Expected"] = new JArray(expected.r, expected.g, expected.b), ["Pixels"] = pixels,
+                ["MaximumChannelError"] = maximum, ["Passed"] = maximum <= .08f, ["Png"] = name + ".png",
+                ["Sha256"] = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").ToLowerInvariant()
+            };
+            ((JArray)_result["UrpVisual"]["Samples"]).Add(row);
+            Require(maximum <= .08f, "URP visible-pixel mismatch: " + row.ToString(Formatting.None));
+        }
+        finally
+        {
+            Destroy(frame);
+        }
+    }
+
+    private IEnumerator SceneLoop(string project)
+    {
+        _module = new Stage9DeliveryModule { ProjectName = project };
+        yield return ModuleManager.StartUpModule(_module);
+        var controller = _module.LoadController<SceneController>();
+        for (var round = 0; round < 20; round++)
+        {
+            Step("scene-loop-load-b", new { Round = round });
+            using var toB = controller.LoadSceneAsync("scene-b", LoadSceneMode.Single);
+            yield return toB;
+            var b = toB.TakeResult();
+            Require(b.HasSceneSideEffects && b.Scene.isLoaded && b.Scene.GetRootGameObjects().Any(x => x.name == "Stage9 scene B"),
+                "SceneController must return the actual B identity.");
+            var record = _resources.GetSceneRecords().Single(x => x.IsLoaded && x.Scene == b.Scene);
+
+            Step("scene-loop-return-a", new { Round = round });
+            using var toA = _resources.LoadSceneAsync(new ResourceAddress(project, "scene-a"), LoadSceneMode.Additive);
+            yield return toA;
+            using var a = toA.TakeResult();
+            Require(a.IsValid && a.Scene.GetRootGameObjects().Any(x => x.name == "Stage9 scene A") && SceneManager.SetActiveScene(a.Scene),
+                "Resource must return and activate the actual A lease.");
+
+            Step("scene-loop-unload-b", new { Round = round });
+            using var unload = _resources.UnloadSceneAsync(record);
+            yield return unload;
+            Require(unload.TakeResult() && !b.Scene.isLoaded && !record.IsLoaded && SceneManager.sceneCount == 1,
+                "Explicit Resource unload must settle B's record without consuming A.");
+            yield return Resources.UnloadUnusedAssets();
+            Step("scene-loop-round-complete", new { Round = round + 1 });
+        }
+
+        // 最后一个 Bundle 场景由中立内置场景替换，不能重建带 probe 的 Bootstrap。
+        yield return SceneManager.LoadSceneAsync("Stage9Neutral", LoadSceneMode.Single);
+        var deadline = Time.realtimeSinceStartup + 10;
+        while (_resources.GetSceneRecords().Count != 0)
+        {
+            Require(Time.realtimeSinceStartup < deadline, "Scene records did not drain after returning to neutral.");
+            yield return null;
+        }
+
+        _module.Close();
+        Require(_module.State == ModuleState.Closed && ModuleManager.AllModules.Count == 0, "Scene module must close cleanly.");
+        _result["SceneLoop"] = new JObject { ["CompletedRounds"] = 20, ["UnloadCount"] = 20, ["RemainingSceneRecords"] = 0 };
     }
 
     private void SaveRoundTrip()

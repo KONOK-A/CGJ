@@ -4,7 +4,26 @@
 
 `https://gitee.com/focus-creative-games/hybridclr_unity.git#v9.0.3`
 
-解析 commit 必须为 `6cadd24d101f4cbd00cd80190106f6621132d24d`。显式运行官方 Installer，确认 package 与本地 libil2cpp 均为 `9.0.3`。不包含官方包、运行库、dnlib、XF 或 XFAB 副本。支持目标边界为 Unity `2022.3.62f3c1`、Windows64、IL2CPP、.NET Framework；只有实际完成的原生验收才证明相应环境可用。
+解析 commit 必须为 `6cadd24d101f4cbd00cd80190106f6621132d24d`。不包含官方包、运行库、dnlib、XF 或 XFAB 副本。下面的定点范围均为 Windows64、IL2CPP、.NET Framework；package 或本地版本文本等于 `9.0.3` 只是必要条件，不能单独证明实际 native 来源或可用性。
+
+## Verified Runtime Scope
+
+| Unity | Runtime 来源 | 已验证范围 |
+|---|---|---|
+| `2022.3.62f3c1` | SDK `9.0.3` 选择的官方对应 native；il2cpp_plus `ba3a76c9979d14cee404fb5d44301773e0768866` / hybridclr `83929787581bce6c7219418f62348a10c33582ee` | Development/Low 的两项目共享基座、精确程序集子集、MVID 冲突拒绝、泛型/async 与生命周期。code-only 子集不冒称完整配表 Module 或普通 Release 样例已重新验收。 |
+| `6000.3.27f1` | 下述 `ParameterOwner` 维护 runtime | Development/Low 的完整样例与签名 HTTPS 更新/认证、载荷和部分 metadata 负向；非 Development/Low/C++ Release、空额外宏的完整样例、本地已发布 snapshot 更新及同 Player 重启 V2；两项目共享子集与相关负向。普通 Release 的本地更新不等于其远端 TLS 已验。 |
+
+不外推 High stripping、其它平台/Unity 补丁或任意动态泛型。不同运行配置、项目选择和最终 AOT 都必须保留实际身份；EditorSimulation/EditorFast、目录里有 metadata 或仅类型存在都不是这些原生结果。`Dependencies.json` 的旧 `scope.nativeValidated=false` 保留为未作全能力总括声明，精确已验证能力以 `verifiedEnvironments` 为准。
+
+### Unity 6.3 Maintained Runtime
+
+未修改的官方 6.3 native 曾在合成热更元素数组的参数反射中把 AOT method definition 与 Interpreter 参数表混用；不能因为旧 Development 或某次运行未崩溃就宣布普通 Release 可用。
+
+已验证的维护源固定为 il2cpp_plus `6eb38b29c3a7448b3ac6c4dee450de375b5d158d` 与 hybridclr `bf01f8eed56a077781c3a7b25f418603c7645588`（两者 tag `v6000.3.x-9.0.1`）。在独立维护源合入配套 `hybridclr/` 后，仅将 `libil2cpp/vm/GlobalMetadata.cpp` 的参数定义查询由 `klass->image` 改为既有 `methodDefinition` 重载。完整 patch、精确来源/哈希和两份上游 MIT 作为独立 `NativeRuntime-ParameterOwner` 附件提供，不在本可选 unitypackage 内，也不是升级为另一个 SDK 版本。
+
+通过官方 Installer 的 local-source 流程（`InstallerController.InstallFromLocal`）安装到新工程，只使用项目内 LocalIl2CppData，`useGlobalIl2cpp=false`。不要手改 Library、PackageCache、Editor 安装或旧冻结基座；不要把 6.3 patch 套到 2022 tag。归档/native 源每文件清单、实际前后像/单文件差异、patch、SDK commit、安装树及最终 Player/AOT 指纹应一起核验。官方 Installer 仍会写 `9.0.3` 版本标记，因此必须另行记录 `ParameterOwner` 与源清单哈希，不能伪称未修改官方 native。
+
+进程退出与功能证据也分开：Unity 2022 某些受控 Editor 退出可能挂起。任何允许消费已完成产物的处理必须针对明确操作/输入独立授权并保留真实超时/强退/失败，不能改成 exit0 或扩展到构建、Player。历史单次接受不是应用或 CI 的通用成功政策。
 
 运行时 namespace 保持 `YLFramework.Integrations.HybridCLR`，Editor 为 `YLFramework.Integrations.HybridCLR.Editor`；程序集名仍为 `YLFramework.HybridCLR` / `YLFramework.HybridCLR.Editor`。宿主使用的 Resource/Core 当前分别为 `YLFramework.Resource` / `YLFramework.Core`；默认框架仍是 Runtime/Editor 两个主体，功能目录不是额外 DLL。完整身份与依赖见 [架构总览](../../Documentation/Architecture.md#namespace-与迁移)。
 

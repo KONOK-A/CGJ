@@ -135,8 +135,25 @@ namespace YLFramework.Tests.ResourceBuild
             Assert.That(stableCatalog.CatalogDigest, Is.EqualTo(secondCatalog.CatalogDigest));
             var stable = Publish(stableBuild);
             Assert.That(Value(stable, "IsRepeat"), Is.True);
-            Assert.That(stableBuild.CacheReuseBlockedBy.Count, Is.EqualTo(6), "Keep the established untracked-callback correctness gate.");
-            Assert.That(stableBuild.WasUnityBuildInvoked && stableBuild.ForceRebuild && !stableBuild.IsCacheHit, Is.True);
+            var engine = typeof(EditorApplication).Assembly;
+            var callbackContracts = new[]
+            {
+                typeof(UnityEditor.Build.IPreprocessShaders), typeof(UnityEditor.Build.IPreprocessComputeShaders),
+                typeof(UnityEditor.Build.IProcessSceneWithReport), engine.GetType("UnityEditor.Build.IProcessScene")
+            };
+            var registeredCallbacks = callbackContracts.Where(type => type != null)
+                .SelectMany(type => TypeCache.GetTypesDerivedFrom(type).AsEnumerable())
+                .Where(type => !type.IsAbstract && !type.IsInterface && type.Assembly != engine)
+                .Select(type => type.FullName)
+                .Concat(TypeCache.GetMethodsWithAttribute<UnityEditor.Callbacks.PostProcessSceneAttribute>()
+                    .Where(method => method.DeclaringType != null && method.DeclaringType.Assembly != engine)
+                    .Select(method => method.DeclaringType.FullName + "." + method.Name))
+                .Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+            CollectionAssert.AreEqual(registeredCallbacks, stableBuild.CacheReuseBlockedBy);
+            var hasUntrackedCallbacks = registeredCallbacks.Length != 0;
+            Assert.That(stableBuild.WasUnityBuildInvoked, Is.EqualTo(hasUntrackedCallbacks));
+            Assert.That(stableBuild.ForceRebuild, Is.EqualTo(hasUntrackedCallbacks));
+            Assert.That(stableBuild.IsCacheHit, Is.EqualTo(!hasUntrackedCallbacks));
             fixture.AssertProtected();
             fixture.RetainRelease = true;
             Debug.Log("REAL_82B root=" + root + "; v1=" + firstCatalog.CatalogDigest + "; v2=" + secondCatalog.CatalogDigest +
