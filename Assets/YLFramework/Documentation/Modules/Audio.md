@@ -888,9 +888,7 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 ## 业务接入
 
-源码仓库主游戏已改用 XF AudioPlayer/AudioController 与 XFAB，不再消费 YL AudioKit、AudioEmitter 或 AudioMusicPlayer。游戏代码、Prefab/Scene 和自有测试的依赖闭包与 YL 分开；不随框架默认导出，也不是新项目接入要求。
-
-游戏的分来源战斗预算、80ms 去重、组内优先级抢占和偏好迁回 XF 都是游戏业务策略，不属于 YL 音频契约。YL 的组件生命周期和旧序列化兼容测试使用框架自有夹具，不再读取游戏资源；原 `-ui34-game`、`-audio45-game`、`-runtime55-game` 联合验收入口已退休，默认 YL UI/Audio/Runtime 验收入口保持。新项目按本页正式入口配置，不复制原游戏策略或把历史游戏验收当作运行前提。
+应用自行决定战斗预算、去重窗口、组内优先级和偏好存储，不能把某个现成游戏的策略当作框架默认合同。新项目按本页正式 API、组件和 Provider 接入，不需要复制原游戏资产或恢复历史联合验收入口；框架生命周期和序列化测试使用自有夹具。
 
 ## 测试与帮助
 
@@ -898,9 +896,9 @@ Shutdown -> 阻止新请求 -> 停播/清池/清订阅与静态状态 -> 释放�
 
 | 位置 | 关注范围 |
 |---|---|
-| [`Tests/EditMode/Systems/Audio/`](../../Tests/EditMode/Systems/Audio/) | 设置、参数、快照、去重/并发、所有权、资源 Provider、Action 与会话隔离 |
-| [`Tests/PlayMode/Systems/Audio/`](../../Tests/PlayMode/Systems/Audio/) | 原生播放、进度/暂停/静音、空间目标、回调重入、池复用、淡变与 Action 等待 |
-| [`Tests/EditMode/Editor/Audio/`](../../Tests/EditMode/Editor/Audio/) | Inspector、帮助、素材库迁移和重复 Play 会话夹具 |
+| `Tests/EditMode/Systems/Audio/` | 设置、参数、快照、去重/并发、所有权、资源 Provider、Action 与会话隔离 |
+| `Tests/PlayMode/Systems/Audio/` | 原生播放、进度/暂停/静音、空间目标、回调重入、池复用、淡变与 Action 等待 |
+| `Tests/EditMode/Editor/Audio/` | Inspector、帮助、素材库迁移和重复 Play 会话夹具 |
 
 `AudioResourceBundleTests` 使用自有正式 ResourceProject/发布夹具，不涉及原游戏 Bundle；`AudioContinuousPlayTests` 检查同域重复 Play 的隔离。运行前处理自己的脏场景，读取实际执行结果；不要用全局卸载制造归零，或把测试发现列表当作运行结果。
 

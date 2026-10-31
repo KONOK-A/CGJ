@@ -1,33 +1,28 @@
-# YLFramework AI 编程说明
+# YLFramework 产品维护约定
 
-YLFramework 是 Unity 游戏框架，按 Runtime、Editor 和可选集成分层。本文件适用于本目录及子目录，与上级项目约定共同生效。
+本文件适用于 YLFramework 产品目录，并随默认框架包分发。源码仓库还受根 `AGENTS.md` 约束；导入到其他工程后服从该工程的上级约定，不把原开发宿主的工具和依赖当作消费方前置。
 
-## 项目导航
+## 先找职责
 
-- `Runtime/Foundation`：异步、事件、池、计时与更新等基础机制。
-- `Runtime/Core`：Module、MVC、UI 和资源接入；`Runtime/Systems`：Audio、Resource、Save、玩法等系统；`Runtime/Utilities`：通用工具。
-- `Editor`：作者工具、工作台与导出；`Integrations`：可选适配；`Plugins`：随附第三方库。
-- `Samples`：接入示例；`Tests`：测试与验收夹具；`Documentation`：架构和模块说明。
-- 代码规范只维护 [Documentation/CodingStyle.md](Documentation/CodingStyle.md)；架构与模块入口见 [Architecture](Documentation/Architecture.md) 和 [文档首页](Documentation/README.md)。
+修改代码前阅读 [代码规范](Documentation/CodingStyle.md)，按 [架构](Documentation/Architecture.md) 找到所有者，再查 [模块文档](Documentation/README.md#能力导航)、实现、调用方和测试。
 
-## 工作方式
+- `Runtime` / `Editor` 是两个主体程序集；Foundation、Core、Systems、Utilities 是职责区，不是独立安装包。
+- 基础机制归 Foundation，业务会话与 UI 归 Core，领域服务归 Systems，按需组合的工具与组件归 Utilities。配套 Editor 按所有者归位，中立支撑才进入 `Editor/Common`。
+- 可选集成留在 `Integrations` 的明确编译边界，不让主体反向依赖其 DLL、宏或 SDK。开发宿主的 XF、MCP 与商业插件不成为产品必需依赖。
 
-AI Agent 处理本目录及子目录的框架代码前，必须先阅读并遵守 [代码规范](Documentation/CodingStyle.md)；维护、修复、重构和新增代码均适用。
+## 设计与合同
 
-1. 先读相关模块的实现、调用方、测试和资产，确认预期行为及验证方式，不凭名称猜契约。
-2. 复用现有模块与模式，做最小必要修改；不顺手全库重构、格式化或增加抽象。框架外业务仅同步必要调用/绑定。
-3. 保持 Runtime/Editor 依赖方向、程序集与可选集成边界；生成代码修改模板或生成器，不手改受管输出。
-4. 涉及 API、序列化或协议时，同步检查反射、UnityEvent、旧资产、JSON/Excel 键及文档。保留 `.meta`/GUID；`FormerlySerializedAs` 不代表所有数据合同已兼容。
-5. 保护用户和并行修改；不自动保存脏场景、接管未知输出或覆盖冻结制品。未经授权不改依赖、权限/忽略配置、分支或提交推送。
+1. 优先复用已经正确的能力；目标要求时完整重构或淘汰旧实现，不为保留旧名增加无用兼容层，也不为统一形式新增系统、调度器或全局 Manager。
+2. Core 通过自身窄合同消费资源；Resource 是资产、实例与场景租约的释放权威。Module、Audio、Timer、Action 和领域服务各自持有生命周期，不能由一个模块的关闭推导全局清理。
+3. `YLFrameworkRoot` 是常驻宿主与 UI 装配入口，不是所有系统的自动启动器。轻量工具不强制创建 Root 或 Module；资源、音频 Provider 和业务启动由应用明确装配。
+4. 公共 API、namespace、程序集、序列化字段、资源地址、JSON/Excel 键是不同合同。按实际消费者同步调用、反射、UnityEvent、生成模板与真实旧数据；`FormerlySerializedAs` 或保留 GUID 不能代替完整迁移验证。
+5. 保留 Unity fake-null、主线程约束、重入与稳定终态；明确共享资源的借用、独占实例、取消和释放责任。不要以判空、宽泛异常捕获或静默回退掩盖错误。
+6. Editor 工具只修改明确选择或拥有的资产，支持适当的 Undo / Prefab 流程；不为预览创建运行宿主、不自动保存用户场景、不接管未知生成目录或冻结基座。
 
-## 验证与交付
+## 验证与维护
 
-- 按影响选择最小充分验证：代码看实际 Unity 编译与相关测试；数据迁移用真实旧数据；生成器验证正式输出与消费者。纯文档只检查内容、链接和差异。
-- 同一工程只用一个 Unity Editor。程序集变化影响 HybridCLR 夹具时，先走原 Prepare；AOT/热更合同变化按原门禁验证，不覆盖旧基座。
-- 源仓库提供格式只查命令；Apply 须显式限定路径。分发包缺少工具时不虚构执行，formatter 通过也不能代替结构与命名 Review。
-
-```powershell
-pwsh -NoLogo -NoProfile -NonInteractive -File Tools/CodeStyle/Format-YL.ps1 -Mode Check
-```
-
-- 完成前检查 diff、文档与资产身份；简要报告改动、实际验证和未验证范围。过程记录放任务 Plan，不写入长期规则。
+- 源码仓库使用 `Tools/Testing` 的声明式入口选择相关模块；格式与 Analyzer 使用独立工具。消费方导入包没有 `Tools` 或 `Tests` 时，使用其实际可用的编译、测试与接入冒烟，不虚构仓库命令或测试结果。
+- 源仓库格式工具与适用范围统一见 [代码规范](Documentation/CodingStyle.md#格式工具)；Apply 限定任务路径，排版通过不代表命名、结构或行为正确。
+- 运行时改动验证实际 Unity 编译、相关生命周期和失败路径；资源/生成器验证消费者；程序集与发行变更验证编译图、导出边界和干净接收工程。IL2CPP / HybridCLR 另验裁剪、反射、metadata 与基座，不能由 EditorSimulation 替代。
+- 变更落在对应模块文档，跨模块规则才更新架构，消费者入口才更新首页。一个事实维护一个权威位置，不往本文件加入阶段状态、测试数量、机器路径或历史回执。
+- 保留资产 `.meta` / GUID、来源声明和适用许可证；新增文件的元数据由 Unity 生成并核对。完成前复查差异与使用入口，明确已验证和未验证范围，不夹带消费方或并行工作区的改动。

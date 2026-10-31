@@ -90,10 +90,10 @@ EditorFast 要求已有 ResourceSystem 与 Core provider 绑定，仅使用 AppD
 
 `HybridCLRIntegrationExporter.Export(absolutePackagePath, includeSample: true)` 显式导出本叶子的源码、asmdef 和依赖说明。默认不带样例，不递归依赖，不带 Tests、官方包、生成 DLL、基线、StreamingAssets 制品、私钥或仓库验收工具；默认框架仍导出六个目录（Editor、Plugins/BouncyCastle、Prefabs、Runtime、Samples、Documentation）及两个根文件（LICENSE.md、AGENTS.md），代码规范随 Documentation 导出，不含本可选叶子或宿主商业插件。
 
-## 历史验收
+## 验证与测试边界
 
-以下为原 HybridCLR 专题的历史结果，测试数字与 Player 证据不改写为当前结构已通过。框架或相关程序集重编译后，源码仓库的 loader/Module 测试须先用当前程序集执行 `HybridCLRTestFixtures.Prepare()` 生成本机输入，不复用旧 bytes/manifest；参见 [测试说明](../../Documentation/README.md#测试)。当前 namespace 迁移的编译、完整测试与新 Player 仍由本轮整合验收分别确认。
+框架或相关程序集重编译后，源码仓库的 loader / Module 测试须先以当前程序集执行 `HybridCLRTestFixtures.Prepare()` 生成本机输入，不复用旧 bytes / manifest；准备与执行入口统一见源码仓库根 README 的“可选集成测试”。默认产品包不提供这些仓库工具或夹具。
 
-首版迁移已实际验证 Windows64 IL2CPP Development 与 Release Low 基座/运行，以及不改同一 Player 的签名 HTTPS v1→v2、重启屏障、坏 hash/签名/缺 DLL、真实部分 metadata 失败与新原生需求拒绝；这些是专项 Plan §7 的历史证据，不冒充本轮全部重验。
+原生验证需要对应 Editor / SDK / 后端的真实基座、metadata、热更程序集、Module 与 Prefab 执行链。EditorSimulation / EditorFast 不能代替 Native，最小本地闭环不能代替 HTTPS 更新、版本替换 / 回滚或任意反射泛型覆盖。
 
-本轮项目子集/EditorFast/进度与窗口增量及最终 review 修正通过 EditMode 121/121、HybridCLR PlayMode 25/25 和 CoroutineStarter 15/15；后两者在 Runtime 未再变化时沿用有效结果。新 Development IL2CPP Player 实际验证 A/B 共用基座、项目闭包发布、共享 DLL 仅加载一份及真实 async 输出；使用可信本地发布快照，不代替 HTTPS 更新验收，也未启动旧样例固定项目的 Module。当前不外推新 Release、High stripping、其他平台或任意动态泛型。执行证据、环境故障与精确范围保存在专项 Plan §9/§10，不以本说明替代实际结果。
+构建、运行、签名网络更新、裁剪级别和平台结果分别报告，并绑定当前源码、依赖、基座与制品。原专项的失败、修复和测试记录从 [历史索引](../../Documentation/IntegrationPlan.md) 查找，不在使用说明中复制旧叶子数量或将旧 Player 解释为当前成功。

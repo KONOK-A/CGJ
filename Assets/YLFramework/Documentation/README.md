@@ -1,181 +1,112 @@
-# YLFramework 文档
+# YLFramework
 
-YLFramework 是整体交付、按需使用的 Unity 游戏框架。运行时主体为 `YLFramework.Runtime`，编辑器主体为 `YLFramework.Editor`；功能目录不是独立安装包，使用某项工具也不要求启动全部系统。
+YLFramework 是 Unity C# 游戏框架，提供基础机制、Module / MVC / UI、资源与音频、配置与领域系统，以及配套作者工具。默认以 **Runtime / Editor 两个主体程序集**交付，能力按需使用，不要求先搭建完整应用框架。
 
-本文档说明当前源码的接入方式与行为边界，不是完整 API Reference。方法签名以源码和 Editor 帮助为准，平台支持以各模块的限制为准。
+本页是消费方入口。维护源仓库、运行框架测试或发行产品时，使用源码仓库根 README；不要把开发宿主当作游戏工程模板。
 
-## Unity 兼容范围
+## 从哪里开始
 
-当前定点兼容环境为 Unity `2022.3.62f3c1` 与 `6000.3.27f1`，使用同一份框架源码、资产 GUID 和 C# 9 API。独立接收工程分别使用 UGUI `1.0.0` / `2.0.0`，共同依赖 Newtonsoft.Json `3.2.1`；不要把源码开发宿主的 Packages、ProjectSettings 或 Library 搬到接收工程。
+| 目标 | 建议路径 |
+| --- | --- |
+| 使用池、事件、计时、数据结构 | 安装后直接使用相应模块，不需要 Root 或 Module |
+| 组织业务模块与窗口 | 从 [UI / Module](Modules/UI.md) 开始，选择默认 UI 根或正式模板 |
+| 加载资源、场景和命名音频 | 从 [Resource 最小接入](Modules/Resource.md#可运行最小接入) 开始，明确初始化、Provider 和 lease |
+| 编辑配置与玩法定义 | 阅读 [配置数据](Modules/Data.md)、[领域系统](Modules/Domain.md) 和 [Editor 扩展](Modules/Editor.md) |
+| 理解或扩展框架 | 阅读 [架构](Architecture.md)、[代码规范](CodingStyle.md) 和 [维护约定](../AGENTS.md) |
 
-Windows64 的 Mono 与 IL2CPP Low 已按适用范围验证资源、正式 UI/输入和业务消费者。New/Both 的定点 Input System 分别为 `1.14.2` / `1.20.1`；Legacy 工程不需要额外安装 Input System。真实音频输出采样、原生输入、独立作者工具与程序集边界是分开的验证，不以初始化、metadata 存在或单元测试数量替代。
+## 安装与分发
 
-可选 HybridCLR 的范围另外记录在其 [依赖说明](../Integrations/HybridCLR/Dependencies.json) 与 [接入说明](../Integrations/HybridCLR/README.md)：Unity 6.3 的原生结果依赖明确的维护 runtime，不是未修改官方 native 已修复。默认包不包含该可选叶子、官方 SDK、native、dnlib 或验收工具。DOTween 可选包只分发 wrapper，Standard 原包由使用者另取，不能混入 Pro 或据本地测试推断 vendor 再分发授权。
+### 独立工程安装
 
-这些结果不外推其它 Unity 补丁、移动端/WebGL、IL2CPP High、物理设备热插拔/触摸、任意动态泛型或共享 actions 配置。音频 PCM/RMS 结果不等于人工听音或 OS loopback。源码宿主专用与缺失历史制品的测试也不计独立接收已验证；准确支持范围与发行审计应和具体交付版本一起保存。
+主要兼容目标为 Unity 2022.3 LTS 与 Unity 6.3 LTS，源码按 C# 9 维护。Editor、Mono、IL2CPP 与目标平台是不同验证范围；不能把某个补丁版本或 Editor 导入成功扩展为所有平台支持。
 
-## 源码开发宿主
+Resource 远端 Player 与 IL2CPP 加密后端另有 Windows64 和精确引擎门禁，定点为 `2022.3.62f3c1` / `6000.3.27f1`；详见 [平台与范围](Modules/Resource.md#共存与范围)。本地 Bundle、远端更新、加密与整个框架的支持范围不能混为一谈。
 
-源码仓库保留 `CGJ2024` 的目录、Git 历史与开发环境，当前产品身份为 `YLFrameworkDev`，默认构建与开发场景为 `Assets/Scenes/YLFrameworkDev.unity`。主游戏已迁入独立的 `SnakeUnbound` 工程和仓库，继续使用 XF/XFAB，不是 YL 的示例或产品依赖。
+1. 在目标 Unity 工程安装必要依赖，等待 UPM 完成解析。
+2. 导入正式 Exporter 生成的 `.unitypackage`。不要复制源宿主的 Packages、ProjectSettings 或整个外部 Plugins / Resources 目录。
+3. 消费方 asmdef 显式引用 `YLFramework.Runtime`；仅 Editor 扩展引用 `YLFramework.Editor`。检查真实 Unity 编译，而不是只看 IDE。
+4. 按能力完成显式装配。基础工具可直接使用；UI、Resource、命名 Audio 和领域配置遵守各自初始化与所有权，不因放入 Root Prefab 就自动全部启用。
+5. 在目标工程验证实际场景与 Player；配置、反射类型、资源闭包和可选 SDK 的平台前置由应用一并准备。
 
-开发场景复用正式 `Prefabs/YLFramework.prefab` 和一个活动主 Camera。`YLFrameworkRoot` 只持有常驻宿主及预绑定 UI 层级，进入 Play 不等于自动启动 Resource、Audio 或业务 Module；业务仍须按各模块合同显式启动。
+| 默认依赖 | 安装与边界 |
+| --- | --- |
+| UGUI：`com.unity.ugui` | 使用目标 Editor 对应的兼容版本；正式 UI 和部分动作依赖 UnityEngine.UI |
+| Json.NET：`com.unity.nuget.newtonsoft-json` | 安装 Unity UPM 包；分发验证基线为 `3.2.1`，不可用同名替身 DLL 代替 |
+| `BouncyCastle.Cryptography 2.7.0` | netstandard2.0 DLL 与许可已随框架携带，用于 HKDF-SHA256；不要再导入冲突副本 |
 
-源码宿主保留 XF/XFAB/XFFSM/Overlap、共享 `Assets/Resources/XFGameFramework`、可选集成和工具，供共存验证与开发使用，不代表这些是 YL 分发包的必要依赖。开发场景、测试和宿主配置不在默认 `.unitypackage` 导出根内，框架分发根、版本和可选集成策略未因此改变。
+默认产品不要求 XF 生态、Odin、MCP、DOTween、MiniExcel 或 HybridCLR。可选依赖只在实际安装相应集成时需要。
 
-## 阅读顺序
+Resource 默认不启用内容加密。选择 AES-256-GCM 内容加密时，当前原生后端使用 Windows CNG；没有软件 GCM 或临时明文回退。具体平台、key provider 与失败合同见 [可选 Bundle 内容加密](Modules/Resource.md#可选-bundle-内容加密)。
 
-| 需要做什么 | 入口 |
-|---|---|
-| 导入到其他工程 | [独立工程安装](#独立工程安装) |
-| 理解目录、namespace、依赖和所有权 | [架构总览](Architecture.md) |
-| 选择需要的能力 | [模块导航](#模块导航) |
-| 启动资源并连接 Module / Audio | [Resource 最小接入](Modules/Resource.md#可运行最小接入) |
-| 打开界面、播放音频或组合动作 | [UI](Modules/UI.md) · [Audio](Modules/Audio.md) · [Action](Modules/Action.md) |
-| 使用 Editor 帮助或导出框架 | [帮助与导出](#帮助与导出) |
-| 修改框架源码 | [代码规范](CodingStyle.md) · [AI 编程说明](../AGENTS.md) |
-| 查询旧版本的设计和验收证据 | [历史记录](IntegrationPlan.md) |
+### 帮助与导出
 
-## 目录结构
+- 帮助菜单为 `YLFramework/帮助`，以及 Core / Toolkit / Action / Audio 子入口；它只读取索引、元数据与 XML，不执行示例或启动系统，见 [Help](Modules/Help.md)。
+- 默认包由源码仓库的 `Editor/Distribution/ExportUnityPackage.cs` 生成；菜单为 `YLFramework/Toolkit/导出框架包`，自动化入口为 `ExportUnityPackage.Export(absolutePackagePath)`。
+- Exporter 递归导出明确根，不使用 IncludeDependencies；不能把宿主实际已安装的依赖误认为会随包自动交付。
 
-框架根目录为 `Assets/YLFramework/`：
+| 默认交付 | 内容 |
+| --- | --- |
+| `Runtime/`、`Editor/` | 两主体源码、Core 默认资源及编译器输入 |
+| `Plugins/BouncyCastle/` | 随包 DLL 与完整许可 |
+| `Prefabs/` | 正式 UI 模板，清单与继承关系见 [UI 资产准备](Modules/UI.md#资产准备与迁移) |
+| `Samples/` | 独立接入样例；生成的使用工程数据不属于该源码根 |
+| `Documentation/`、`AGENTS.md`、`LICENSE.md` | 当前产品说明、维护约束与来源许可 |
 
-| 目录 | 说明 |
-|---|---|
-| [`Documentation/CodingStyle.md`](CodingStyle.md) | 代码、命名、bool 分类与安全改名的唯一规范 |
-| [`AGENTS.md`](../AGENTS.md) | 面向 AI 编程的项目导航、工作流程与验证要求 |
-| [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Core / Systems / Utilities） |
-| [`Editor/`](../Editor/) | Editor-only 主体、作者工具、帮助与导出 |
-| [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
-| [`Integrations/Excel/`](../Integrations/Excel/) | 可选 Editor-only xlsx 后端；Runtime 字段合同在 Utilities/Excel |
-| [`Integrations/DomainExcel/`](../Integrations/DomainExcel/) | 依赖可选 Excel 后端的领域作者接入 |
-| [`Integrations/HybridCLR/`](../Integrations/HybridCLR/) | 可选官方 HybridCLR 9.0.3 接入，独立导出；不自动接入原游戏 |
-| [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
-| [`Plugins/`](../Plugins/) | 仅含批准的官方 BouncyCastle 2.7.0 HKDF 依赖及 SOURCE 来源；不包含宿主商业插件 |
-| [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具；完整清单与继承关系见 [UI 资产准备与迁移](Modules/UI.md#资产准备与迁移) |
-| [`Samples/`](../Samples/) | ResourceStartup 的显式启动、模拟/Bundle、内容加密与内置部署示例 |
-| `Documentation/` | 本文档目录 |
+不导出 `Tests`、根 `Integrations`、源仓库 Tools、游戏、测试探针、SDK、NuGet 缓存或开发宿主配置。Core 生成器的 `Examples/Core/Modules` 也是非默认交付的生成输出，详见 [Editor 设置与生成](Modules/Editor.md#设置与生成)。Analyzer 以 RoslynAnalyzer 编译器输入交付，不作为 Player 插件；规则、安装与移除只维护在 [Attributes](Modules/Attributes.md#core-使用诊断)。
 
-Runtime 分为 Foundation、Core、Systems、Utilities 四个职责区，Editor 按对应功能及 Help / Distribution 组织。namespace 表达功能域，不机械复制目录；精确归属和升级注意事项见 [Namespace 与迁移](Architecture.md#namespace-与迁移)。
+## 能力导航
 
-## 模块导航
+### 基础机制
 
-### Foundation（框架基础机制）
+| 能力 | 文档 |
+| --- | --- |
+| 事件、Channel / Bus 与 Unity 监听 | [Events](Modules/Events.md) |
+| 对象池与精确回收 | [Pool](Modules/Pool.md) |
+| 计时、作用域与日期投递 | [Timing](Modules/Timing.md) |
+| 依赖注入、单例与会话重置 | [IOC](Modules/IOC.md) · [Singleton](Modules/Singleton.md) |
+| 属性与方法绑定 | [Binding](Modules/Binding.md) |
+| 元数据、Inspector 扩展与编译器诊断 | [Attributes](Modules/Attributes.md) |
+| 类型查找与缓存 | [AssemblyTool](Modules/AssemblyTool.md) |
+| 更新与协程等待基础 | `Runtime/Foundation/Update`、`Async`；请求基类边界见 [HTTP](Modules/Http.md#与异步基类的区别) |
 
-| 模块 | 作用 | 文档 |
-|---|---|---|
-| Singleton | 普通、Mono、Prefab 与 ScriptableObject 单例及会话生命周期 | [Singleton](Modules/Singleton.md) |
-| Pool | 类对象、安全池、GameObject 与集合池；回收责任由调用方持有 | [Pool](Modules/Pool.md) |
-| Events | 实例、命名、类型事件与 Unity 消息适配；Core EventManager 为薄入口 | [Events](Modules/Events.md) |
-| Binding | 可监听属性、列表、字典与 PlayerPrefs 属性 | [Binding](Modules/Binding.md) |
-| IOC | 注册、解析、构造与成员注入 | [IOC](Modules/IOC.md) |
-| AssemblyTool | 按完整类型名查找 Type | [AssemblyTool](Modules/AssemblyTool.md) |
-| Attributes | 展示元数据、DisableEdit 与 Core 编译器诊断 | [Attributes](Modules/Attributes.md) |
-| Timing | 秒/帧计时、精确句柄、Scope、显式复用与终态等待 | [Timing](Modules/Timing.md) |
-| Serialization | 通用 SerializedDictionary，与 Save 文件策略分离 | [字典用法](Modules/Save.md#serializeddictionary-用法与边界) |
-| Async / Update | 协程启动与观察、基础请求、三相位更新订阅 | [Async 源码](../Runtime/Foundation/Async/) · [Update 源码](../Runtime/Foundation/Update/) |
+### 业务与领域
 
-### Core（业务生命周期与 UI）
+| 能力 | 文档 |
+| --- | --- |
+| Module / MVC、View / Panel、UI 根与输入 | [UI](Modules/UI.md) · [Core 职责](Architecture.md#core-职责归口) |
+| Catalog、AssetBundle、场景、lease、构建发布 | [Resource](Modules/Resource.md) |
+| Music / Voice / Sound、命名 Provider、句柄与 Mixer | [Audio](Modules/Audio.md) |
+| Action、Observable、组合动作与音频桥接 | [Action](Modules/Action.md) |
+| Localization、DataAssets、Excel 字段与作者流程 | [Data](Modules/Data.md) |
+| 存档槽、SaveStore、序列化与故障恢复 | [Save](Modules/Save.md) |
+| Skill、Buff、Mission、Equipment、Reddot、Logging | [Domain](Modules/Domain.md) |
+| HTTP 请求、取消与响应快照 | [HTTP](Modules/Http.md) |
+| 配置式 StateMachine | [Behavior](Modules/Behavior.md#两种状态机)，不同于下方轻量 FSM |
 
-| 模块 | 作用 | 文档 |
-|---|---|---|
-| Module / MVC / View | Module 统一持有业务会话、注册、启动与退出；通过窄合同消费资源 | [Core 职责](Architecture.md#core-职责归口) |
-| UI | Panel/View、根与层、模态、输入、适配与 Tips | [UI](Modules/UI.md) |
+### 工具与 Editor
 
-### Utilities（通用工具）
+| 能力 | 文档 |
+| --- | --- |
+| 轻量 FSM、网格与索引 | [FSM](Modules/FSM.md) · [Grid](Modules/Grid.md) · [Table](Modules/Table.md) |
+| JSON 树、压缩与通用扩展 | [Json](Modules/Json.md) · [ZipTool](Modules/ZipTool.md) · [Extensions](Modules/Extensions.md) |
+| Overlap、CharacterController2D、MoveablePlatform | [Behavior](Modules/Behavior.md) |
+| 取色器与窗口 | [UI](Modules/UI.md#取色控件colorselector) |
+| 作者工具、TreeView、设置与 Editor 迁移 | [Editor](Modules/Editor.md) |
+| 帮助提供方、窗口与 XML | [Help](Modules/Help.md) |
 
-| 模块 | 作用 | 文档 |
-|---|---|---|
-| Extensions / StringTools | Unity、System、几何扩展与显示格式工具 | [Extensions](Modules/Extensions.md) |
-| FSM | 调用方驱动与回收的轻量纯代码状态机 | [FSM](Modules/FSM.md) |
-| Grid | 矩形与稀疏二维数据结构 | [Grid](Modules/Grid.md) |
-| Json | JSONObject 树解析与构建，不替代 Json.NET 或 Save | [Json](Modules/Json.md) |
-| Table | 通用表与多值索引，不接管资源所有权 | [Table](Modules/Table.md) |
-| ZipTool | Zip / GZip 与显式归还的归档读取器 | [ZipTool](Modules/ZipTool.md) |
-| ColorSelector | 按需使用的取色控件与 Core Panel 窗口 | [ColorSelector](Modules/UI.md#colorselector) |
-| Overlap / CharacterController2D / MoveablePlatform | 检测、2D 角色移动与平台组件及对应 Editor | [Utilities 源码](../Runtime/Utilities/) |
-| Excel | Runtime 字段合同；xlsx 作者后端另行选装 | [配置数据接入](Architecture.md#配置数据接入) |
+## 可选集成
 
-### Systems（领域服务与规则）
+以下均需显式安装，不从默认产品反向引用 SDK。版本、宏、平台与许可按所选集成的声明准备，不以“目录已存在”当作已接入。
 
-| 模块 | 作用 | 文档 |
-|---|---|---|
-| Action | 动作组合、命名执行、安全句柄、屏幕过渡与 BCL Observable | [Action](Modules/Action.md) |
-| Audio | Clip / 命名播放、Music / Voice / Sound、Crossfade、空间音效与可选 Mixer | [Audio](Modules/Audio.md) |
-| Resource | 显式启动、Catalog、资产/实例/场景租约、构建发布与更新事务 | [Resource](Modules/Resource.md) |
-| Save | 唯一 SaveStore、模型与槽位、异步请求、缓存与显式备份恢复；仅当前 v2 | [Save](Modules/Save.md) |
-| Localization / DataAssets | 多语言文本图片、SO 根/子资产作者流程与登记句柄 | [配置数据接入](Architecture.md#配置数据接入) |
-| Skill / Buff / Mission / Reddot / Logging | 领域运行态、宿主清理、配置作者工具、红点来源与显式文件日志 | [领域玩法接入](Architecture.md#领域玩法接入) |
-| Equipment | Asset / Script 双创建、单一挂载归属与装备配置窗口 | [Equipment 接入](Architecture.md#equipment-接入) |
-| StateMachine | 配置驱动的完整状态机与可视化作者工具，与轻量 FSM 分离 | [Runtime 源码](../Runtime/Systems/StateMachine/) · [Editor 源码](../Editor/Systems/StateMachine/) |
-| HTTP | GET / Form / JSON / PUT / DELETE、稳定终态与独占传输取消 | [HTTP / AsyncOperation 边界](Architecture.md#http--asyncoperation-边界) |
+| 集成 | 使用边界 |
+| --- | --- |
+| DOTween | `Integrations/DOTween`，外部 DOTween.dll 与 `DOTWEEN`；[Action 接入](Modules/Action.md#扩展方式) |
+| Excel | `Integrations/Excel/Editor`，完整 MiniExcel 后端及许可；[配置作者流程](Modules/Data.md#excel-作者后端) |
+| DomainExcel | `Integrations/DomainExcel`，完整 Excel 后端与 `YL_DOMAIN_EXCEL`；[领域导入](Modules/Domain.md#domainexcel) |
+| HybridCLR | 独立导出，使用声明的官方 SDK 并复用 Resource；[架构边界](Architecture.md#hybridclr-可选接入)，完整步骤在选装目录 README |
 
-### 可选集成
+## 维护与来源
 
-下列目录只在源码仓库或显式选装后存在，不随默认框架包分发，也不成为主体的必需依赖：
+框架代码规范见 [CodingStyle](CodingStyle.md)，维护规则见 [AGENTS](../AGENTS.md)，来源与许可见 [LICENSE](../LICENSE.md)。历史设计与迁移的查找入口为 [历史索引](IntegrationPlan.md)，不是当前待办、安装说明或授权。
 
-| 集成 | 使用条件 | 说明 |
-|---|---|---|
-| DOTween | 安装供应商 DLL、启用 `DOTWEEN`，业务 asmdef 显式引用集成程序集 | Action 扩展，`autoReferenced=false` |
-| Excel | 完整携带 `Integrations/Excel/Editor` 及其依赖与许可证 | Editor-only xlsx 作者后端 |
-| DomainExcel | Excel 后端及 `YL_DOMAIN_EXCEL` | Skill / Buff / Mission / Equipment 作者接入 |
-| HybridCLR | 官方包 `9.0.3` 及对应原生工具链 | 独立导出；详见选装目录的 [README](../Integrations/HybridCLR/README.md) |
-
-不提供 XFAB 兼容入口或自动回退；YL 的正式资源与音频接入由自身 ResourceSystem 完成。
-
-### 其他内容
-
-- [Help](Modules/Help.md)：Editor-only主体中的共享Help与各领域提供方，原菜单/窗口/Provider与配置身份保持。
-- [ColorSelector](Modules/UI.md#colorselector)：四个取色类型完整归 `Runtime/Utilities/UI/ColorSelector/`，不是框架底层；正式 `YLFramework.UI.ColorSelectorWindow` 与 `Prefabs/ColorSelector.prefab` 保留，由业务 Module 显式打开，旧样例已退役。
-
-## 帮助与导出
-
-- 菜单：`YLFramework/帮助`、`YLFramework/Core/帮助`、`YLFramework/Toolkit/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。浏览帮助不执行示例或创建运行宿主，扩展方式见 [Help](Modules/Help.md)。
-- 常用工具：`YLFramework/Resource/Workbench`、`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`、`YLFramework/Core/分析器规则`（Project Settings > YLFramework > Analyzers）。
-- `YLFramework/Toolkit/导出框架包` 的默认根为 `Editor`、`Plugins/BouncyCastle`、`Prefabs`、`Runtime`、`Samples`、`Documentation` 六个目录，以及 `LICENSE.md`、`AGENTS.md` 两个根文件；使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根导出，代码规范随 `Documentation` 导出。
-- 自动化可调用 `YLFramework.Editor.Distribution.ExportUnityPackage.Export(absolutePackagePath)` 向已有本地父目录导出同一内容，默认不覆盖、不保存其他资产；菜单入口会先保存资产。Resource 发布快照是另一类交付，见 [Resource](Modules/Resource.md#轮换与交付)。
-- `Plugins/BouncyCastle/` 完整递归且保留原导入平台；不递归整个 Plugins，更不复制或改变宿主商业插件配置。JSONObject/SharpZipLib 的现有来源声明与许可证随 Runtime 保留。
-- `Runtime/Core/Analyzers/YLFramework.Analyzers.dll` 是编译器输入，不是 Player 运行依赖；十项诊断默认 Warning，新增 Inject 声明、View 入口加载 Panel、音频协程等待检查。设置页可选 asmdef/预定义业务程序集、预览并修改原生 ruleset，保留其他规则与继承；只读接入自检不把零诊断当成功。配置、Error 恢复、升级与源码重建见 [Attributes](Modules/Attributes.md#core-使用诊断)。
-- 默认不导出 `Tests/`、根 `Integrations/`、`Examples/`、游戏资产/Bundle、`Assets/YLFrameworkData`、SDK 工具项目、NuGet 缓存、临时探针、中间产物及包外 DOTween。可选扩展源码须另行满足依赖；Analyzer 重建源码保留在仓库 `Tools/YLFramework.Analyzers`，不随 UnityPackage 提供 SDK 项目。
-- 框架需要 UGUI、Json.NET 与随包的 BouncyCastle，不是零依赖安装包；不需要原 XF 生态或商业 Editor 插件。`Library/` 下的 XML 是构建产物，不默认导出，缺 XML 时 Help 仍展示可反射的声明。
-
-## 测试
-
-- EditMode：`Tests/EditMode/{Foundation,Core,Systems/<模块>,Utilities}/`；Editor 行为位于 `Tests/EditMode/Editor/<功能>/`，如 Help、Resource 和 Core。
-- PlayMode：`Tests/PlayMode/{Foundation,Core,Systems/<模块>,Utilities}/`，覆盖单例、Timing、Action、Audio 等运行行为。普通单模块测试随职责归位，混合验收保留跨模块范围。
-- `Tests/Acceptance/Core/` 与 `Tests/Fixtures/Core/` 分别保留显式验收入口及夹具；Tests 整体不默认分发。目录重排不更名测试程序集，也不以源码存在冒充测试发现或通过。
-- `Tests/EditMode/Editor/Distribution/DevelopmentHostBoundaryTests.cs` 验证真实开发场景、正式 Prefab 绑定、产品身份及游戏依赖边界，不把不存在路径的空闭包当作独立性证据。
-- DOTween：`Tests/Integrations/DOTween/` 下两个独立测试程序集，受 `DOTWEEN` + `UNITY_INCLUDE_TESTS` 约束。
-- HybridCLR：`Tests/Integrations/HybridCLR/` 的独立 EditMode/PlayMode 叶子，精确约束 9.0.3；Editor Simulation、替身与真实 IL2CPP 证据分别记录，不把单元测试冒充原生热更。
-
-HybridCLR 源码仓库首次检出或相关程序集重新编译后，先在非 Play 的 Editor 主线程调用 `YLFramework.Tests.Integrations.HybridCLR.HybridCLRTestFixtures.Prepare()`，再运行 loader/Module PlayMode 测试。该步骤从当前已编译程序集生成 `PlayMode/Resources/YLHybridCLRTests` 下的 `.bytes` 和 manifest JSON；这些本机输入及其 meta 不纳入 Git，不能复用其他机器或旧程序集的快照。
-
-导出的框架包不包含 `Tests/`，测试仅在源码仓库内运行。
-
-运行入口为 Unity Test Runner。API 示例编译、Unity 编译、EditMode、PlayMode、Player 构建与运行是不同证据；测试数量和具体制品结果只放在对应的历史记录中，不作为本文的当前通过承诺。
-
-## 独立工程安装
-
-以 Unity `2022.3.62f3c1` 为安装基线，先在目标工程准备下列依赖，再通过 `Assets > Import Package > Custom Package` 导入框架 `.unitypackage`。不要复制源码开发宿主或 `SnakeUnbound` 游戏工程的 manifest、Library 或游戏插件来补依赖；这些工程保留了与框架分发无关的包，其声明也不能代替接收工程实际解析的版本。
-
-Analyzer 的发行验收目标为 Windows / Unity 2022.3 LTS、Unity 6.3 LTS / Visual Studio、Rider；以每份发行记录的实际版本与结果为准，不将目标矩阵当作已通过证明。未完成环境验证时不得扩写支持声明，其他系统、Unity版本及IL2CPP不由本目标自动保证，详见 [发布支持边界](Modules/Attributes.md#发布支持边界)。
-
-| 依赖 | 安装来源与版本 | 用途 |
-| --- | --- | --- |
-| UGUI | Unity Package Manager，使用该 Editor 对应版本；独立安装历史基线为 `1.0.0` / builtin | `UnityEngine.UI` |
-| Json.NET | Unity Registry，`com.unity.nuget.newtonsoft-json` `3.2.1` | Runtime/Editor直接依赖 |
-| BouncyCastle | 框架包内`Plugins/BouncyCastle`，2.7.0官方netstandard2.0制品 | HKDF-SHA256 |
-| Unity内建模块 | 同版本Editor正常提供/解析的UI、Audio、AssetBundle、UnityWebRequest等模块 | 不复制UnityEngine或Windows系统DLL |
-
-Input System 为可选输入后端；最小工程可用 Legacy Input。使用新输入时需另装兼容的 Input System（现有基线为 `1.14.2`），配置 Active Input Handling 并重启 Editor，具体限制见 [UI 输入边界](Modules/UI.md#输入边界)。框架不要求 URP；使用现有渲染管线时，由应用维护对应材质。
-
-不需要原 XF / XFAB / XFFSM、MCP、DOTween 或历史 XF Logger 补丁。YL 自有 `LoggerManager` 默认被动，只有应用显式启用才接管日志，见 [领域玩法接入](Architecture.md#领域玩法接入)。
-
-导入并确认 Unity 编译成功后，再按 [Resource 最小接入](Modules/Resource.md#可运行最小接入) 生成目标工程自己的资源，或按 [UI 用法](Modules/UI.md) 使用轻量默认根与完整模板。随包不含源码仓库的 Acceptance 场景、测试程序集或历史接收工程。
-
-Resource 远端更新、Bundle 加密与 HybridCLR 各有额外平台和环境限制；安装主体成功不等于这些能力已在任意目标平台可用。
-
-## 历史与维护
-
-[IntegrationPlan.md](IntegrationPlan.md) 保留融合蓝图、旧交付身份、失败与复验记录；其中的本机路径、提交、测试数量和“本轮”只属于记录当时的快照，不是安装步骤或当前验收结论。源码仓库的 `.kilo/plans/` 与验收工具不随默认包分发，读取产品指南不需要这些文件。
-
-维护文档时优先更新对应模块页，首页只保留导航，架构页只保留跨模块规则。不要在多个页面复制阶段回执，或将旧包、旧 Player 与当前源码的验证混为一谈。
+源码仓库的 Tests、测试 CLI 与验收夹具不随默认包交付。消费方使用自己的真实编译、接入场景和目标平台验证；旧结果、缺失工具或同名 API 都不能代替当前使用环境的证据。

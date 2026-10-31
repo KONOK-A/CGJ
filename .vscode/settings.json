@@ -99,5 +99,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "CGJ2024.slnx"
+    "dotnet.defaultSolution": "YLFrameworkDev.slnx"
 }

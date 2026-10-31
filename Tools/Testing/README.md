@@ -14,15 +14,14 @@
 - Framework 模块需要声明中的现有插件、包锁和资产元数据。离线引用包含来源工程已导入的 UGUI 与 Json.NET，必须先完成真实 Unity 导入，工具不会伪造这些 DLL。
 - Native 宿主只安装模块声明需要的包与源码，不恢复历史游戏或接收工程。图形模块不能使用无图形模式替代。
 
-本机当前示例：
+示例从当前进程环境变量取值并显式传参。运行者须先将它们设为本机实际 Editor 路径和明确的独立工作根，不复制其他机器或历史验收的路径：
 
 ```powershell
-$unity = 'G:\Unity Editor\2022.3.62f3\Editor\Unity.exe'
-$workspace = 'G:\Unity\Testing'
+$unity = $env:YL_TEST_UNITY
+$workspace = $env:YL_TEST_WORKSPACE
 ```
 
-Unity 6 可改为实际安装的 `G:\Unity Editor\6000.3.27f1\Editor\Unity.exe`。
-其他构建只有在配置中有经过核实的完整身份时才受支持。
+Unity 2022 与 Unity 6 使用各自真实可执行文件，支持的完整 ProductVersion 统一以 `TestSuites.json` 为准。它们与来源工程 `ProjectVersion.txt` 是不同身份；没有对应声明时不能仅替换路径声称兼容。
 
 ## 操作
 
@@ -102,7 +101,7 @@ Daily 的类别排除必须出现在发现摘要的 `excludedCategories` / `excl
 | Resource native crypto / TLS / 下载矩阵 | 引擎及平台适配必须有对应实际证据；普通逻辑通过不表示所有原生后端受支持，不自动修改信任、证书或网络策略。 |
 | Audio DSP / 原生音频输出 | 原生测量断言保留，需要真实设备；AudioSession与日常集都不能替代DSP/可听输出验收。 |
 | OS / IDE / 插件与物理输入设备 | 真实操作系统或外部宿主为独立前置；两个已声明NativeInput窗口用例不能替代这些专项，不创建替身或控制用户Editor。 |
-| Stage9 / Equipment / 旧主Editor接收模板 | 作为明确安装的测试支持或冻结记录保留，不在生产默认编译图；固定owner/提交/路径不转为新成功，也不为它们恢复旧工程。 |
+| Stage9 / Equipment / 旧主Editor接收模板 | 仅在明确声明和满足前置时安装为测试支持，不在生产默认编译图；历史owner、提交或路径不是当前授权与执行入口。 |
 | DomainExcel / DOTween 等可选适配 | 当前源码与宏前置保留，只有存在对应声明和可用依赖时才执行；旧复合归档脚本的历史结果不等于当前可选集成验收。 |
 
 这些边界不是Skip白名单，不能用于把已选择的失败改报通过。
@@ -179,13 +178,7 @@ pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLUnitySa
 `Test-YLAssemblyLayout.ps1` 消费实际 Unity 编译图；静态图通过不是功能或 Player 构建通过。
 其输入图必须标明来源工程、实际 Editor、采集时间和编译状态，不能用手写理想图冒充。
 
-Formatter 与 Analyzer 保留独立入口，不并入 UTF，不改变原有诊断或默认部署行为：
-
-```powershell
-pwsh -NoLogo -NoProfile -NonInteractive -File Tools/CodeStyle/Format-YL.ps1 -Mode Check
-pwsh -NoLogo -NoProfile -NonInteractive -File Tools/CodeStyle/Test-Format-YL.ps1
-pwsh -NoLogo -NoProfile -NonInteractive -File Tools/YLFramework.Analyzers/build.ps1
-```
+Formatter 与 Analyzer 保留独立入口，不并入 UTF，也不改变默认部署行为。格式与工具边界见 [CodingStyle](../../Assets/YLFramework/Documentation/CodingStyle.md#格式工具)，诊断重建与验证见 [Attributes](../../Assets/YLFramework/Documentation/Modules/Attributes.md#重建与验证)。
 
 旧 Verify/Offline/接收工具的辅助编译结果不能替代上述测试合同。
 正式使用说明只记当前入口和前置；阶段计数、一次性失败、迁移取舍与未验收范围记在原任务 Plan。
@@ -213,10 +206,10 @@ pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLDistrib
 仅在明确提供已存在、已核实的原生源时启用，要求同时指定`-Backend IL2CPP -RunPlayer -HybridCLR -NativeSource`。主工程的热更名单、API级别和本地基座不会被配置成测试状态。
 
 ```powershell
-$native2022 = 'G:\Unity\Projects\CGJ2024\Library\HybridCLR\il2cpp_plus_repo\libil2cpp'
+$nativeSource = $env:YL_HYBRIDCLR_NATIVE_SOURCE
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLDistribution.ps1 `
-  -Unity $unity -WorkspaceRoot 'G:\Unity\Testing' -Backend IL2CPP -RunPlayer -HybridCLR `
-  -NativeSource $native2022 -TimeoutSeconds 2400 -PlayerTimeoutSeconds 180
+  -Unity $unity -WorkspaceRoot $workspace -Backend IL2CPP -RunPlayer -HybridCLR `
+  -NativeSource $nativeSource -TimeoutSeconds 2400 -PlayerTimeoutSeconds 180
 ```
 
 - 普通包必须先通过原导出及无Tests/UTF的裸导入，然后才向自有接收宿主安装可选HybridCLR叶子、当前声明的精确SDK及产品根外的`HybridCLREntry.cs`/`HybridCLRSmoke.cs`。默认Mono/普通IL2CPP模式不安装该可选叶子。
@@ -233,4 +226,4 @@ pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLDistrib
 CI必须提供明确Editor/SDK/可选包与短的独占工作根；缺前置报告未运行，不安装未授权依赖或改报通过。
 上传本轮summary、selection、XML与必要脱敏日志；取消同样保留真实终态，不用上传成功替代测试成功。
 图形/OS/DSP、AOT/Player和可选SDK门保留各自前置，不能用普通无图形代理或纯逻辑门外推。
-本任务只提供可接入的本地入口和文档，不新增远程CI服务、密钥或部署流程。
+当前提供可接入 CI 的本地入口，不内建远程 CI 服务、密钥或部署流程。

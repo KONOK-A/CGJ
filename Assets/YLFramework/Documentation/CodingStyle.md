@@ -41,3 +41,11 @@
 - JSON/Excel/存档键、资源地址、枚举值、布局和签名输入不随改名漂移；Json.NET 显式映射，JsonUtility 协议字段必要时保留旧名。
 - `keepWaiting` 等外部 override、Audio 公开 JSON 字段、`SerializedDictionary.datas/Key/Value` 是合法例外，不以旧名零命中验收。
 - 不借改名改变 API 形状、访问级别、初始化/求值顺序、线程、所有权、取消、异常、重入或 Unity fake-null 语义。
+
+## 格式工具
+
+以下仅适用于源码仓库，默认产品包不携带 `Tools`。从仓库根使用 PowerShell 7.6，执行 `Tools/CodeStyle/Format-YL.ps1 -Mode Check`；Apply 必须以 `-Paths` 指定本次任务的仓库相对路径。
+
+工具按受维护源码范围工作，排除第三方实现、生成代码和 HybridCLR 本机测试输入。Check 只查编码与排版，不重命名、改语义或执行 IDE 命名建议；实际范围与 SDK 前置以脚本及对应版本锁为准。
+
+命名、结构、外部合同和可读性仍需语义审查。编译器诊断的独立构建与验证见 [Attributes](Modules/Attributes.md#重建与验证)，不把格式通过当作行为或 Analyzer 验收。

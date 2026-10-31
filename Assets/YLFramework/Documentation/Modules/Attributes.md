@@ -62,7 +62,7 @@ Editor 内可从 `YLFramework/Core/帮助` 阅读规则和接入摘要；`YLFram
 
 六个正式 marker 位于 [`Runtime/Core/Attributes/`](../../Runtime/Core/Attributes/)，namespace `YLFramework.Core.RoslynAnalyzers`、程序集 `YLFramework.Runtime`。它们保留原有构造及 AttributeUsage，只提供编译元数据，不执行运行时权限检查。
 
-分析器源码位于**源码仓库根**的 `Tools/YLFramework.Analyzers/`，不在 `Assets/YLFramework` 内，也不随默认 `.unitypackage` 分发。包内唯一编译器 DLL 为 [`Runtime/Core/Analyzers/YLFramework.Analyzers.dll`](../../Runtime/Core/Analyzers/YLFramework.Analyzers.dll)，设置页源码随 Editor 分发。十项规则默认启用且均为 **Warning**，项目可按 ID 配置严重级别；分析器不依赖 Unity / Core / Workspaces，默认不分析生成代码，缓存仅限当前 compilation。当前不提供 CodeFix，不通过自动修改所有权、生命周期或不可变设计来消除诊断。
+分析器实现和 SDK 测试位于**源码仓库根**的 `Tools/YLFramework.Analyzers/`，不随默认 `.unitypackage` 分发。规则目录源文件 [`Editor/Core/Analyzers/AnalyzerRuleCatalog.cs`](../../Editor/Core/Analyzers/AnalyzerRuleCatalog.cs) 随 Editor 交付，并由 SDK 项目链接编译，供诊断实现与设置/帮助共享规则元数据。包内唯一编译器 DLL 为 [`Runtime/Core/Analyzers/YLFramework.Analyzers.dll`](../../Runtime/Core/Analyzers/YLFramework.Analyzers.dll)。十项规则默认启用且均为 **Warning**，项目可按 ID 配置严重级别；分析器不依赖 Unity / Core / Workspaces，默认不分析生成代码，缓存仅限当前 compilation。当前不提供 CodeFix，不通过自动修改所有权、生命周期或不可变设计来消除诊断。
 
 | ID | 契约与典型修复 |
 |---|---|

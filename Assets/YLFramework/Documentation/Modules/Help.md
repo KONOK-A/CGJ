@@ -18,7 +18,7 @@ HelpKit 是 Unity Editor 内的只读帮助窗口基础设施：项目模块显�
 | [`Editor/Systems/Action/Help/`](../../Editor/Systems/Action/Help/)、[`Editor/Systems/Audio/Help/`](../../Editor/Systems/Audio/Help/) | `YLFramework.Editor` | 对应领域提供方，按显式类型索引 |
 | [`Editor/Help/FoundationToolsHelpProvider.cs`](../../Editor/Help/FoundationToolsHelpProvider.cs) | `YLFramework.Editor` | 基础机制与工具提供方，namespace 为 `YLFramework.Editor.Help` |
 | [`Editor/Core/CoreHelpProvider.cs`](../../Editor/Core/CoreHelpProvider.cs) | `YLFramework.Editor` | Core提供方；主体依赖Runtime/UGUI/Json.NET，不要求XFAB |
-| [`Tests/EditMode/Editor/Help/`](../../Tests/EditMode/Editor/Help/) | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集 |
+| 源码仓库 `Tests/EditMode/Editor/Help/` | `YLFramework.Tests.EditMode` | 复用普通 EditMode 程序集，不随默认包交付 |
 
 Core 提供方 namespace 为 `YLFramework.Editor.Core`，Action / Audio 提供方为 `YLFramework.Editor.Actions` / `.Audio`；所有正式编辑器类型共用 Editor-only 主体。帮助核心与领域提供方按职责分离，注册表不发现模块，API 索引不自动收集依赖程序集。
 
@@ -107,7 +107,7 @@ internal static class InventoryHelp
 - HelpKit 自身不注册帮助模块；打开 `YLFramework/帮助` 可看到 Core、Foundation / Tools、ActionKit、AudioKit。
 - 窗口标题："项目帮助"或 "`<DisplayName>` 帮助"。
 - 模块快捷菜单：`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`；稳定注册 id 为 `actionkit` / `audiokit`，显示名仍为 ActionKit / AudioKit。
-- `YLFramework/Core/帮助` 的稳定 id 为 `core`：Module/MVC、View/UI 最小接入、现有生成器入口、依赖边界，以及 YL0001～YL0007 的 Warning 默认、作用域、配置与源码重建。详细规则仍以 [Attributes](Attributes.md#core-使用诊断) 为准，不在 Help 复制整份说明。
+- `YLFramework/Core/帮助` 的稳定 id 为 `core`：Module/MVC、View/UI 最小接入、现有生成器入口、依赖边界，以及编译器诊断的作用域、配置与源码重建。详细规则只维护在 [Attributes](Attributes.md#core-使用诊断)，Help 按共享目录展示，不另存固定规则数量。
 - `YLFramework/Toolkit/帮助` 的稳定 id 为 `foundation-tools`：Foundation、Tools、Attributes 的简洁导航与精选真实 API。CustomClassNameGui/CustomPropertyGui 仍是显式扩展元数据，不宣称已有自动 Inspector 平台。
 - 内容工厂在实际加载模块时惰性调用；窗口复用未变化的当前注册项，切换模块或替换该注册项才重新构建。API 索引只读取元数据与文档，不执行成员或示例，也不初始化 Runtime 宿主。
 - Action/Audio Provider 按所属 namespace 的精确或点分边界筛选类型；Core/Foundation-Tools 直接列出精选类型，共享 Runtime 不意味着展示全程序集。Observable / Audio bridge 内建，只有 DOTween 指南保留 optional 门控。

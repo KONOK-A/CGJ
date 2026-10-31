@@ -114,7 +114,7 @@ using (var request = resources.AcquireAsync<TextAsset>(new ResourceAddress("game
 }
 ```
 
-配置数据接入时，通过 `ResourceProjectMount(..., assetTypes: compiledTypes)` 显式提供编译类型：`typeof(YLFramework.Localization.MultiLanguageConfigs)`、`typeof(YLFramework.DataAssets.ScriptableObjectConfigs)` 及应用实际使用的具体根/直接加载条目类型。不扫描全部资产，也不向 Resource 默认类型表写入领域依赖。Localization/DataAssets 返回的登记句柄持有根租约，业务先停 UI 再归还句柄，条目借用不得超过根生命周期。见 [配置数据接入](../Architecture.md#配置数据接入)。
+配置数据接入时，通过 `ResourceProjectMount(..., assetTypes: compiledTypes)` 显式提供编译类型：`typeof(YLFramework.Localization.MultiLanguageConfigs)`、`typeof(YLFramework.DataAssets.ScriptableObjectConfigs)` 及应用实际使用的具体根/直接加载条目类型。不扫描全部资产，也不向 Resource 默认类型表写入领域依赖。Localization/DataAssets 返回的登记句柄持有根租约，业务先停 UI 再归还句柄，条目借用不得超过根生命周期。见 [配置数据接入](Data.md#资源准备与生命周期)。
 
 ## 可运行最小接入
 

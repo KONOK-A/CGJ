@@ -145,10 +145,12 @@ private void OnDisable() => _background.Cancel();
 
 ## 测试与帮助
 
-- [`Tests/EditMode/Systems/Action/`](../../Tests/EditMode/Systems/Action/)：执行与回收、命名/重入/租约、生命周期、组合动作、屏幕资源与 Observable；Help/API 行为归 [`Tests/EditMode/Editor/Help/`](../../Tests/EditMode/Editor/Help/)。事件与注销契约由 [`EventsContractTests.cs`](../../Tests/EditMode/Foundation/Events/EventsContractTests.cs) 覆盖。
-- [`Tests/PlayMode/Systems/Action/`](../../Tests/PlayMode/Systems/Action/)：三种执行范围、真实帧延迟、宿主/场景销毁、全局消息、屏幕过渡与内建 Observable；事件生命周期触发器由 [`EventsLifecyclePlayModeTests.cs`](../../Tests/PlayMode/Foundation/Events/EventsLifecyclePlayModeTests.cs) 覆盖。
-- [`Tests/Integrations/DOTween/`](../../Tests/Integrations/DOTween/)：两个独立测试程序集，要求 `DOTWEEN` + `UNITY_INCLUDE_TESTS`。
-- [`ApiHelpTests.cs`](../../Tests/EditMode/Editor/Help/ApiHelpTests.cs) 保留可信引擎 / BCL 引用筛选回归；全量示例与 core-only 真实 AssemblyBuilder fixture 分别验证，后者不链接 optional wrapper 或供应商 DLL，不代表干净工程导入。
+以下测试位置相对于源码仓库的框架根，默认产品包不包含 Tests；执行入口见仓库测试工具说明。
+
+- `Tests/EditMode/Systems/Action/`：执行与回收、命名/重入/租约、生命周期、组合动作、屏幕资源与 Observable；Help/API 行为归 `Tests/EditMode/Editor/Help/`。事件与注销契约由 `Tests/EditMode/Foundation/Events/EventsContractTests.cs` 覆盖。
+- `Tests/PlayMode/Systems/Action/`：三种执行范围、真实帧延迟、宿主/场景销毁、全局消息、屏幕过渡与内建 Observable；事件生命周期触发器由 `Tests/PlayMode/Foundation/Events/EventsLifecyclePlayModeTests.cs` 覆盖。
+- `Tests/Integrations/DOTween/`：两个独立测试程序集，要求 `DOTWEEN` + `UNITY_INCLUDE_TESTS`。
+- `Tests/EditMode/Editor/Help/ApiHelpTests.cs` 保留可信引擎 / BCL 引用筛选回归；全量示例与 core-only 真实 AssemblyBuilder fixture 分别验证，后者不链接 optional wrapper 或供应商 DLL，不代表干净工程导入。
 - 提供方 namespace `YLFramework.Editor.Actions`，稳定注册 id `actionkit`；factory 惰性构建只读内容，API 文档不会执行 demo。公共菜单 `YLFramework/帮助`。
 - API 筛选所属 namespace 的精确或点分边界，包含内建 Observable 及可用 DOTween 类型，不展示整个共享 Runtime。只有 DOTween 指南保留可选程序集门控。
 - XML 来自唯一 [`Runtime/csc.rsp`](../../Runtime/csc.rsp) 的 `Library/YLFramework.Runtime.xml`；optional 使用 `Library/YLFramework.Actions.DOTween.xml`，按真实 Assembly 去重。XML 是构建产物，不默认导出。
