@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 静态反射元数据缓存：类型 → 注入成员清单 / 构造计划。
@@ -12,29 +12,31 @@ namespace YLFramework.Core.IOC
     /// </summary>
     internal static class MetadataCache
     {
-        private static readonly Dictionary<Type, InjectionMetadata> InjectionMetadataByType =
+        private static readonly Dictionary<Type, InjectionMetadata> _injectionMetadataByType =
             new Dictionary<Type, InjectionMetadata>();
 
-        private static readonly Dictionary<Type, CreationPlan> CreationPlansByType =
+        private static readonly Dictionary<Type, CreationPlan> _creationPlansByType =
             new Dictionary<Type, CreationPlan>();
 
+        /// <summary>取得类型的成员注入元数据，首次访问才扫描并保存完整继承链结果。</summary>
         internal static InjectionMetadata GetInjectionMetadata(Type type)
         {
-            if (!InjectionMetadataByType.TryGetValue(type, out var metadata))
+            if (!_injectionMetadataByType.TryGetValue(type, out var metadata))
             {
                 metadata = BuildInjectionMetadata(type);
-                InjectionMetadataByType[type] = metadata;
+                _injectionMetadataByType[type] = metadata;
             }
 
             return metadata;
         }
 
+        /// <summary>取得类型的自动构造计划，歧义等无效结果也缓存，留到创建时报告。</summary>
         internal static CreationPlan GetCreationPlan(Type type)
         {
-            if (!CreationPlansByType.TryGetValue(type, out var plan))
+            if (!_creationPlansByType.TryGetValue(type, out var plan))
             {
                 plan = BuildCreationPlan(type);
-                CreationPlansByType[type] = plan;
+                _creationPlansByType[type] = plan;
             }
 
             return plan;
@@ -148,6 +150,7 @@ namespace YLFramework.Core.IOC
             return CreationPlan.ForConstructor(selected, selected.GetParameters());
         }
 
+        /// <summary>为构造函数选择歧义消息生成类型名及参数类型清单。</summary>
         private static string DescribeSignature(ConstructorInfo constructor) =>
             constructor.DeclaringType != null
                 ? $"{constructor.DeclaringType.Name}({string.Join(", ", constructor.GetParameters().Select(parameter => parameter.ParameterType.Name))})"

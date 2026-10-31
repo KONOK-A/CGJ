@@ -1,89 +1,112 @@
-# YLFramework 文档
+# YLFramework
 
-YLFramework 是当前工程内自研的 Unity 游戏框架，面向游戏业务层提供对象池、单例、事件、数据绑定、状态机、IOC、动作编排、音频、资源管理、存档、UI 等能力。
+YLFramework 是 Unity C# 游戏框架，提供基础机制、Module / MVC / UI、资源与音频、配置与领域系统，以及配套作者工具。默认以 **Runtime / Editor 两个主体程序集**交付，能力按需使用，不要求先搭建完整应用框架。
 
-> 当前框架仍在持续开发和完善中，部分模块缺少测试或存在明确的待完善项，详见各模块文档的“当前状态”。
-> 本文档是导航性质的内部文档，不是完整 API Reference。
+本页是消费方入口。维护源仓库、运行框架测试或发行产品时，使用源码仓库根 README；不要把开发宿主当作游戏工程模板。
 
-## 目录结构（当前）
+## 从哪里开始
 
-框架根目录为 `Assets/YLFramework/`：
+| 目标 | 建议路径 |
+| --- | --- |
+| 使用池、事件、计时、数据结构 | 安装后直接使用相应模块，不需要 Root 或 Module |
+| 组织业务模块与窗口 | 从 [UI / Module](Modules/UI.md) 开始，选择默认 UI 根或正式模板 |
+| 加载资源、场景和命名音频 | 从 [Resource 最小接入](Modules/Resource.md#可运行最小接入) 开始，明确初始化、Provider 和 lease |
+| 编辑配置与玩法定义 | 阅读 [配置数据](Modules/Data.md)、[领域系统](Modules/Domain.md) 和 [Editor 扩展](Modules/Editor.md) |
+| 理解或扩展框架 | 阅读 [架构](Architecture.md)、[代码规范](CodingStyle.md) 和 [维护约定](../AGENTS.md) |
 
-| 目录 | 说明 |
-|---|---|
-| [`Runtime/`](../Runtime/) | 运行时框架代码（Foundation / Tools / 大型模块） |
-| [`Editor/`](../Editor/) | 编辑器工具、模块帮助提供方与独立 Help 核心 |
-| [`Integrations/DOTween/`](../Integrations/DOTween/) | 可选 Action DOTween 扩展，不在默认导出范围 |
-| [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
-| [`Plugins/`](../Plugins/) | 第三方插件（Sirenix Odin、Editor Enhancers） |
-| [`Prefabs/`](../Prefabs/) | 框架运行所需预制体（`YLFramework.prefab`、`UITips.prefab`） |
-| [`Samples/`](../Samples/) | 示例（`ColorSelector`） |
-| `Documentation/` | 本文档目录 |
+## 安装与分发
 
-## 模块导航
+### 独立工程安装
 
-### Foundation（框架基础机制）
+主要兼容目标为 Unity 2022.3 LTS 与 Unity 6.3 LTS，源码按 C# 9 维护。Editor、Mono、IL2CPP 与目标平台是不同验证范围；不能把某个补丁版本或 Editor 导入成功扩展为所有平台支持。
 
-| 模块 | 作用 | 状态 | 文档 |
-|---|---|---|---|
-| Singleton | 单例：普通/持久/可替换 Mono 单例、Prefab/ScriptableObject 单例属性 | 已完成 | [Modules/Singleton.md](Modules/Singleton.md) |
-| Pool | 对象池：类对象池、安全池、GameObject 池、List/Dictionary 池 | 已完成 | [Modules/Pool.md](Modules/Pool.md) |
-| Events | 事件系统：EasyEvent、事件组件、按枚举/字符串/类型分发 | 基本完成（EventManager 为空占位） | [Modules/Events.md](Modules/Events.md) |
-| Binding | 可监听数据：属性/列表/字典、PlayerPrefs 持久化属性 | 已完成 | [Modules/Binding.md](Modules/Binding.md) |
-| IOC | 依赖注入容器：注册、解析、成员注入 | 已完成 | [Modules/IOC.md](Modules/IOC.md) |
+Resource 远端 Player 与 IL2CPP 加密后端另有 Windows64 和精确引擎门禁，定点为 `2022.3.62f3c1` / `6000.3.27f1`；详见 [平台与范围](Modules/Resource.md#共存与范围)。本地 Bundle、远端更新、加密与整个框架的支持范围不能混为一谈。
 
-### Tools（通用工具）
+1. 在目标 Unity 工程安装必要依赖，等待 UPM 完成解析。
+2. 导入正式 Exporter 生成的 `.unitypackage`。不要复制源宿主的 Packages、ProjectSettings 或整个外部 Plugins / Resources 目录。
+3. 消费方 asmdef 显式引用 `YLFramework.Runtime`；仅 Editor 扩展引用 `YLFramework.Editor`。检查真实 Unity 编译，而不是只看 IDE。
+4. 按能力完成显式装配。基础工具可直接使用；UI、Resource、命名 Audio 和领域配置遵守各自初始化与所有权，不因放入 Root Prefab 就自动全部启用。
+5. 在目标工程验证实际场景与 Player；配置、反射类型、资源闭包和可选 SDK 的平台前置由应用一并准备。
 
-| 模块 | 作用 | 状态 | 文档 |
-|---|---|---|---|
-| AssemblyTool | 按类型全名查找 `Type` 的反射工具 | 已完成（含专项测试，暂无调用方） | [Modules/AssemblyTool.md](Modules/AssemblyTool.md) |
-| Attributes | 自定义编辑器显示特性 | 已完成（含专项测试，暂无调用方） | [Modules/Attributes.md](Modules/Attributes.md) |
-| Extensions | 常用 Unity / System 类型扩展方法 | 已完成 | [Modules/Extensions.md](Modules/Extensions.md) |
-| FSM | 有限状态机 | 已完成 | [Modules/FSM.md](Modules/FSM.md) |
-| Grid | 网格数据结构（固定容量 / 动态扩容） | 已完成 | [Modules/Grid.md](Modules/Grid.md) |
-| Json | JSON 解析与构建（JSONObject） | 已完成 | [Modules/Json.md](Modules/Json.md) |
-| Table | 带索引的数据表基类 | 已完成（含专项测试） | [Modules/Table.md](Modules/Table.md) |
-| Timing | 双堆定时任务、状态与暂停恢复、独立命名范围及取消辅助 | 已实现（验证结果见具体执行记录） | [Modules/Timing.md](Modules/Timing.md) |
-| ZipTool | Zip / GZip 压缩解压工具（内置 SharpZipLib） | 已完成 | [Modules/ZipTool.md](Modules/ZipTool.md) |
+| 默认依赖 | 安装与边界 |
+| --- | --- |
+| UGUI：`com.unity.ugui` | 使用目标 Editor 对应的兼容版本；正式 UI 和部分动作依赖 UnityEngine.UI |
+| Json.NET：`com.unity.nuget.newtonsoft-json` | 安装 Unity UPM 包；分发验证基线为 `3.2.1`，不可用同名替身 DLL 代替 |
+| `BouncyCastle.Cryptography 2.7.0` | netstandard2.0 DLL 与许可已随框架携带，用于 HKDF-SHA256；不要再导入冲突副本 |
 
-### Runtime 大型模块
+默认产品不要求 XF 生态、Odin、MCP、DOTween、MiniExcel 或 HybridCLR。可选依赖只在实际安装相应集成时需要。
 
-| 模块 | 作用 | 状态 | 文档 |
-|---|---|---|---|
-| Action | 动作组合、命名执行、安全句柄、屏幕过渡与内建 BCL Observable | 已归入 Runtime | [Modules/Action.md](Modules/Action.md) |
-| Audio | Clip-only Music / Voice / Sound、代次安全句柄、Sound 并发上限与开始回调、双轨音乐 Crossfade、手动/自动首尾淡变、均匀/加权随机、空间播放、可选 Unity Mixer 与 Action 桥接 | 已归入 Runtime（验证以执行记录为准） | [Modules/Audio.md](Modules/Audio.md) · [Sound 并发上限](Modules/Audio.md#sound-并发上限) · [音乐 Crossfade](Modules/Audio.md#音乐-crossfade) · [自动首尾淡变](Modules/Audio.md#自动首尾淡变) |
-| Resource | 资源加载与 AssetBundle 管理（ResManager / ResLoader） | 基本完成（热更新待完善） | [Modules/Resource.md](Modules/Resource.md) |
-| Save | 存档槽与全局设置读写（原子写入 / 备份恢复 / 元数据） | 已完成（含专项测试） | [Modules/Save.md](Modules/Save.md) |
-| UI | 窗口管理、UI 根节点、提示气泡 | 部分功能待完善 | [Modules/UI.md](Modules/UI.md) |
+Resource 默认不启用内容加密。选择 AES-256-GCM 内容加密时，当前原生后端使用 Windows CNG；没有软件 GCM 或临时明文回退。具体平台、key provider 与失败合同见 [可选 Bundle 内容加密](Modules/Resource.md#可选-bundle-内容加密)。
 
-### 其他内容
+### 帮助与导出
 
-- [Help](Modules/Help.md)：`Editor/Help/` 中的 Editor-only 帮助核心，不属于 Runtime / Foundation；Action、Audio 提供方由普通 Editor 程序集承载。
-- [`Samples/ColorSelector/`](../Samples/ColorSelector/)：基于 UI 窗口的取色器示例，非框架模块（已移出 Runtime）。
+- 帮助菜单为 `YLFramework/帮助`，以及 Core / Toolkit / Action / Audio 子入口；它只读取索引、元数据与 XML，不执行示例或启动系统，见 [Help](Modules/Help.md)。
+- 默认包由源码仓库的 `Editor/Distribution/ExportUnityPackage.cs` 生成；菜单为 `YLFramework/Toolkit/导出框架包`，自动化入口为 `ExportUnityPackage.Export(absolutePackagePath)`。
+- Exporter 递归导出明确根，不使用 IncludeDependencies；不能把宿主实际已安装的依赖误认为会随包自动交付。
 
-## 架构与依赖
+| 默认交付 | 内容 |
+| --- | --- |
+| `Runtime/`、`Editor/` | 两主体源码、Core 默认资源及编译器输入 |
+| `Plugins/BouncyCastle/` | 随包 DLL 与完整许可 |
+| `Prefabs/` | 正式 UI 模板，清单与继承关系见 [UI 资产准备](Modules/UI.md#资产准备与迁移) |
+| `Samples/` | 独立接入样例；生成的使用工程数据不属于该源码根 |
+| `Documentation/`、`AGENTS.md`、`LICENSE.md` | 当前产品说明、维护约束与来源许可 |
 
-程序集划分、依赖方向与目录分层说明见 [Architecture.md](Architecture.md)。
+不导出 `Tests`、根 `Integrations`、源仓库 Tools、游戏、测试探针、SDK、NuGet 缓存或开发宿主配置。Core 生成器的 `Examples/Core/Modules` 也是非默认交付的生成输出，详见 [Editor 设置与生成](Modules/Editor.md#设置与生成)。Analyzer 以 RoslynAnalyzer 编译器输入交付，不作为 Player 插件；规则、安装与移除只维护在 [Attributes](Modules/Attributes.md#core-使用诊断)。
 
-Timing 的 Timer 负责到期回调；逐帧进度、插值与组合流程由 ActionKit 的 Delay / Lerp / Repeat 等动作承担。两边各自管理名字与生命周期，`TimerScope` 不与 `ActionHandle` 共用任务表。Action / Audio 位于 `Runtime/Action/`、`Runtime/Audio/`，共用 `YLFramework.Runtime`；公共入口仍为 `ActionKit` / `AudioKit`。
+## 能力导航
 
-Audio 不配置 Mixer 时保留原功能；分类默认与单次覆盖/Direct 路由均可选，配置资产与薄 UnityEvent 组件不新增播放宿主或资源加载。Settings 音量不自动写 Mixer；路由、原生参数控制及资源所有权各自显式管理，见 [Audio](Modules/Audio.md#可选-mixer)。
+### 基础机制
 
-## 帮助与导出
+| 能力 | 文档 |
+| --- | --- |
+| 事件、Channel / Bus 与 Unity 监听 | [Events](Modules/Events.md) |
+| 对象池与精确回收 | [Pool](Modules/Pool.md) |
+| 计时、作用域与日期投递 | [Timing](Modules/Timing.md) |
+| 依赖注入、单例与会话重置 | [IOC](Modules/IOC.md) · [Singleton](Modules/Singleton.md) |
+| 属性与方法绑定 | [Binding](Modules/Binding.md) |
+| 元数据、Inspector 扩展与编译器诊断 | [Attributes](Modules/Attributes.md) |
+| 类型查找与缓存 | [AssemblyTool](Modules/AssemblyTool.md) |
+| 更新与协程等待基础 | `Runtime/Foundation/Update`、`Async`；请求基类边界见 [HTTP](Modules/Http.md#与异步基类的区别) |
 
-- 菜单：`YLFramework/帮助`、`YLFramework/Action/帮助`、`YLFramework/Audio/帮助`。
-- 模块工具：`YLFramework/Action/创建屏幕过渡资源`、`YLFramework/Audio/Debug`。
-- `YLFramework/Toolkit/导出框架包` 的默认 ExportRoots 为 `Editor`、`Plugins`、`Prefabs`、`Runtime`、`Samples`、`Documentation`，使用 `Recurse`，不使用 `IncludeDependencies`。普通模块源码、资源与文档随这些根目录导出。
-- 默认不导出 `Tests/`、根目录 `Integrations/DOTween/` 及包外 `Assets/Plugins/Demigiant/DOTween/DOTween.dll`。可选扩展源码须另行引入并满足 DOTween 依赖，不复制 Core 或供应商 DLL。
-- 框架仍沿用 UGUI、Odin、Newtonsoft 等既有依赖，不是零依赖安装包。XML 位于 `Library/`，是构建产物，不默认导出。
-- 导出回归检查当前工程实际包清单及 GUID / meta 字节，不等于干净工程导入、Player 构建或第二 Unity 实例验证。
+### 业务与领域
 
-## 测试
+| 能力 | 文档 |
+| --- | --- |
+| Module / MVC、View / Panel、UI 根与输入 | [UI](Modules/UI.md) · [Core 职责](Architecture.md#core-职责归口) |
+| Catalog、AssetBundle、场景、lease、构建发布 | [Resource](Modules/Resource.md) |
+| Music / Voice / Sound、命名 Provider、句柄与 Mixer | [Audio](Modules/Audio.md) |
+| Action、Observable、组合动作与音频桥接 | [Action](Modules/Action.md) |
+| Localization、DataAssets、Excel 字段与作者流程 | [Data](Modules/Data.md) |
+| 存档槽、SaveStore、序列化与故障恢复 | [Save](Modules/Save.md) |
+| Skill、Buff、Mission、Equipment、Reddot、Logging | [Domain](Modules/Domain.md) |
+| HTTP 请求、取消与响应快照 | [HTTP](Modules/Http.md) |
+| 配置式 StateMachine | [Behavior](Modules/Behavior.md#两种状态机)，不同于下方轻量 FSM |
 
-- EditMode：`Tests/EditMode/`，覆盖 Foundation / Tools / Resource，以及 `Action/`、`Audio/`、`Help/` 的行为、API、XML 与帮助边界。
-- PlayMode：`Tests/PlayMode/`，覆盖 MonoBehaviour 单例、Timing 时钟与宿主，以及 `Action/`、`Audio/` 的真实帧执行和播放生命周期。
-- DOTween：`Tests/Integrations/DOTween/` 下两个独立测试程序集，受 `DOTWEEN` + `UNITY_INCLUDE_TESTS` 约束。
+### 工具与 Editor
 
-导出的框架包不包含 `Tests/`，测试仅在源码仓库内运行。
+| 能力 | 文档 |
+| --- | --- |
+| 轻量 FSM、网格与索引 | [FSM](Modules/FSM.md) · [Grid](Modules/Grid.md) · [Table](Modules/Table.md) |
+| JSON 树、压缩与通用扩展 | [Json](Modules/Json.md) · [ZipTool](Modules/ZipTool.md) · [Extensions](Modules/Extensions.md) |
+| Overlap、CharacterController2D、MoveablePlatform | [Behavior](Modules/Behavior.md) |
+| 取色器与窗口 | [UI](Modules/UI.md#取色控件colorselector) |
+| 作者工具、TreeView、设置与 Editor 迁移 | [Editor](Modules/Editor.md) |
+| 帮助提供方、窗口与 XML | [Help](Modules/Help.md) |
 
-运行方式：Unity Test Runner，或使用 `-runTests` 批处理参数。
+## 可选集成
+
+以下均需显式安装，不从默认产品反向引用 SDK。版本、宏、平台与许可按所选集成的声明准备，不以“目录已存在”当作已接入。
+
+| 集成 | 使用边界 |
+| --- | --- |
+| DOTween | `Integrations/DOTween`，外部 DOTween.dll 与 `DOTWEEN`；[Action 接入](Modules/Action.md#扩展方式) |
+| Excel | `Integrations/Excel/Editor`，完整 MiniExcel 后端及许可；[配置作者流程](Modules/Data.md#excel-作者后端) |
+| DomainExcel | `Integrations/DomainExcel`，完整 Excel 后端与 `YL_DOMAIN_EXCEL`；[领域导入](Modules/Domain.md#domainexcel) |
+| HybridCLR | 独立导出，使用声明的官方 SDK 并复用 Resource；[架构边界](Architecture.md#hybridclr-可选接入)，完整步骤在选装目录 README |
+
+## 维护与来源
+
+框架代码规范见 [CodingStyle](CodingStyle.md)，维护规则见 [AGENTS](../AGENTS.md)，来源与许可见 [LICENSE](../LICENSE.md)。历史设计与迁移的查找入口为 [历史索引](IntegrationPlan.md)，不是当前待办、安装说明或授权。
+
+源码仓库的 Tests、测试 CLI 与验收夹具不随默认包交付。消费方使用自己的真实编译、接入场景和目标平台验证；旧结果、缺失工具或同名 API 都不能代替当前使用环境的证据。

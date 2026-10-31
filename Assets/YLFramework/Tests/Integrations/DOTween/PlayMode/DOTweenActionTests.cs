@@ -1,4 +1,3 @@
-using YLFramework.Actions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -8,7 +7,9 @@ using DG.Tweening;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using YLFramework.Actions;
 using Object = UnityEngine.Object;
+using YLFramework.Integrations.DOTween;
 
 namespace YLFramework.Tests.Actions.DOTween
 {
@@ -16,15 +17,15 @@ namespace YLFramework.Tests.Actions.DOTween
 
     public class DOTweenActionTests
     {
-        private readonly List<ActionLease> mActions = new List<ActionLease>();
-        private readonly Dictionary<Tween, object> mTweens = new Dictionary<Tween, object>();
-        private Action mRestoreSettings;
-        private bool mOwnEnvironment;
+        private readonly List<ActionLease> _actions = new List<ActionLease>();
+        private readonly Dictionary<Tween, object> _tweens = new Dictionary<Tween, object>();
+        private Action _restoreSettings;
+        private bool _ownsEnvironment;
 
         [SetUp]
         public void SetUp()
         {
-            mOwnEnvironment = false;
+            _ownsEnvironment = false;
             Assert.That(Application.isPlaying, Is.True, "DOTween 1.2.825 must initialize in Play Mode for Kill and recycling tests.");
             Assert.That(Object.FindObjectsOfType<MonoUpdateActionExecutor>(true), Is.Empty, "Do not run alongside another owner's ActionKit controllers.");
             Assert.That(Object.FindObjectsOfType<ActionRecycleDriver>(true), Is.Empty, "Only this fixture's recycle driver may be released.");
@@ -34,7 +35,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(contextType.FullName, Is.EqualTo("UnityEngine.UnitySynchronizationContext"));
             Assert.That(contextType.Assembly, Is.SameAs(typeof(Object).Assembly));
             Assert.That(contextType.IsSealed, Is.True);
-            mOwnEnvironment = true;
+            _ownsEnvironment = true;
 
             var timeScale = DOTween.timeScale;
             var unscaledTimeScale = DOTween.unscaledTimeScale;
@@ -57,7 +58,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var ease = DOTween.defaultEaseType;
             var overshoot = DOTween.defaultEaseOvershootOrAmplitude;
             var period = DOTween.defaultEasePeriod;
-            mRestoreSettings = () =>
+            _restoreSettings = () =>
             {
                 DOTween.timeScale = timeScale;
                 DOTween.unscaledTimeScale = unscaledTimeScale;
@@ -84,25 +85,39 @@ namespace YLFramework.Tests.Actions.DOTween
             // First Init can load DOTweenSettings. Preserve the caller's settings and retain the service.
             Assert.That(DOTween.Init(recyclable, safeMode, log), Is.Not.Null,
                 "A live DOTween service must be initialized before creating lifecycle test tweens.");
-            mRestoreSettings();
+            _restoreSettings();
         }
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            if (!mOwnEnvironment) yield break;
+            if (!_ownsEnvironment)
+            {
+                yield break;
+            }
+
             try
             {
                 // Only the current fixture-created source may be cleared, never a foreign pool reuse.
-                foreach (var entry in mTweens)
+                foreach (var entry in _tweens)
                 {
                     var tween = entry.Key;
-                    if (!tween.IsActive() || !ReferenceEquals(tween.target, entry.Value)) continue;
+                    if (!tween.IsActive() || !ReferenceEquals(tween.target, entry.Value))
+                    {
+                        continue;
+                    }
+
                     tween.onComplete = tween.onKill = tween.onPlay = tween.onPause = null;
                     tween.OnStart(null);
                 }
-                foreach (var lease in mActions)
-                    if (lease.Matches && !lease.Action.Deinited) lease.Action.Deinit();
+                foreach (var lease in _actions)
+                {
+                    if (lease.Matches && !lease.Action.IsDeinitialized)
+                    {
+                        lease.Action.Deinit();
+                    }
+                }
+
                 ActionQueue.Drain();
                 ActionRecycleDriver.ReleaseAll();
                 // Drain is not the Unity context queue. Let pending posts leave their callback stacks.
@@ -111,19 +126,25 @@ namespace YLFramework.Tests.Actions.DOTween
             }
             finally
             {
-                foreach (var entry in mTweens)
-                    if (entry.Key.IsActive() && ReferenceEquals(entry.Key.target, entry.Value)) entry.Key.Kill(false);
-                mActions.Clear();
-                mTweens.Clear();
-                mRestoreSettings?.Invoke();
-                mRestoreSettings = null;
-                mOwnEnvironment = false;
+                foreach (var entry in _tweens)
+                {
+                    if (entry.Key.IsActive() && ReferenceEquals(entry.Key.target, entry.Value))
+                    {
+                        entry.Key.Kill(false);
+                    }
+                }
+
+                _actions.Clear();
+                _tweens.Clear();
+                _restoreSettings?.Invoke();
+                _restoreSettings = null;
+                _ownsEnvironment = false;
             }
         }
 
         private T Own<T>(T action) where T : IAction
         {
-            mActions.Add(new ActionLease(action));
+            _actions.Add(new ActionLease(action));
             return action;
         }
 
@@ -136,8 +157,12 @@ namespace YLFramework.Tests.Actions.DOTween
                 .SetAutoKill(autoKill).SetRecyclable(false).SetTarget(source);
             // 1.2.825 retains onPause in pooled objects; never inherit an unrelated cached callback.
             // The sole preservation case explicitly Play()s the reused tween without calling its old onPause.
-            if (!preservePause) tween.OnPause(null).Pause();
-            mTweens[tween] = source;
+            if (!preservePause)
+            {
+                tween.OnPause(null).Pause();
+            }
+
+            _tweens[tween] = source;
             return tween;
         }
 
@@ -146,7 +171,11 @@ namespace YLFramework.Tests.Actions.DOTween
             var executed = false;
             SynchronizationContext.Current.Post(_ => executed = true, null);
             var limit = Time.realtimeSinceStartup + 2f;
-            while (!executed && Time.realtimeSinceStartup < limit) yield return null;
+            while (!executed && Time.realtimeSinceStartup < limit)
+            {
+                yield return null;
+            }
+
             Assert.That(executed, Is.True, "The original Unity context must process Post through a real Player tick; no nested Exec pump is used.");
         }
 
@@ -154,9 +183,13 @@ namespace YLFramework.Tests.Actions.DOTween
         {
             // Supply the fixture clock directly, formerly global scale=1, without changing another owner's clock.
             // Allocation-specific tokens also isolate recycling and additions made by callbacks.
-            foreach (var entry in mTweens.ToArray())
+            foreach (var entry in _tweens.ToArray())
+            {
                 if (entry.Key.IsActive() && ReferenceEquals(entry.Key.target, entry.Value))
+                {
                     entry.Key.ManualUpdate(scaled, unscaled);
+                }
+            }
         }
 
         [Test]
@@ -188,7 +221,10 @@ namespace YLFramework.Tests.Actions.DOTween
             }
             finally
             {
-                if (foreign.IsActive() && ReferenceEquals(foreign.target, token)) foreign.Kill(false);
+                if (foreign.IsActive() && ReferenceEquals(foreign.target, token))
+                {
+                    foreign.Kill(false);
+                }
             }
         }
 
@@ -210,7 +246,11 @@ namespace YLFramework.Tests.Actions.DOTween
         {
             var calls = 0;
             Tween tween = null;
-            var action = Own(DOTweenAction.Allocate(() => { calls++; return tween = NewTween(); }));
+            var action = Own(DOTweenAction.Allocate(() =>
+            {
+                calls++;
+                return tween = NewTween();
+            }));
             Assert.That(action.Execute(100), Is.False);
             Assert.That(action.Execute(100), Is.False);
             Assert.That(calls, Is.EqualTo(1));
@@ -245,7 +285,7 @@ namespace YLFramework.Tests.Actions.DOTween
             action.Execute(0);
             Advance();
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Finished));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(action.Execute(0), Is.True);
             Assert.That(completions, Is.EqualTo(1));
             Assert.That(kills, Is.EqualTo(autoKill ? 1 : 0));
@@ -264,7 +304,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Advance();
             Assert.That(action.Execute(0), Is.False);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             tween.Play();
             Advance();
             Assert.That(action.Execute(0), Is.True);
@@ -278,7 +318,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var action = Own(tween.ToAction());
             action.Execute(0);
             tween.Kill(false);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(action.Execute(0), Is.False);
             Assert.That(complete, Is.Zero);
@@ -292,10 +332,17 @@ namespace YLFramework.Tests.Actions.DOTween
             var tween = NewTween(false).OnComplete(() => complete++);
             var action = Own(tween.ToAction());
             action.Execute(0);
-            if (kill) tween.Kill(true);
-            else tween.Complete();
+            if (kill)
+            {
+                tween.Kill(true);
+            }
+            else
+            {
+                tween.Complete();
+            }
+
             Assert.That(complete, Is.EqualTo(1));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(action.Execute(0), Is.True);
             Assert.That(tween.IsActive(), Is.EqualTo(!kill));
         }
@@ -307,18 +354,25 @@ namespace YLFramework.Tests.Actions.DOTween
             var tween = NewTween(false).OnComplete(() => complete++).OnKill(() => killed++);
             var action = Own(tween.ToAction());
             action.Execute(0);
-            if (actionPause) action.Paused = true;
-            else tween.Pause();
+            if (actionPause)
+            {
+                action.IsPaused = true;
+            }
+            else
+            {
+                tween.Pause();
+            }
+
             action.Deinit();
             action.Deinit();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Execute(0), Is.False);
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(killed, Is.Zero);
             Assert.Throws<InvalidOperationException>(() => tween.ToAction(), "Logical close retains the source reservation until physical Kill.");
             var competing = Own(DOTweenAction.Allocate(() => tween));
             Assert.Throws<InvalidOperationException>(() => competing.Execute(0));
-            Assert.That(competing.Deinited, Is.True);
+            Assert.That(competing.IsDeinitialized, Is.True);
             ActionQueue.Drain();
             Assert.That(tween.IsActive(), Is.True, "ActionQueue.Drain must not synchronously run posted Unity cleanup.");
             yield return UnityContextTurn();
@@ -340,17 +394,17 @@ namespace YLFramework.Tests.Actions.DOTween
             var tween = NewTween();
             var action = Own(tween.ToAction());
             action.Execute(0);
-            action.Paused = true;
+            action.IsPaused = true;
             Assert.That(tween.IsPlaying(), Is.False);
             Advance(0.4f, 0.4f);
             Assert.That(tween.Elapsed(), Is.Zero);
-            action.Paused = false;
+            action.IsPaused = false;
             Assert.That(tween.IsPlaying(), Is.True);
             Advance(0.4f, 0.4f);
             Assert.That(tween.Elapsed(), Is.EqualTo(0.4f).Within(0.001f));
             tween.Pause();
-            action.Paused = true;
-            action.Paused = false;
+            action.IsPaused = true;
+            action.IsPaused = false;
             Assert.That(tween.IsPlaying(), Is.False, "Resume must not steal an external pause.");
             Assert.That(action.Execute(0), Is.False);
         }
@@ -360,12 +414,12 @@ namespace YLFramework.Tests.Actions.DOTween
         {
             var tween = NewTween();
             var action = Own(tween.ToAction());
-            action.Paused = true;
+            action.IsPaused = true;
             action.Execute(0);
             Assert.That(tween.IsPlaying(), Is.False);
             Advance();
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            action.Paused = false;
+            action.IsPaused = false;
             Advance();
             Assert.That(action.Execute(0), Is.True);
         }
@@ -398,14 +452,19 @@ namespace YLFramework.Tests.Actions.DOTween
         public IEnumerator ResetKillsTheOldPausedLeaseAndCallsFreshFactoryOnNextExecution()
         {
             var created = new List<Tween>();
-            var action = Own(DOTweenAction.Allocate(() => { var tween = NewTween(); created.Add(tween); return tween; }));
+            var action = Own(DOTweenAction.Allocate(() =>
+            {
+                var tween = NewTween();
+                created.Add(tween);
+                return tween;
+            }));
             action.Execute(0);
-            action.Paused = true;
+            action.IsPaused = true;
             var version = ((IActionExecutionVersion)action).ExecutionVersion;
             action.Reset();
             Assert.That(created[0].IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => created[0].ToAction());
-            Assert.That(action.Paused, Is.False);
+            Assert.That(action.IsPaused, Is.False);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
             Assert.That(((IActionExecutionVersion)action).ExecutionVersion, Is.GreaterThan(version));
             action.Execute(0);
@@ -429,7 +488,7 @@ namespace YLFramework.Tests.Actions.DOTween
                 return returned = NewTween().OnStart(() => starts++);
             }));
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(returned.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => returned.ToAction());
             Advance();
@@ -449,16 +508,24 @@ namespace YLFramework.Tests.Actions.DOTween
             action = Own(DOTweenAction.Allocate(() =>
             {
                 calls++;
-                if (calls == 1) action.Reset();
+                if (calls == 1)
+                {
+                    action.Reset();
+                }
+
                 var tween = NewTween();
-                if (calls == 1) abandoned = tween;
+                if (calls == 1)
+                {
+                    abandoned = tween;
+                }
+
                 return tween;
             }));
             Assert.That(action.Execute(0), Is.False);
             Assert.That(abandoned.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => abandoned.ToAction());
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             action.Execute(0);
             Assert.That(calls, Is.EqualTo(2));
             Advance();
@@ -511,12 +578,12 @@ namespace YLFramework.Tests.Actions.DOTween
                 fresh = Own(DOTweenAction.Allocate(() => next));
                 return abandoned = NewTween();
             }));
-            var originalId = original.ActionID;
+            var originalId = original.ActionId;
             Assert.That(original.Execute(0), Is.False);
             Assert.That(fresh, Is.SameAs(original));
-            Assert.That(fresh.ActionID, Is.Not.EqualTo(originalId));
+            Assert.That(fresh.ActionId, Is.Not.EqualTo(originalId));
             Assert.That(fresh.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(fresh.Deinited, Is.False);
+            Assert.That(fresh.IsDeinitialized, Is.False);
             Assert.That(abandoned.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => abandoned.ToAction());
             fresh.Execute(0);
@@ -537,8 +604,14 @@ namespace YLFramework.Tests.Actions.DOTween
             tween.OnPlay(() =>
             {
                 plays++;
-                if (reset) action.Reset();
-                else action.Deinit();
+                if (reset)
+                {
+                    action.Reset();
+                }
+                else
+                {
+                    action.Deinit();
+                }
             });
             action = Own(DOTweenAction.Allocate(() => tween));
             Assert.That(action.Execute(0), Is.False);
@@ -546,7 +619,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(tween.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Deinited, Is.EqualTo(!reset));
+            Assert.That(action.IsDeinitialized, Is.EqualTo(!reset));
             yield return UnityContextTurn();
             Assert.That(tween.IsActive(), Is.False);
         }
@@ -566,7 +639,11 @@ namespace YLFramework.Tests.Actions.DOTween
             var next = NewTween();
             var factories = 0;
             DOTweenAction action = null;
-            first.OnPlay(() => { action.Reset(); action.Execute(0); });
+            first.OnPlay(() =>
+            {
+                action.Reset();
+                action.Execute(0);
+            });
             action = Own(DOTweenAction.Allocate(() => ++factories == 1 ? first : next));
             Assert.That(action.Execute(0), Is.False);
             Assert.That(factories, Is.EqualTo(2));
@@ -574,7 +651,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.Throws<InvalidOperationException>(() => first.ToAction());
             Assert.That(next.IsPlaying(), Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             next.Complete();
             Assert.That(action.Execute(0), Is.True);
             yield return UnityContextTurn();
@@ -589,7 +666,7 @@ namespace YLFramework.Tests.Actions.DOTween
             action = Own(tween.ToAction() as DOTweenAction);
             action.Execute(0);
             Advance(0.1f, 0.1f);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(tween.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             Assert.That(action.Execute(0), Is.False);
@@ -608,8 +685,19 @@ namespace YLFramework.Tests.Actions.DOTween
             {
                 calls++;
                 var tween = NewTween(false);
-                if (calls == 1) tween.OnComplete(() => { action.Reset(); action.Execute(0); });
-                else next = tween;
+                if (calls == 1)
+                {
+                    tween.OnComplete(() =>
+                    {
+                        action.Reset();
+                        action.Execute(0);
+                    });
+                }
+                else
+                {
+                    next = tween;
+                }
+
                 return tween;
             }));
             action.Execute(0);
@@ -617,7 +705,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(calls, Is.EqualTo(2));
             Assert.That(next.IsActive(), Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             next.Complete();
             Assert.That(action.Execute(0), Is.True);
         }
@@ -633,8 +721,19 @@ namespace YLFramework.Tests.Actions.DOTween
             {
                 calls++;
                 var tween = NewTween();
-                if (calls == 1) old = tween.OnKill(() => { action.Reset(); action.Execute(0); });
-                else next = tween;
+                if (calls == 1)
+                {
+                    old = tween.OnKill(() =>
+                    {
+                        action.Reset();
+                        action.Execute(0);
+                    });
+                }
+                else
+                {
+                    next = tween;
+                }
+
                 return tween;
             }));
             action.Execute(0);
@@ -647,7 +746,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(calls, Is.EqualTo(2));
             Assert.That(old.IsActive(), Is.False);
             Assert.That(next.IsPlaying(), Is.True);
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
         }
 
@@ -659,7 +758,7 @@ namespace YLFramework.Tests.Actions.DOTween
             oldAction.Execute(0);
             var lateComplete = oldTween.onComplete;
             var lateKill = oldTween.onKill;
-            var oldId = oldAction.ActionID;
+            var oldId = oldAction.ActionId;
             oldAction.Deinit();
             ActionQueue.Drain();
             Assert.That(oldTween.IsActive(), Is.True);
@@ -667,16 +766,16 @@ namespace YLFramework.Tests.Actions.DOTween
             var nextTween = NewTween();
             var reused = Own(DOTweenAction.Allocate(() => nextTween));
             Assert.That(reused, Is.SameAs(oldAction));
-            Assert.That(reused.ActionID, Is.Not.EqualTo(oldId));
+            Assert.That(reused.ActionId, Is.Not.EqualTo(oldId));
             reused.Execute(0);
             lateComplete();
             lateKill();
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(reused.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(nextTween.IsPlaying(), Is.True);
             yield return UnityContextTurn();
             Assert.That(oldTween.IsActive(), Is.False);
-            Assert.That(reused.Deinited, Is.False);
+            Assert.That(reused.IsDeinitialized, Is.False);
             Assert.That(nextTween.IsPlaying(), Is.True);
         }
 
@@ -691,7 +790,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(reused, Is.SameAs(oldTween), "This test must exercise real DOTween pool reuse, not merely two distinct tween references.");
             reused.Play();
             action.Deinit();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(reused.IsActive(), Is.True);
             Assert.That(reused.IsPlaying(), Is.True);
         }
@@ -755,8 +854,14 @@ namespace YLFramework.Tests.Actions.DOTween
             var tween = NewTween().SetRecyclable(true).OnKill(() =>
             {
                 kills++;
-                if (reset) action.Reset();
-                else action.Deinit();
+                if (reset)
+                {
+                    action.Reset();
+                }
+                else
+                {
+                    action.Deinit();
+                }
             });
             action = Own(tween.ToAction());
             action.Execute(0);
@@ -792,7 +897,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var replacementCalls = 0;
             tween.OnKill(() => replacementCalls++);
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsPlaying(), Is.True);
@@ -810,9 +915,9 @@ namespace YLFramework.Tests.Actions.DOTween
             tween.Kill(false);
             var foreign = NewTween().Play();
             Assert.That(foreign, Is.SameAs(tween));
-            Assert.That(action.Deinited, Is.False, "Replacing OnKill is an unsupported observation boundary, not reliable immediate cancellation.");
+            Assert.That(action.IsDeinitialized, Is.False, "Replacing OnKill is an unsupported observation boundary, not reliable immediate cancellation.");
             lateKill();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(foreign.IsActive(), Is.True);
             Assert.That(foreign.IsPlaying(), Is.True);
@@ -831,7 +936,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(foreign, Is.SameAs(tween));
             Assert.That(foreign.onPause, Is.Not.Null, "DOTween 1.2.825 keeps onPause across Reset; it must not be an ownership marker.");
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(foreign.IsActive(), Is.True);
             Assert.That(pauses, Is.Zero);
         }
@@ -846,8 +951,8 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             var second = Own(DOTweenAction.Allocate(() => tween));
             Assert.Throws<InvalidOperationException>(() => second.Execute(0));
-            Assert.That(second.Deinited, Is.True);
-            Assert.That(first.Deinited, Is.False);
+            Assert.That(second.IsDeinitialized, Is.True);
+            Assert.That(first.IsDeinitialized, Is.False);
             Assert.That(first.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(tween.IsPlaying(), Is.True);
             Advance();
@@ -861,7 +966,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.Throws<ArgumentNullException>(() => ((Tween)null).ToAction());
             var action = Own(DOTweenAction.Allocate(() => null));
             Assert.Throws<ArgumentNullException>(() => action.Execute(0));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
         }
 
@@ -873,7 +978,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             var action = Own(DOTweenAction.Allocate(() => tween));
             Assert.Throws<InvalidOperationException>(() => action.Execute(0));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
         }
 
@@ -883,7 +988,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var error = new InvalidOperationException("fixture factory failed");
             var action = Own(DOTweenAction.Allocate(() => throw error));
             Assert.That(Assert.Throws<InvalidOperationException>(() => action.Execute(0)), Is.SameAs(error));
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
         }
 
@@ -900,18 +1005,25 @@ namespace YLFramework.Tests.Actions.DOTween
             var complete = tween.onComplete;
             var kill = tween.onKill;
             var factories = 0;
-            var action = Own(DOTweenAction.Allocate(() => { factories++; return tween; }));
+            var action = Own(DOTweenAction.Allocate(() =>
+            {
+                factories++;
+                return tween;
+            }));
             try
             {
                 SynchronizationContext.SetSynchronizationContext(nonUnityContext ? new SynchronizationContext() : null);
                 Assert.Throws<InvalidOperationException>(() => action.Execute(0));
                 Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             }
-            finally { SynchronizationContext.SetSynchronizationContext(originalContext); }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(originalContext);
+            }
             Assert.That(factories, Is.Zero);
             Assert.That(pauses, Is.Zero);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsPlaying(), Is.True);
             Assert.That(tween.Elapsed(), Is.EqualTo(position));
@@ -929,7 +1041,11 @@ namespace YLFramework.Tests.Actions.DOTween
             var complete = tween.onComplete;
             var kill = tween.onKill;
             var factories = 0;
-            var action = Own(DOTweenAction.Allocate(() => { factories++; return tween; }));
+            var action = Own(DOTweenAction.Allocate(() =>
+            {
+                factories++;
+                return tween;
+            }));
             Exception startError = null;
             Exception bindError = null;
             var worker = new Thread(() =>
@@ -939,12 +1055,27 @@ namespace YLFramework.Tests.Actions.DOTween
                 {
                     // Reuse the genuine captured context to test the thread check, not a fake type.
                     SynchronizationContext.SetSynchronizationContext(originalContext);
-                    try { action.Execute(0); }
-                    catch (Exception exception) { startError = exception; }
-                    try { tween.ToAction(); }
-                    catch (Exception exception) { bindError = exception; }
+                    try
+                    {
+                        action.Execute(0);
+                    }
+                    catch (Exception exception)
+                    {
+                        startError = exception;
+                    }
+                    try
+                    {
+                        tween.ToAction();
+                    }
+                    catch (Exception exception)
+                    {
+                        bindError = exception;
+                    }
                 }
-                finally { SynchronizationContext.SetSynchronizationContext(previous); }
+                finally
+                {
+                    SynchronizationContext.SetSynchronizationContext(previous);
+                }
             });
             worker.IsBackground = true;
             worker.Start();
@@ -954,7 +1085,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(factories, Is.Zero);
             Assert.That(pauses, Is.Zero);
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsPlaying(), Is.True);
             Assert.That(tween.onComplete, Is.SameAs(complete));
@@ -975,7 +1106,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(tween.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => tween.ToAction());
             Assert.That(action.Execute(0), Is.False);
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(tween.Elapsed(), Is.EqualTo(position), "Bound startup must not reattach or Restart after Reset.");
             yield return UnityContextTurn();
             Assert.That(tween.IsActive(), Is.False);
@@ -996,7 +1127,7 @@ namespace YLFramework.Tests.Actions.DOTween
             action.Reset();
             Assert.That(((IActionExecutionVersion)action).ExecutionVersion, Is.GreaterThan(version));
             Assert.That(action.Status, Is.EqualTo(ActionStatus.NotStart));
-            Assert.That(action.Deinited, Is.False);
+            Assert.That(action.IsDeinitialized, Is.False);
             Assert.That(tween.onComplete, Is.SameAs(completeMarker));
             Assert.That(tween.onKill, Is.SameAs(killMarker));
             Assert.That(tween.onKill.GetInvocationList().Length, Is.EqualTo(2));
@@ -1022,7 +1153,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var sequence = Own(ActionKit.Sequence().Append(child).Append(Own(ActionKit.Callback(() => calls++))));
             Assert.That(sequence.Execute(0), Is.False);
             Assert.That(tween.onKill, Is.SameAs(marker), "Sequence startup Reset must preserve the original prebinding, not detach and reacquire.");
-            Assert.That(child.Deinited, Is.False);
+            Assert.That(child.IsDeinitialized, Is.False);
             Assert.That(tween.IsPlaying(), Is.True);
             Advance();
             Assert.That(sequence.Execute(0), Is.True);
@@ -1046,7 +1177,7 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(completes, Is.EqualTo(1));
             Assert.That(tween.IsComplete(), Is.True);
             Assert.That(child.Status, Is.EqualTo(ActionStatus.NotStart), "Pre-start completion must not skip the first bound startup.");
-            Assert.That(child.Deinited, Is.False);
+            Assert.That(child.IsDeinitialized, Is.False);
             var marker = tween.onKill;
             var sequence = Own(ActionKit.Sequence().Append(child).Append(Own(ActionKit.Callback(() => calls++))));
             Assert.That(sequence.Execute(0), Is.False);
@@ -1076,8 +1207,8 @@ namespace YLFramework.Tests.Actions.DOTween
             Assert.That(repeat.Execute(0), Is.False);
             Assert.That(completes, Is.EqualTo(1));
             Assert.That(repeat.Execute(0), Is.False);
-            Assert.That(repeat.Deinited, Is.True);
-            Assert.That(child.Deinited, Is.True);
+            Assert.That(repeat.IsDeinitialized, Is.True);
+            Assert.That(child.IsDeinitialized, Is.True);
             Assert.That(repeat.Status, Is.Not.EqualTo(ActionStatus.Finished));
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsComplete(), Is.True);
@@ -1096,7 +1227,7 @@ namespace YLFramework.Tests.Actions.DOTween
             var action = Own(tween.ToAction());
             action.Execute(0);
             action.Deinit();
-            Assert.That(action.Deinited, Is.True);
+            Assert.That(action.IsDeinitialized, Is.True);
             Assert.That(action.Execute(0), Is.False);
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsPlaying(), Is.True, "Cancellation is immediate logically, not a synchronous physical Pause/Kill guarantee.");
@@ -1126,8 +1257,8 @@ namespace YLFramework.Tests.Actions.DOTween
             Advance(0.2f, 0.2f);
             var position = tween.Elapsed();
             yield return UnityContextTurn();
-            Assert.That(old.Deinited, Is.True);
-            Assert.That(replacement.Deinited, Is.False);
+            Assert.That(old.IsDeinitialized, Is.True);
+            Assert.That(replacement.IsDeinitialized, Is.False);
             Assert.That(replacement.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(tween.IsActive(), Is.True);
             Assert.That(tween.IsPlaying(), Is.True);
@@ -1141,7 +1272,12 @@ namespace YLFramework.Tests.Actions.DOTween
         public void RepeatUsesOneFreshFactoryTweenPerRound()
         {
             var created = new List<Tween>();
-            var repeat = Own(ActionKit.Repeat(3).DOTween(() => { var tween = NewTween(); created.Add(tween); return tween; }));
+            var repeat = Own(ActionKit.Repeat(3).DOTween(() =>
+            {
+                var tween = NewTween();
+                created.Add(tween);
+                return tween;
+            }));
             var finished = repeat.Execute(0);
             for (var step = 0; step < 12 && !finished; step++)
             {
@@ -1149,10 +1285,13 @@ namespace YLFramework.Tests.Actions.DOTween
                 finished = repeat.Execute(0);
             }
             Assert.That(finished, Is.True);
-            Assert.That(repeat.Deinited, Is.False);
+            Assert.That(repeat.IsDeinitialized, Is.False);
             Assert.That(created.Count, Is.EqualTo(3));
             Assert.That(new HashSet<Tween>(created).Count, Is.EqualTo(3));
-            foreach (var tween in created) Assert.That(tween.IsActive(), Is.False);
+            foreach (var tween in created)
+            {
+                Assert.That(tween.IsActive(), Is.False);
+            }
         }
 
         private IEnumerator CheckCompositeTweenCancellation(bool parallel)
@@ -1169,9 +1308,9 @@ namespace YLFramework.Tests.Actions.DOTween
             sequence.Execute(0);
             tween.Kill(false);
             Assert.That(sequence.Execute(0), Is.False);
-            Assert.That(sequence.Deinited, Is.True);
-            Assert.That(group.Deinited, Is.True);
-            Assert.That(sibling.Deinited, Is.True);
+            Assert.That(sequence.IsDeinitialized, Is.True);
+            Assert.That(group.IsDeinitialized, Is.True);
+            Assert.That(sibling.IsDeinitialized, Is.True);
             Assert.That(siblingTween.IsActive(), Is.True);
             Assert.Throws<InvalidOperationException>(() => siblingTween.ToAction());
             Assert.That(calls, Is.Zero);
@@ -1194,25 +1333,35 @@ namespace YLFramework.Tests.Actions.DOTween
             var oldTween = NewTween();
             var child = Own(oldTween.ToAction() as DOTweenAction);
             ISequence group;
-            if (kind == 0) group = Own(ActionKit.Sequence());
-            else if (kind == 1) group = Own(ActionKit.Parallel());
-            else group = Own(ActionKit.Repeat(2));
+            if (kind == 0)
+            {
+                group = Own(ActionKit.Sequence());
+            }
+            else if (kind == 1)
+            {
+                group = Own(ActionKit.Parallel());
+            }
+            else
+            {
+                group = Own(ActionKit.Repeat(2));
+            }
+
             group.Append(child);
             group.Execute(0);
             group.Execute(0);
             Assert.That(oldTween.IsPlaying(), Is.True);
-            var oldId = child.ActionID;
+            var oldId = child.ActionId;
             oldTween.Kill(false);
             ActionQueue.Drain();
             var nextTween = NewTween();
             var fresh = Own(DOTweenAction.Allocate(() => nextTween));
             Assert.That(fresh, Is.SameAs(child));
-            Assert.That(fresh.ActionID, Is.Not.EqualTo(oldId));
+            Assert.That(fresh.ActionId, Is.Not.EqualTo(oldId));
             fresh.Execute(0);
             Assert.That(group.Execute(0), Is.False);
-            Assert.That(group.Deinited, Is.True);
+            Assert.That(group.IsDeinitialized, Is.True);
             group.Deinit();
-            Assert.That(fresh.Deinited, Is.False);
+            Assert.That(fresh.IsDeinitialized, Is.False);
             Assert.That(fresh.Status, Is.EqualTo(ActionStatus.Started));
             Assert.That(nextTween.IsPlaying(), Is.True);
             nextTween.Complete();

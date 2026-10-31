@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 对象工厂接口，负责对象的创建策略。

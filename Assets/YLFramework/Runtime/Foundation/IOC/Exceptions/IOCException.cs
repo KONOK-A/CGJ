@@ -1,9 +1,9 @@
 using System;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
-    /// IOC 容器异常基类：注册、解析与注入失败均抛出该体系异常。
+    /// IOC 容器注册、解析与注入错误的异常基类；null 参数等入口校验仍可抛出标准参数异常。
     /// </summary>
     public class IOCException : Exception
     {

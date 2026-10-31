@@ -1,4 +1,4 @@
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 注册名称归一化：null 与空字符串统一视为“无名”，供容器与多键集合复用。

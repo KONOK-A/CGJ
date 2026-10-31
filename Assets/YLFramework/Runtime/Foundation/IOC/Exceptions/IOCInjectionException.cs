@@ -1,16 +1,19 @@
 using System;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
-    /// 成员注入失败：成员不可注入（readonly / 无 setter / indexer）或成员依赖无法解析。
+    /// 成员注入失败：成员不可注入（readonly / 无 setter / 索引器）、必要依赖缺失或成员写入抛错。
     /// </summary>
     public class IOCInjectionException : IOCException
     {
         /// <summary>
         /// 注入失败时的依赖链，供诊断使用；无上下文时为 null。
         /// </summary>
-        public string DependencyPath { get; }
+        public string DependencyPath
+        {
+            get;
+        }
 
         /// <summary>
         /// 使用指定错误消息创建异常。

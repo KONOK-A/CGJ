@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 多键字典：(TFor, TBase) → 具体实现类型。

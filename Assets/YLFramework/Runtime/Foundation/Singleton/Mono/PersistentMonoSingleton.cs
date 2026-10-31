@@ -1,47 +1,43 @@
-﻿using UnityEngine;
-using YLFramework.Utilities.Extensions;
+using UnityEngine;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 常驻 MonoBehaviour 单例：Instance 首次访问时优先从场景查找，找不到才创建。
     /// 场景中存在多个实例时保留先激活（先登记）的，后激活者自动销毁自身 GameObject。
-    /// 实例会 DontDestroyOnLoad 跨场景常驻；退出流程中 Instance 返回 null。
+    /// 实例会 DontDestroyOnLoad 跨场景常驻；退出流程中仅返回已有缓存，不再查找或创建。
     /// </summary>
     /// <typeparam name="T">单例类型（继承时传入自身）。</typeparam>
     public class PersistentMonoSingleton<T> : MonoBehaviour where T : PersistentMonoSingleton<T>
     {
         private static T _instance;
 
+        /// <summary>登记新 Play 会话的实例缓存重置。</summary>
         static PersistentMonoSingleton()
         {
             SingletonSessionState.RegisterSessionReset(ResetSessionState);
         }
 
         /// <summary>
-        /// 单例实例；首次访问时从场景查找或创建，退出流程中返回 null。
+        /// 单例实例；首次访问时从场景查找或创建，退出流程中无缓存时返回 null。
         /// </summary>
         public static T Instance
         {
             get
             {
-                //有实例直接返回
                 if (_instance != null)
                 {
                     return _instance;
                 }
-                //退出流程中不再创建
                 if (SingletonSessionState.IsApplicationQuitting)
                 {
                     return null;
                 }
-                //没有则先在场景中找这个类的实例
                 _instance = FindFirstObjectByType<T>();
                 if (_instance != null)
                 {
                     return _instance;
                 }
-                //再没有则创建
                 var obj = new GameObject();
                 _instance = obj.AddComponent<T>();
                 return _instance;
@@ -80,7 +76,10 @@ namespace YLFramework.Core.Singleton
             {
                 if (this != _instance)
                 {
-                    this.DestroyGameObjGracefully();
+                    if (this && gameObject)
+                    {
+                        Object.Destroy(gameObject);
+                    }
                     return;
                 }
             }
@@ -89,6 +88,7 @@ namespace YLFramework.Core.Singleton
             DontDestroyOnLoad(gameObject);
         }
 
+        /// <summary>进入新 Play 会话时清空缓存，不主动销毁旧 GameObject。</summary>
         private static void ResetSessionState()
         {
             _instance = null;

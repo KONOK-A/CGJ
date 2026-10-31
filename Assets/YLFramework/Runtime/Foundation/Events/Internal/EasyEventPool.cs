@@ -1,5 +1,5 @@
-using YLFramework.Core.Pool;
-using YLFramework.Core.Singleton;
+using YLFramework.Pooling;
+using YLFramework.Singletons;
 
 namespace YLFramework.Events.Internal
 {
@@ -21,7 +21,8 @@ namespace YLFramework.Events.Internal
         }
 
         /// <summary>
-        /// 回收事件实例，必要时先初始化池。
+        /// 归还由当前类型池取得的事件。外部 new 与旧池借用不被新池接纳，
+        /// 旧持有者应归还原 Safe 池；只实现接口不意味着实例事件自动池化。
         /// </summary>
         /// <param name="obj">待回收的事件实例。</param>
         /// <param name="prewarmCount">池初始化时的预热数量。</param>
@@ -31,6 +32,7 @@ namespace YLFramework.Events.Internal
             SafeObjectPool<TEvent>.Instance.Recycle(obj);
         }
 
+        /// <summary>仅在当前类型的池入口不存在时配置容量和预热数量，避免覆盖存活池的状态。</summary>
         private static void EnsureInitialized(int prewarmCount)
         {
             if (!SingletonProperty<SafeObjectPool<TEvent>>.HasInstance)

@@ -1,0 +1,7 @@
+<linker>
+  <assembly fullname="UnityEngine.CoreModule">
+    <type fullname="UnityEngine.RectTransform" preserve="nothing">
+      <property name="drivenProperties" accessors="get" />
+    </type>
+  </assembly>
+</linker>

@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.Core.Tests.Fixtures.Editor",
+    "rootNamespace": "YLFramework.Core.Tests",
+    "references": ["YLFramework.Runtime", "YLFramework.Tests.Fixtures", "YLFramework.Editor"],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

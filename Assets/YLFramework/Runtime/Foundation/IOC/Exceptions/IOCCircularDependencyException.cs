@@ -1,4 +1,4 @@
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 解析路径中同一类型被重复构造（自引用或 A→B→A）时抛出，避免无限递归导致栈溢出。
@@ -8,7 +8,10 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 循环链，例如 "A -> B -> A"。
         /// </summary>
-        public string CyclePath { get; }
+        public string CyclePath
+        {
+            get;
+        }
 
         /// <summary>
         /// 使用循环链创建异常，消息中包含完整依赖链。

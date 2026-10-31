@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.HybridCLR",
+    "rootNamespace": "YLFramework.Integrations.HybridCLR",
+    "references": ["YLFramework.Runtime", "HybridCLR.Runtime"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": ["Newtonsoft.Json.dll"],
+    "autoReferenced": false,
+    "defineConstraints": ["YL_HYBRIDCLR_9_0_3"],
+    "versionDefines": [{ "name": "com.code-philosophy.hybridclr", "expression": "[9.0.3,9.0.4)", "define": "YL_HYBRIDCLR_9_0_3" }],
+    "noEngineReferences": false
+}

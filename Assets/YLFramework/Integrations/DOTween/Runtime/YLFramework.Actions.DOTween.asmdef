@@ -1,6 +1,6 @@
 {
     "name": "YLFramework.Actions.DOTween",
-    "rootNamespace": "YLFramework.Actions",
+    "rootNamespace": "YLFramework.Integrations.DOTween",
     "references": ["YLFramework.Runtime"],
     "includePlatforms": [],
     "excludePlatforms": [],

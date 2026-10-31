@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Pool
+namespace YLFramework.Pooling
 {
     /// <summary>
     /// 对象池通用接口。
@@ -15,7 +15,10 @@
         /// 回收对象。
         /// </summary>
         /// <param name="obj">待回收对象。</param>
-        /// <returns>成功进入缓存时返回 true；被具体实现的回收策略或容量规则拒绝时返回 false。</returns>
+        /// <returns>
+        /// 成功进入缓存时返回 true；否则为 false。false 不表示引用仍可使用或应重试，
+        /// 清理、所有权和失败处理以具体实现的契约为准。
+        /// </returns>
         bool Recycle(T obj);
     }
 }

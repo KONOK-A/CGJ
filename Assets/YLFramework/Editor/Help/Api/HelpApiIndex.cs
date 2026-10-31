@@ -1,6 +1,3 @@
-// Reflection 展示改编自项目内原有的 API 帮助实现；下方保留原来源与许可。
-// Copyright (c) 2015 - 2025 liangxiegame and the authors named in the original sources, MIT License.
-// https://github.com/liangxiegame/QFramework
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -19,21 +16,43 @@ namespace YLFramework.Editor.Help
         /// <remarks>包含 protected internal 成员和非静态构造函数；不展开继承成员或嵌套类型，也不执行成员。</remarks>
         public static IEnumerable<MemberInfo> GetDeclaredApi(Type type)
         {
-            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+            const BindingFlags Flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
                                        BindingFlags.Static | BindingFlags.DeclaredOnly;
-            if (typeof(Delegate).IsAssignableFrom(type)) return Array.Empty<MemberInfo>();
-            return type.GetMembers(flags).Where(member =>
+            if (typeof(Delegate).IsAssignableFrom(type))
             {
-                if (member is MethodBase method) return !method.IsSpecialName && Accessible(method) ||
+                return Array.Empty<MemberInfo>();
+            }
+
+            return type.GetMembers(Flags).Where(member =>
+            {
+                if (member is MethodBase method)
+                {
+                    return !method.IsSpecialName && Accessible(method) ||
                     method is ConstructorInfo && !method.IsStatic && Accessible(method);
-                if (member is PropertyInfo property) return property.GetAccessors(true).Any(Accessible);
-                if (member is FieldInfo field) return !field.IsSpecialName && (field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly);
-                if (member is EventInfo signal) return signal.GetAddMethod(true) != null && Accessible(signal.GetAddMethod(true));
+                }
+
+                if (member is PropertyInfo property)
+                {
+                    return property.GetAccessors(true).Any(Accessible);
+                }
+
+                if (member is FieldInfo field)
+                {
+                    return !field.IsSpecialName && (field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly);
+                }
+
+                if (member is EventInfo signal)
+                {
+                    return signal.GetAddMethod(true) != null && Accessible(signal.GetAddMethod(true));
+                }
+
                 return false;
             });
         }
 
+        /// <summary>确认方法或访问器属于帮助窗口展示的 public、protected 或 protected internal 范围。</summary>
         private static bool Accessible(MethodBase method) => method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly;
+        /// <summary>将已选定可见方法的访问级别转换为声明前缀。</summary>
         private static string Access(MethodBase method) => method.IsPublic ? "public " : method.IsFamilyOrAssembly ? "protected internal " : "protected ";
 
         /// <summary>格式化类型名；指定的模块命名空间使用短名，其他外部类型保留限定名。</summary>
@@ -42,25 +61,77 @@ namespace YLFramework.Editor.Help
         /// <returns>C# 风格的类型显示名；泛型实参与嵌套关系一并展开。</returns>
         public static string FormatType(Type type, params string[] shortNamespaces)
         {
-            if (type.IsByRef) return FormatType(type.GetElementType(), shortNamespaces);
-            if (type.IsArray) return FormatType(type.GetElementType(), shortNamespaces) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
-            if (type.IsGenericParameter) return type.Name;
-            if (type == typeof(void)) return "void";
-            if (type == typeof(bool)) return "bool";
-            if (type == typeof(int)) return "int";
-            if (type == typeof(ulong)) return "ulong";
-            if (type == typeof(float)) return "float";
-            if (type == typeof(double)) return "double";
-            if (type == typeof(string)) return "string";
-            if (type == typeof(object)) return "object";
+            if (type.IsByRef)
+            {
+                return FormatType(type.GetElementType(), shortNamespaces);
+            }
+
+            if (type.IsArray)
+            {
+                return FormatType(type.GetElementType(), shortNamespaces) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
+            }
+
+            if (type.IsGenericParameter)
+            {
+                return type.Name;
+            }
+
+            if (type == typeof(void))
+            {
+                return "void";
+            }
+
+            if (type == typeof(bool))
+            {
+                return "bool";
+            }
+
+            if (type == typeof(int))
+            {
+                return "int";
+            }
+
+            if (type == typeof(ulong))
+            {
+                return "ulong";
+            }
+
+            if (type == typeof(float))
+            {
+                return "float";
+            }
+
+            if (type == typeof(double))
+            {
+                return "double";
+            }
+
+            if (type == typeof(string))
+            {
+                return "string";
+            }
+
+            if (type == typeof(object))
+            {
+                return "object";
+            }
+
             var name = type.Name.Split('`')[0];
             var arguments = type.IsGenericType ? type.GetGenericArguments() : Type.EmptyTypes;
             var inherited = type.IsNested && type.DeclaringType.IsGenericType ? type.DeclaringType.GetGenericArguments().Length : 0;
-            if (arguments.Length > inherited) name += "<" + string.Join(", ", arguments.Skip(inherited).Select(argument => FormatType(argument, shortNamespaces))) + ">";
+            if (arguments.Length > inherited)
+            {
+                name += "<" + string.Join(", ", arguments.Skip(inherited).Select(argument => FormatType(argument, shortNamespaces))) + ">";
+            }
+
             if (type.IsNested)
             {
                 var declaring = type.DeclaringType;
-                if (inherited != 0) declaring = declaring.MakeGenericType(arguments.Take(inherited).ToArray());
+                if (inherited != 0)
+                {
+                    declaring = declaring.MakeGenericType(arguments.Take(inherited).ToArray());
+                }
+
                 return FormatType(declaring, shortNamespaces) + "." + name;
             }
             return string.IsNullOrEmpty(type.Namespace) || type.Namespace == "System" || type.Namespace == "System.Collections.Generic" ||
@@ -86,11 +157,18 @@ namespace YLFramework.Editor.Help
             if (type.IsEnum)
             {
                 var underlying = Enum.GetUnderlyingType(type);
-                if (underlying != typeof(int)) bases.Add(underlying);
+                if (underlying != typeof(int))
+                {
+                    bases.Add(underlying);
+                }
             }
             else
             {
-                if (type.BaseType != null && type.BaseType != typeof(object) && !type.IsValueType) bases.Add(type.BaseType);
+                if (type.BaseType != null && type.BaseType != typeof(object) && !type.IsValueType)
+                {
+                    bases.Add(type.BaseType);
+                }
+
                 bases.AddRange(type.GetInterfaces().Where(contract => contract.IsVisible)
                     .OrderBy(contract => FormatType(contract, shortNamespaces), StringComparer.Ordinal));
             }
@@ -108,7 +186,10 @@ namespace YLFramework.Editor.Help
         public static string FormatSignature(MemberInfo member, params string[] shortNamespaces)
         {
             if (member is ConstructorInfo constructor)
+            {
                 return Access(constructor) + constructor.DeclaringType.Name.Split('`')[0] + "(" + Parameters(constructor, shortNamespaces) + ");";
+            }
+
             if (member is MethodInfo method)
             {
                 var generic = method.IsGenericMethod ? method.GetGenericArguments() : Type.EmptyTypes;
@@ -131,7 +212,11 @@ namespace YLFramework.Editor.Help
             }
             if (member is FieldInfo field)
             {
-                if (field.DeclaringType.IsEnum) return field.Name + " = " + Convert.ToString(field.GetRawConstantValue(), CultureInfo.InvariantCulture) + ",";
+                if (field.DeclaringType.IsEnum)
+                {
+                    return field.Name + " = " + Convert.ToString(field.GetRawConstantValue(), CultureInfo.InvariantCulture) + ",";
+                }
+
                 return (field.IsPublic ? "public " : field.IsFamilyOrAssembly ? "protected internal " : "protected ") +
                     (field.IsLiteral ? "const " : field.IsStatic ? "static " : "") + (field.IsInitOnly ? "readonly " : "") +
                     FormatType(field.FieldType, shortNamespaces) + " " + field.Name +
@@ -145,11 +230,13 @@ namespace YLFramework.Editor.Help
             throw new ArgumentException("不支持的 API 成员：" + member);
         }
 
+        /// <summary>从方法元数据选择静态、覆写或虚方法修饰符，接口成员不额外展示隐含的 abstract。</summary>
         private static string Modifiers(MethodInfo method) => method.IsStatic ? "static " :
             method.GetBaseDefinition() != method ? (method.IsFinal ? "sealed override " : "override ") :
             method.IsAbstract && !method.DeclaringType.IsInterface ? "abstract " :
             method.IsVirtual && !method.IsFinal && !method.DeclaringType.IsInterface ? "virtual " : "";
 
+        /// <summary>组织声明参数列表，从元数据读取扩展接收者、参数数组、引用方式与可选默认值。</summary>
         private static string Parameters(MethodBase method, string[] shortNamespaces)
         {
             var extension = method.IsDefined(typeof(ExtensionAttribute), false);
@@ -160,6 +247,7 @@ namespace YLFramework.Editor.Help
                 (parameter.HasDefaultValue ? " = " + Literal(parameter.DefaultValue, shortNamespaces) : "")));
         }
 
+        /// <summary>按泛型参数元数据组织 where 子句，避免为 struct 再重复输出 ValueType 或 new()。</summary>
         private static string Constraints(Type[] arguments, string[] shortNamespaces)
         {
             var result = "";
@@ -168,23 +256,58 @@ namespace YLFramework.Editor.Help
                 var constraints = new List<string>();
                 var flags = argument.GenericParameterAttributes;
                 var value = (flags & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0;
-                if (value) constraints.Add("struct");
-                else if ((flags & GenericParameterAttributes.ReferenceTypeConstraint) != 0) constraints.Add("class");
+                if (value)
+                {
+                    constraints.Add("struct");
+                }
+                else if ((flags & GenericParameterAttributes.ReferenceTypeConstraint) != 0)
+                {
+                    constraints.Add("class");
+                }
+
                 constraints.AddRange(argument.GetGenericParameterConstraints().Where(type => type != typeof(ValueType))
                     .Select(type => FormatType(type, shortNamespaces)));
-                if (!value && (flags & GenericParameterAttributes.DefaultConstructorConstraint) != 0) constraints.Add("new()");
-                if (constraints.Count != 0) result += " where " + argument.Name + " : " + string.Join(", ", constraints);
+                if (!value && (flags & GenericParameterAttributes.DefaultConstructorConstraint) != 0)
+                {
+                    constraints.Add("new()");
+                }
+
+                if (constraints.Count != 0)
+                {
+                    result += " where " + argument.Name + " : " + string.Join(", ", constraints);
+                }
             }
             return result;
         }
 
+        /// <summary>把编译元数据中的常量或默认值转为展示文本，使用固定区域格式避免本机语言影响数值。</summary>
         private static string Literal(object value, string[] shortNamespaces)
         {
-            if (value == null) return "null";
-            if (value is string text) return "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-            if (value is bool flag) return flag ? "true" : "false";
-            if (value is float number) return number.ToString("R", CultureInfo.InvariantCulture) + "f";
-            if (value is Enum) return FormatType(value.GetType(), shortNamespaces) + "." + value;
+            if (value == null)
+            {
+                return "null";
+            }
+
+            if (value is string text)
+            {
+                return "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            }
+
+            if (value is bool flag)
+            {
+                return flag ? "true" : "false";
+            }
+
+            if (value is float number)
+            {
+                return number.ToString("R", CultureInfo.InvariantCulture) + "f";
+            }
+
+            if (value is Enum)
+            {
+                return FormatType(value.GetType(), shortNamespaces) + "." + value;
+            }
+
             return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
     }
@@ -203,6 +326,7 @@ namespace YLFramework.Editor.Help
         /// <summary>模块覆盖优先于 XML 的字段级合并说明。</summary>
         public readonly HelpDocumentation Help;
 
+        /// <summary>为一个真实成员建立展示签名和类别，保存已由索引构建流程合并的说明。</summary>
         internal HelpApiMember(MemberInfo member, string[] shortNamespaces, HelpDocumentation help)
         {
             Member = member;
@@ -218,13 +342,22 @@ namespace YLFramework.Editor.Help
         public string SearchText => Signature + "\n" + HelpApiIndex.DocumentationText(Help);
 
         /// <summary>把成员名、所属类型、说明与签名按权重加入评分字段。</summary>
+        /// <param name="fields">追加搜索字段的调用方缓冲；本方法不清空已有内容。</param>
         /// <param name="owner">声明类型的短名；为空时跳过。</param>
         /// <param name="includeDocumentation">false 时只加入名称类字段，用于判断查询词是否已被类型上下文覆盖。</param>
         internal void AppendSearchFields(List<HelpSearchField> fields, string owner, bool includeDocumentation = true)
         {
             fields.Add(new HelpSearchField(Name, HelpSearch.TitleWeight));
-            if (!string.IsNullOrEmpty(owner)) fields.Add(new HelpSearchField(owner, HelpSearch.TechnicalWeight));
-            if (!includeDocumentation) return;
+            if (!string.IsNullOrEmpty(owner))
+            {
+                fields.Add(new HelpSearchField(owner, HelpSearch.TechnicalWeight));
+            }
+
+            if (!includeDocumentation)
+            {
+                return;
+            }
+
             fields.Add(new HelpSearchField(Help.Summary, HelpSearch.SummaryWeight));
             fields.Add(new HelpSearchField(HelpApiIndex.DocumentationNotes(Help), HelpSearch.DocWeight));
             fields.Add(new HelpSearchField(Signature, HelpSearch.TechnicalWeight));
@@ -259,6 +392,7 @@ namespace YLFramework.Editor.Help
         /// <summary>跨程序集不冲突的类型身份。</summary>
         public string Id => Type.AssemblyQualifiedName;
 
+        /// <summary>为明确选定的类型建立直接声明成员索引，合并真实文档并按实际 Type 关联页面。</summary>
         internal HelpApiType(HelpApiTypeDefinition definition, string[] shortNamespaces, HelpPage[] pages,
             HelpXmlDocumentation xml, Func<MemberInfo, HelpDocumentation> documentation)
         {
@@ -283,6 +417,7 @@ namespace YLFramework.Editor.Help
         public bool Matches(string search) => HelpSearch.Contains(SearchText, search);
 
         /// <summary>把类型名、限定名、分组、说明与声明按权重加入评分字段；可选纳入成员字段供全局搜索。</summary>
+        /// <param name="fields">追加搜索字段的调用方缓冲；本方法不清空已有内容。</param>
         /// <param name="includeMembers">true 时加入成员名、成员说明与签名，使命中成员的查询能显示该类型。</param>
         /// <param name="includeDocumentation">false 时只加入名称与声明等身份字段，用于判断查询词是否已被类型上下文覆盖。</param>
         internal void AppendSearchFields(List<HelpSearchField> fields, bool includeMembers, bool includeDocumentation = true)
@@ -296,7 +431,11 @@ namespace YLFramework.Editor.Help
                 fields.Add(new HelpSearchField(HelpApiIndex.DocumentationNotes(Help), HelpSearch.DocWeight));
             }
             fields.Add(new HelpSearchField(Declaration, HelpSearch.TechnicalWeight));
-            if (!includeMembers) return;
+            if (!includeMembers)
+            {
+                return;
+            }
+
             foreach (var entry in Entries)
             {
                 fields.Add(new HelpSearchField(entry.Name, HelpSearch.MemberNameWeight));
@@ -312,7 +451,11 @@ namespace YLFramework.Editor.Help
         /// <returns>查询词中未被类型上下文覆盖的部分全部命中该成员时为 true；没有这类剩余词时为 false。</returns>
         public bool MemberMatches(HelpApiMember member, string search)
         {
-            if (string.IsNullOrWhiteSpace(search)) return false;
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                return false;
+            }
+
             var context = Type.Namespace + "\n" + Name + "\n" + Declaration;
             var terms = search.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
             var memberTerms = terms.Where(term => !HelpSearch.Contains(context, term)).ToArray();
@@ -333,7 +476,11 @@ namespace YLFramework.Editor.Help
         /// <exception cref="ArgumentNullException">module 为 null。</exception>
         public static HelpApiType[] Build(HelpModule module)
         {
-            if (module == null) throw new ArgumentNullException(nameof(module));
+            if (module == null)
+            {
+                throw new ArgumentNullException(nameof(module));
+            }
+
             var definitions = module.ApiTypes ?? Array.Empty<HelpApiTypeDefinition>();
             var shortNamespaces = definitions.Select(definition => definition.Type.Namespace).Distinct().ToArray();
             var pages = (module.Guides ?? Array.Empty<HelpPage>()).Concat(module.About ?? Array.Empty<HelpPage>()).ToArray();
@@ -341,6 +488,7 @@ namespace YLFramework.Editor.Help
             return definitions.Select(definition => new HelpApiType(definition, shortNamespaces, pages, xml, module.Documentation)).ToArray();
         }
 
+        /// <summary>组合摘要与其他已提供的说明，供字面搜索使用，不补造缺失文档。</summary>
         internal static string DocumentationText(HelpDocumentation help) => help.Summary + "\n" + DocumentationNotes(help);
 
         /// <summary>摘要之外的说明文本：返回值、备注与参数/类型参数说明。</summary>

@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace YLFramework.Core.IOC
+namespace YLFramework.DependencyInjection
 {
     /// <summary>
     /// 轻量、纯 C#、代码优先的依赖注入容器：类型映射、实例注册、解析与成员注入。
-    /// <para>解析优先级：已注册实例 → 类型映射（创建）→ 未注册 concrete class 自动构造（仅无名）→ null。</para>
+    /// <para>解析优先级：已注册实例 → 类型映射（创建）→ 未注册具体类自动构造（仅无名）→ null。</para>
     /// <para>构造函数注入选择参数最多的公开构造函数；最大参数数量并列时抛出异常，不依赖反射返回顺序。</para>
     /// <para>成员注入处理带 <see cref="InjectAttribute"/> 的实例字段与属性，搜索范围由 <see cref="MemberSearchModes"/> 控制。</para>
     /// <para>解析路径中重复出现同一类型会抛出带依赖链的循环依赖异常，不会无限递归。</para>
-    /// <para>容器只保存注册引用，不持有、不 Dispose 注册实例与解析出的对象，生命周期由调用方管理。</para>
+    /// <para>容器仅保存注册引用，不接管注册实例与解析结果的释放责任，生命周期由调用方管理。</para>
     /// <para>不保证线程安全，按单线程使用。</para>
     /// </summary>
     public class IOCContainer : IIOCContainer
@@ -210,7 +210,7 @@ namespace YLFramework.Core.IOC
         }
 
         /// <summary>
-        /// 解析对象（非泛型）：优先已注册实例，其次类型映射，最后自动构造未注册的 concrete class（仅无名），均不可用时返回 null。
+        /// 解析对象（非泛型）：优先已注册实例，其次类型映射，最后自动构造未注册的具体类（仅无名），均不可用时返回 null。
         /// 自动构造适用于非抽象、非泛型定义、非数组的 class，但不包括 string 与 delegate。
         /// </summary>
         /// <param name="baseType">要解析的服务类型。</param>
@@ -257,8 +257,9 @@ namespace YLFramework.Core.IOC
         /// 没有公开构造函数时回退非公开无参构造。创建完成后对实例执行成员注入。
         /// </summary>
         /// <param name="type">要创建的类型。</param>
-        /// <param name="constructorArgs">显式构造参数；传入后不再自动解析参数。</param>
+        /// <param name="constructorArgs">至少含一个元素时按显式实参匹配构造函数；null 或空数组使用自动构造注入。</param>
         /// <returns>新创建的实例。</returns>
+        /// <remarks>构造或注入失败无事务回滚，也不自动释放已创建的对象及其依赖。</remarks>
         /// <exception cref="ArgumentNullException"><paramref name="type"/> 为 null。</exception>
         /// <exception cref="IOCResolutionException">类型不可实例化、构造选择歧义、依赖缺失或构造函数抛异常。</exception>
         /// <exception cref="IOCCircularDependencyException">解析路径中出现循环依赖。</exception>
@@ -289,7 +290,8 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 解析所有匹配的注册（含无名与命名），匹配规则为“注册键类型可赋值给 <paramref name="type"/>”。
         /// 每个键下已注册实例优先于映射，不重复创建；顺序为无名注册在前、命名注册按名称 Ordinal 排序（稳定契约）。
-        /// 枚举开始时对集合做快照，枚举期间注册不会破坏遍历；某一项创建失败会立即抛出，已产出的项不回滚。
+        /// 枚举开始时仅对注册键做快照，各项读取处理当时的实例或映射；
+        /// 枚举期间注册不会破坏遍历，某项创建失败立即抛出，已产出的项不回滚。
         /// </summary>
         /// <param name="type">要匹配的服务类型。</param>
         /// <returns>匹配的实例序列；无匹配时为空序列。</returns>
@@ -305,6 +307,7 @@ namespace YLFramework.Core.IOC
             return ResolveAllIterator(type);
         }
 
+        /// <summary>按注册键快照延迟解析各项；实例值仍实时读取，不按对象引用去重。</summary>
         private IEnumerable<object> ResolveAllIterator(Type type)
         {
             var sortedKeys = CollectResolveAllKeys(type);
@@ -525,7 +528,7 @@ namespace YLFramework.Core.IOC
             ResolveRelation<TBase>(typeof(TFor), arg);
 
         /// <summary>
-        /// 判断类型（可带名称）是否已有显式注册（实例或映射）。注意：未注册但可自动构造的 concrete class 不算已注册。
+        /// 判断类型（可带名称）是否已有显式注册（实例或映射）。注意：未注册但可自动构造的具体类不算已注册。
         /// </summary>
         /// <typeparam name="T">要判断的类型。</typeparam>
         /// <param name="name">注册名称；null 与空字符串等价。</param>
@@ -550,7 +553,7 @@ namespace YLFramework.Core.IOC
         }
 
         /// <summary>
-        /// 尝试解析（泛型）。语义与 <see cref="Resolve{T}"/> 完全一致（含未注册 concrete class 自动构造），
+        /// 尝试解析（泛型）。语义与 <see cref="Resolve{T}"/> 完全一致（含未注册具体类自动构造），
         /// 仅当解析结果为空时返回 false；创建与注入阶段的真实错误照常抛出，不会被吞掉。
         /// </summary>
         /// <typeparam name="T">要解析的服务类型。</typeparam>
@@ -577,6 +580,7 @@ namespace YLFramework.Core.IOC
             return value != null;
         }
 
+        /// <summary>校验可构造类型并跟踪构造与注入路径；无论成功或失败都移除本层类型记录。</summary>
         private object CreateInstanceTracked(Type type, object[] constructorArgs)
         {
             if (type.IsArray)
@@ -622,6 +626,7 @@ namespace YLFramework.Core.IOC
             }
         }
 
+        /// <summary>用显式实参匹配公开构造函数，将构造失败及常见反射错误转换为带依赖链的异常。</summary>
         private object CreateWithExplicitArguments(Type type, object[] constructorArgs)
         {
             try
@@ -648,6 +653,7 @@ namespace YLFramework.Core.IOC
             }
         }
 
+        /// <summary>执行缓存的构造计划：递归解析公开构造参数，或尝试非公开无参构造；无效计划直接报错。</summary>
         private object CreateWithPlan(Type type, CreationPlan plan)
         {
             if (plan.Kind == CreationPlanKind.Invalid)
@@ -699,7 +705,7 @@ namespace YLFramework.Core.IOC
         }
 
         /// <summary>
-        /// 构造构造函数失败的异常：解包 TargetInvocationException；若原始异常本身是 IOC 异常（如构造函数体内
+        /// 整理构造失败异常：解包 TargetInvocationException；若原始异常本身是 IOC 异常（如构造函数体内
         /// 触发的循环依赖或依赖缺失），返回原异常以保留类型与依赖链，由调用方 throw；否则包装为带上下文的解析异常。
         /// </summary>
         private Exception BuildConstructorFailure(Type type, TargetInvocationException exception)
@@ -719,8 +725,8 @@ namespace YLFramework.Core.IOC
         /// <summary>
         /// 解析单个构造函数参数：数组参数优先使用显式注册（无名或参数名命名），其次按元素类型生成，
         /// params 参数在无显式注册时传空数组，可选数组参数在无匹配元素注册时使用默认值；
-        /// 其余参数按“无名显式注册 → 参数名命名注册 → 完整 Resolve（含 concrete 自动构造）→ 默认值”顺序解析，
-        /// 最终失败时抛出带依赖链的异常。显式注册先于自动构造，避免 concrete 参数被自动构造遮蔽命名注册。
+        /// 其余参数按“无名显式注册 → 参数名命名注册 → 完整 Resolve（含具体类自动构造）→ 默认值”顺序解析，
+        /// 最终失败时抛出带依赖链的异常。显式注册先于自动构造，避免具体类参数的自动构造遮蔽命名注册。
         /// </summary>
         private object ResolveConstructorParameter(Type ownerType, ParameterInfo parameter)
         {
@@ -809,9 +815,11 @@ namespace YLFramework.Core.IOC
             return false;
         }
 
+        /// <summary>识别 params 参数，使无显式数组注册时传入空数组，而非聚合元素注册。</summary>
         private static bool IsParamsParameter(ParameterInfo parameter) =>
             parameter.GetCustomAttribute<ParamArrayAttribute>() != null;
 
+        /// <summary>按 ResolveAll 的注册顺序解析元素，并装入指定元素类型的数组。</summary>
         private Array BuildArray(Type elementType)
         {
             var items = ResolveAll(elementType).ToList();
@@ -824,6 +832,7 @@ namespace YLFramework.Core.IOC
             return array;
         }
 
+        /// <summary>检查成员可注入性，区分缺失依赖与显式注册的 null，再写入字段或属性并整理写入异常。</summary>
         private void InjectMember(object obj, Type ownerType, InjectableMember member)
         {
             if (!member.CanInject)
@@ -873,21 +882,23 @@ namespace YLFramework.Core.IOC
             }
         }
 
+        /// <summary>只检查类型与名称对应的显式注册键；不构造对象，已登记空实例也算注册。</summary>
         private bool IsRegisteredCore(Type type, string name)
         {
             var key = new Tuple<Type, string>(type, NameKey.Normalize(name));
             return Instances.ContainsKey(key) || Mappings.ContainsKey(key);
         }
 
+        /// <summary>按归一化名称查找实例键，返回值区分未注册与已显式注册 null。</summary>
         private bool TryGetRegisteredInstance(Type type, string name, out object instance)
         {
             var key = new Tuple<Type, string>(type, NameKey.Normalize(name));
             return Instances.TryGetValue(key, out instance);
         }
 
+        /// <summary>从两个注册集合快照中收集可赋值的唯一键并排序，不保存实例值或提前创建对象。</summary>
         private List<Tuple<Type, string>> CollectResolveAllKeys(Type type)
         {
-            // 快照两个集合，避免枚举期间（例如注入回调）修改集合导致遍历失败。
             var keys = new List<Tuple<Type, string>>();
             var seen = new HashSet<Tuple<Type, string>>();
             foreach (var entry in Instances.ToArray())
@@ -910,6 +921,7 @@ namespace YLFramework.Core.IOC
             return keys;
         }
 
+        /// <summary>将无名键排在前面，其余按名称、类型全名依次进行 Ordinal 比较。</summary>
         private static int CompareResolveAllKeys(Tuple<Type, string> a, Tuple<Type, string> b)
         {
             var aUnnamed = string.IsNullOrEmpty(a.Item2);
@@ -928,6 +940,7 @@ namespace YLFramework.Core.IOC
             return string.CompareOrdinal(a.Item1.FullName, b.Item1.FullName);
         }
 
+        /// <summary>限制无名未注册类型的自动构造范围，排除抽象类、开放泛型定义、数组、string 和委托。</summary>
         private static bool IsAutoCreatable(Type type)
         {
             if (!type.IsClass || type.IsAbstract || type.IsGenericTypeDefinition || type.IsArray)
@@ -943,8 +956,10 @@ namespace YLFramework.Core.IOC
             return true;
         }
 
+        /// <summary>为构造或注入诊断组合原始异常的类型名称与消息。</summary>
         private static string DescribeException(Exception exception) => $"{exception.GetType().Name}: {exception.Message}";
 
+        /// <summary>描述显式实参的运行时类型及空值，供构造函数匹配失败消息使用。</summary>
         private static string DescribeArguments(object[] arguments)
         {
             if (arguments == null || arguments.Length == 0)
@@ -955,6 +970,7 @@ namespace YLFramework.Core.IOC
             return string.Join(", ", arguments.Select(argument => argument == null ? "null" : argument.GetType().Name));
         }
 
+        /// <summary>为诊断消息统一显示无名注册，不改变实际注册键。</summary>
         private static string FormatName(string name) => string.IsNullOrEmpty(name) ? "null" : name;
     }
 }

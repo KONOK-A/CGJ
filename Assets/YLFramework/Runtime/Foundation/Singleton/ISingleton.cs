@@ -1,4 +1,4 @@
-﻿namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 单例标记接口：配合 SingletonProperty / MonoSingletonProperty / MonoSingleton 等入口使用，
@@ -7,8 +7,8 @@
     public interface ISingleton
     {
         /// <summary>
-        /// 单例实例创建完成后调用一次（每次重新创建都会再次调用）。
-        /// 适合在这里做初始化；请避免在其中再次访问 Instance——部分入口未做重入保护，可能导致递归创建或重复初始化。
+        /// 单例入口创建或采用实例后的初始化回调，是否去重由具体入口负责。
+        /// 部分入口未做重入保护，初始化中访问 Instance 可能递归创建或重复初始化。
         /// </summary>
         void OnSingletonInit();
     }

@@ -1,6 +1,6 @@
 # ====================================================================
 #  Git 属性配置（Unity 项目）
-#  - 文本文件在仓库与工作区统一使用 LF，避免跨平台行尾差异
+#  - 自有文本默认使用 LF；要求原样分发的供应商内容使用精确例外
 #  - Unity 序列化资源（YAML）以 LF 存储，diff 与合并更稳定
 #  - 二进制资源不做文本转换；大体积二进制资源由 Git LFS 管理
 # ====================================================================
@@ -53,3 +53,8 @@
 *.dll filter=lfs diff=lfs merge=lfs -text
 *.so filter=lfs diff=lfs merge=lfs -text
 *.dylib filter=lfs diff=lfs merge=lfs -text
+
+# Preserve the verified upstream bytes and notices of DOTween Standard.
+# Keep the existing LFS filters; only disable text normalization in this vendor tree.
+/Assets/Plugins/Demigiant/DOTween/** -text
+/Assets/Plugins/Demigiant/DOTween/**/*.meta text eol=lf

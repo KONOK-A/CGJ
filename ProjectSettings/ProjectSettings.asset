@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: TANGENT LINE
-  productName: "\u89E3\u9650\u86C7"
+  productName: YLFrameworkDev
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -39,10 +39,8 @@ PlayerSettings:
     y: 0
     width: 1
     height: 1
-  m_SplashScreenLogos:
-  - logo: {fileID: 21300000, guid: c6bbcdd76e21d6f4081507bf37ae08d0, type: 3}
-    duration: 2
-  m_VirtualRealitySplashScreen: {fileID: 2800000, guid: c6bbcdd76e21d6f4081507bf37ae08d0, type: 3}
+  m_SplashScreenLogos: []
+  m_VirtualRealitySplashScreen: {fileID: 0}
   m_HolographicTrackingLossScreen: {fileID: 0}
   defaultScreenWidth: 1920
   defaultScreenHeight: 1080
@@ -165,14 +163,14 @@ PlayerSettings:
   androidSupportedAspectRatio: 1
   androidMaxAspectRatio: 2.1
   applicationIdentifier:
-    Standalone: com.DefaultCompany.CGJ2024
+    Standalone: com.tangentline.ylframeworkdev
   buildNumber:
     Bratwurst: 0
     Standalone: 0
     VisionOS: 0
     iPhone: 0
     tvOS: 0
-  overrideDefaultApplicationIdentifier: 0
+  overrideDefaultApplicationIdentifier: 1
   AndroidBundleVersionCode: 1
   AndroidMinSdkVersion: 23
   AndroidTargetSdkVersion: 0
@@ -291,7 +289,99 @@ PlayerSettings:
   AndroidValidateAppBundleSize: 1
   AndroidAppBundleSizeToValidate: 150
   m_BuildTargetIcons: []
-  m_BuildTargetPlatformIcons: []
+  m_BuildTargetPlatformIcons:
+  - m_BuildTarget: Android
+    m_Icons:
+    - m_Textures: []
+      m_Width: 432
+      m_Height: 432
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 324
+      m_Height: 324
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 216
+      m_Height: 216
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 162
+      m_Height: 162
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 108
+      m_Height: 108
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 81
+      m_Height: 81
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 192
+      m_Height: 192
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 144
+      m_Height: 144
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 96
+      m_Height: 96
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 72
+      m_Height: 72
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 48
+      m_Height: 48
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 36
+      m_Height: 36
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 192
+      m_Height: 192
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 144
+      m_Height: 144
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 96
+      m_Height: 96
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 72
+      m_Height: 72
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 48
+      m_Height: 48
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 36
+      m_Height: 36
+      m_Kind: 0
+      m_SubKind: 
   m_BuildTargetBatching: []
   m_BuildTargetShaderSettings: []
   m_BuildTargetGraphicsJobs: []
@@ -573,24 +663,24 @@ PlayerSettings:
   webGLMemoryGeometricGrowthCap: 96
   webGLPowerPreference: 2
   scriptingDefineSymbols:
-    Android: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    EmbeddedLinux: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    GameCoreScarlett: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    GameCoreXboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    LinuxHeadlessSimulation: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    Nintendo Switch: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    PS4: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    PS5: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    QNX: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    Server: UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    Stadia: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    Standalone: MOREMOUNTAINS_CORGIENGINE;MOREMOUNTAINS_INTERFACE;MOREMOUNTAINS_INVENTORYENGINE;DOTWEEN;ODIN_INSPECTOR;ODIN_INSPECTOR_3;ODIN_INSPECTOR_3_1;ODIN_INSPECTOR_3_2;ODIN_INSPECTOR_3_3;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    VisionOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    WebGL: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    Windows Store Apps: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    XboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    iPhone: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
-    tvOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_6
+    Android: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    EmbeddedLinux: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    GameCoreScarlett: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    GameCoreXboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    LinuxHeadlessSimulation: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Nintendo Switch: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    PS4: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    PS5: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    QNX: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Server: UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Stadia: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Standalone: MOREMOUNTAINS_CORGIENGINE;MOREMOUNTAINS_INTERFACE;MOREMOUNTAINS_INVENTORYENGINE;DOTWEEN;ODIN_INSPECTOR;ODIN_INSPECTOR_3;ODIN_INSPECTOR_3_1;ODIN_INSPECTOR_3_2;ODIN_INSPECTOR_3_3;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    VisionOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    WebGL: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Windows Store Apps: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    XboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    iPhone: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    tvOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

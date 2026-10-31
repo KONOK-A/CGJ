@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace YLFramework.Core.Singleton
+namespace YLFramework.Singletons
 {
     /// <summary>
     /// 可选的单例宿主基类：支持从场景（含未激活对象）收养实例，并按所有权区分“自建宿主”与“借用组件”的释放行为。
@@ -12,14 +12,17 @@ namespace YLFramework.Core.Singleton
     public abstract class MonoSingletonHost<T> : MonoBehaviour, ISingleton where T : MonoSingletonHost<T>
     {
         private static T _instance;
-        private static bool _quitting;
+        private static bool _isQuitting;
         private bool _ownsGameObject;
-        private bool _initialized;
+        private bool _isInitialized;
 
         /// <summary>
         /// 宿主是否已释放；释放后 HasInstance 为 false，模块应停止使用该宿主。
         /// </summary>
-        protected bool HostReleased { get; private set; }
+        protected bool IsHostReleased
+        {
+            get; private set;
+        }
 
         /// <summary>
         /// 宿主 GameObject 是否由本类创建：true 时释放会销毁整个 GameObject，false（借用组件）时只销毁或禁用组件。
@@ -46,6 +49,7 @@ namespace YLFramework.Core.Singleton
         /// </summary>
         protected virtual bool PersistentHost => true;
 
+        /// <summary>为当前宿主类型登记跨 Play 会话的引用和退出标记重置。</summary>
         static MonoSingletonHost()
         {
             SingletonSessionState.RegisterSessionReset(ResetHostSession);
@@ -59,7 +63,7 @@ namespace YLFramework.Core.Singleton
         /// <summary>
         /// 是否持有有效（未释放）的宿主；不会触发查找或创建。
         /// </summary>
-        public static bool HasInstance => _instance != null && !_instance.HostReleased;
+        public static bool HasInstance => _instance != null && !_instance.IsHostReleased;
 
         /// <summary>
         /// 尝试获取有效宿主；不会触发查找或创建。
@@ -82,16 +86,33 @@ namespace YLFramework.Core.Singleton
         protected static T GetInstance(bool allowEditMode = false, Func<GameObject> createGameObject = null,
             bool includeInactive = true)
         {
-            if (HasInstance) return InitializeHost(_instance);
+            if (HasInstance)
+            {
+                return InitializeHost(_instance);
+            }
+
             ReleaseDestroyedHost();
-            if (!CanCreateHost(allowEditMode)) return null;
+            if (!CanCreateHost(allowEditMode))
+            {
+                return null;
+            }
 
             foreach (var candidate in FindObjectsByType<T>(includeInactive ? FindObjectsInactive.Include : FindObjectsInactive.Exclude,
                          FindObjectsSortMode.InstanceID))
             {
-                if (candidate.HostReleased) continue;
-                if (_instance == null) _instance = candidate;
-                else if (candidate != _instance) candidate.ReleaseHost();
+                if (candidate.IsHostReleased)
+                {
+                    continue;
+                }
+
+                if (_instance == null)
+                {
+                    _instance = candidate;
+                }
+                else if (candidate != _instance)
+                {
+                    candidate.ReleaseHost();
+                }
             }
             if (!HasInstance)
             {
@@ -100,8 +121,14 @@ namespace YLFramework.Core.Singleton
                 host._ownsGameObject = true;
                 _instance = host;
                 var parent = host.HostParent;
-                if (parent != null) root.transform.SetParent(parent, false);
-                else if (Application.isPlaying && host.PersistentHost) DontDestroyOnLoad(root);
+                if (parent != null)
+                {
+                    root.transform.SetParent(parent, false);
+                }
+                else if (Application.isPlaying && host.PersistentHost)
+                {
+                    DontDestroyOnLoad(root);
+                }
             }
             return InitializeHost(_instance);
         }
@@ -110,7 +137,7 @@ namespace YLFramework.Core.Singleton
         /// 当前是否允许创建宿主：播放中受退出状态限制，非播放中由 allowEditMode 决定。
         /// </summary>
         protected static bool CanCreateHost(bool allowEditMode = false) =>
-            Application.isPlaying ? !_quitting && !SingletonSessionState.IsApplicationQuitting : allowEditMode;
+            Application.isPlaying ? !_isQuitting && !SingletonSessionState.IsApplicationQuitting : allowEditMode;
 
         /// <summary>
         /// 首次取得宿主时执行 OnSingletonInit；先置初始化标记再回调，允许回调中重入 Instance；
@@ -118,14 +145,17 @@ namespace YLFramework.Core.Singleton
         /// </summary>
         private static T InitializeHost(T host)
         {
-            if (!host._initialized)
+            if (!host._isInitialized)
             {
                 // 先置位再回调，保证初始化过程中重入 Instance 不会递归初始化
-                host._initialized = true;
-                try { host.OnSingletonInit(); }
+                host._isInitialized = true;
+                try
+                {
+                    host.OnSingletonInit();
+                }
                 catch
                 {
-                    host._initialized = false;
+                    host._isInitialized = false;
                     throw;
                 }
             }
@@ -135,17 +165,29 @@ namespace YLFramework.Core.Singleton
         /// <summary>
         /// 宿主初始化回调；仅在首次取得宿主时调用一次（初始化失败会回滚标记，允许重试）。
         /// </summary>
-        public virtual void OnSingletonInit() { }
+        public virtual void OnSingletonInit()
+        {
+        }
 
         /// <summary>
         /// 激活时登记：若已有其他缓存实例，则释放自己（后激活的让位于先登记者）。
         /// </summary>
         protected virtual void Awake()
         {
-            if (!Application.isPlaying || HostReleased) return;
+            if (!Application.isPlaying || IsHostReleased)
+            {
+                return;
+            }
+
             ReleaseDestroyedHost();
-            if (HasInstance && _instance != this) ReleaseHost();
-            else _instance = this as T;
+            if (HasInstance && _instance != this)
+            {
+                ReleaseHost();
+            }
+            else
+            {
+                _instance = this as T;
+            }
         }
 
         /// <summary>
@@ -156,15 +198,26 @@ namespace YLFramework.Core.Singleton
         /// <param name="keepBorrowedComponent">true 且宿主为借用组件时，只清空缓存，不销毁组件。</param>
         protected void ReleaseHost(bool keepBorrowedComponent = false)
         {
-            if (HostReleased) return;
+            if (IsHostReleased)
+            {
+                return;
+            }
+
             if (keepBorrowedComponent && !_ownsGameObject)
             {
                 ClearIfCurrent();
                 return;
             }
-            HostReleased = true;
-            if (this != null) enabled = false;
-            try { OnHostRelease(); }
+            IsHostReleased = true;
+            if (this != null)
+            {
+                enabled = false;
+            }
+
+            try
+            {
+                OnHostRelease();
+            }
             finally
             {
                 // 先清缓存引用再销毁：Destroy 可能同步触发外部回调，此时 HasInstance 应已为 false
@@ -172,8 +225,14 @@ namespace YLFramework.Core.Singleton
                 if (this != null)
                 {
                     var target = _ownsGameObject ? (UnityEngine.Object)gameObject : this;
-                    if (Application.isPlaying) Destroy(target);
-                    else DestroyImmediate(target);
+                    if (Application.isPlaying)
+                    {
+                        Destroy(target);
+                    }
+                    else
+                    {
+                        DestroyImmediate(target);
+                    }
                 }
             }
         }
@@ -182,7 +241,9 @@ namespace YLFramework.Core.Singleton
         /// 宿主释放时的资源清理钩子；在销毁 GameObject / 组件之前同步调用，模块必须在此清理自身资源。
         /// 钩子抛异常时异常向上传播，但清引用与销毁流程仍会继续（由 finally 保证）。
         /// </summary>
-        protected virtual void OnHostRelease() { }
+        protected virtual void OnHostRelease()
+        {
+        }
 
         /// <summary>
         /// 外部销毁宿主时调用：若尚未释放则先执行 <see cref="OnHostRelease"/>，最后清空缓存引用。
@@ -191,19 +252,22 @@ namespace YLFramework.Core.Singleton
         {
             try
             {
-                if (!HostReleased)
+                if (!IsHostReleased)
                 {
-                    HostReleased = true;
+                    IsHostReleased = true;
                     OnHostRelease();
                 }
             }
-            finally { ClearIfCurrent(); }
+            finally
+            {
+                ClearIfCurrent();
+            }
         }
 
         /// <summary>
         /// 应用退出时标记退出状态，退出期间不再创建新宿主。
         /// </summary>
-        protected virtual void OnApplicationQuit() => _quitting = true;
+        protected virtual void OnApplicationQuit() => _isQuitting = true;
 
         /// <summary>
         /// 清理已被 Unity 销毁（fake-null）但缓存仍持有的宿主引用。
@@ -212,18 +276,32 @@ namespace YLFramework.Core.Singleton
         private static void ReleaseDestroyedHost()
         {
             // Unity 不会给从未激活过的对象发送 OnDestroy
-            if (!ReferenceEquals(_instance, null) && _instance == null) _instance.ReleaseHost();
+            if (!ReferenceEquals(_instance, null) && _instance == null)
+            {
+                _instance.ReleaseHost();
+            }
         }
 
+        /// <summary>为新 Play 会话兜底释放已销毁宿主，并确保缓存和退出标记最终被重置。</summary>
         private static void ResetHostSession()
         {
-            try { ReleaseDestroyedHost(); }
-            finally { ResetHostReference(); }
+            try
+            {
+                ReleaseDestroyedHost();
+            }
+            finally
+            {
+                ResetHostReference();
+            }
         }
 
+        /// <summary>仅当自身仍为当前宿主时清空缓存，避免旧对象的迟到清理移除替换实例。</summary>
         private void ClearIfCurrent()
         {
-            if (ReferenceEquals(_instance, this)) _instance = null;
+            if (ReferenceEquals(_instance, this))
+            {
+                _instance = null;
+            }
         }
 
         /// <summary>
@@ -232,7 +310,7 @@ namespace YLFramework.Core.Singleton
         protected static void ResetHostReference()
         {
             _instance = null;
-            _quitting = false;
+            _isQuitting = false;
         }
     }
 }

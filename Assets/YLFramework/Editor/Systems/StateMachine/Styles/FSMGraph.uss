@@ -1,0 +1,16 @@
+.yl-fsm-grid {
+    --spacing: 25;
+    --thick-lines: 10;
+}
+
+.yl-fsm-grid.dark {
+    --grid-background-color: rgb(43, 43, 43);
+    --line-color: rgb(59, 59, 59);
+    --thick-line-color: rgb(75, 75, 75);
+}
+
+.yl-fsm-grid.light {
+    --grid-background-color: rgb(200, 200, 200);
+    --line-color: rgb(178, 178, 178);
+    --thick-line-color: rgb(151, 151, 151);
+}

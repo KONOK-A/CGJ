@@ -1,0 +1,4 @@
+root = true
+
+[EditorConfigFixture.cs]
+dotnet_diagnostic.YL0002.severity = none

@@ -1,0 +1,7 @@
+<linker>
+  <assembly fullname="YLFramework.Tests.Domain.Probes">
+    <type fullname="YLFramework.Tests.DomainAcceptance.ReceiverSkill" preserve="all" />
+    <type fullname="YLFramework.Tests.DomainAcceptance.ReceiverBuff" preserve="all" />
+    <type fullname="YLFramework.Tests.DomainAcceptance.ReceiverMission" preserve="all" />
+  </assembly>
+</linker>

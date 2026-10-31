@@ -11,7 +11,7 @@ namespace YLFramework.Editor.Help
     {
         /// <summary>按展示顺序排列的使用指南。</summary>
         public HelpPage[] Guides = Array.Empty<HelpPage>();
-        /// <summary>可选的模块介绍与许可页面。</summary>
+        /// <summary>可选的模块介绍页面。</summary>
         public HelpPage[] About = Array.Empty<HelpPage>();
         /// <summary>明确属于本模块的 API 类型，不自动收集依赖程序集。</summary>
         public HelpApiTypeDefinition[] ApiTypes = Array.Empty<HelpApiTypeDefinition>();
@@ -56,7 +56,11 @@ namespace YLFramework.Editor.Help
         /// <exception cref="ArgumentException">id 为 null、空或仅由空白字符组成。</exception>
         public HelpPage(string id, string title, string group, string summary, params HelpBlock[] blocks)
         {
-            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("页面标识不能为空。", nameof(id));
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException("页面标识不能为空。", nameof(id));
+            }
+
             Id = id;
             Title = title ?? "";
             Group = group ?? "";
@@ -78,7 +82,11 @@ namespace YLFramework.Editor.Help
             fields.Add(new HelpSearchField(Title, HelpSearch.TitleWeight));
             fields.Add(new HelpSearchField(Group, HelpSearch.KeywordWeight));
             fields.Add(new HelpSearchField(Summary, HelpSearch.SummaryWeight));
-            foreach (var keyword in Keywords) fields.Add(new HelpSearchField(keyword, HelpSearch.KeywordWeight));
+            foreach (var keyword in Keywords)
+            {
+                fields.Add(new HelpSearchField(keyword, HelpSearch.KeywordWeight));
+            }
+
             foreach (var block in Blocks)
             {
                 fields.Add(new HelpSearchField(block.Title, HelpSearch.BodyWeight));
@@ -90,7 +98,10 @@ namespace YLFramework.Editor.Help
                 else
                 {
                     fields.Add(new HelpSearchField(block.Content, HelpSearch.BodyWeight));
-                    if (block.Kind == HelpBlockKind.Link) fields.Add(new HelpSearchField(block.Url, HelpSearch.TechnicalWeight));
+                    if (block.Kind == HelpBlockKind.Link)
+                    {
+                        fields.Add(new HelpSearchField(block.Url, HelpSearch.TechnicalWeight));
+                    }
                 }
             }
         }
@@ -123,6 +134,7 @@ namespace YLFramework.Editor.Help
         /// <summary>外部链接地址。</summary>
         public readonly string Url;
 
+        /// <summary>保存内容块的展示数据，将可选 null 文本规范为空串。</summary>
         private HelpBlock(HelpBlockKind kind, string title, string content, string context = "", string url = "")
         {
             Kind = kind;
@@ -133,12 +145,25 @@ namespace YLFramework.Editor.Help
         }
 
         /// <summary>创建正文段落。</summary>
+        /// <param name="title">可选段落标题；null 按空文本处理。</param>
+        /// <param name="text">正文文本；null 按空文本处理。</param>
+        /// <returns>供阅读器按正文样式展示的内容块。</returns>
         public static HelpBlock Paragraph(string title, string text) => new HelpBlock(HelpBlockKind.Text, title, text);
         /// <summary>创建只读 C# 代码块。</summary>
+        /// <param name="title">代码块标题。</param>
+        /// <param name="context">代码前的使用上下文。</param>
+        /// <param name="code">仅展示和复制的代码，不会被帮助窗口执行。</param>
+        /// <returns>供阅读器按代码样式展示的内容块。</returns>
         public static HelpBlock Code(string title, string context, string code) => new HelpBlock(HelpBlockKind.Code, title, code, context);
         /// <summary>创建提示或注意事项。</summary>
+        /// <param name="title">提示块标题。</param>
+        /// <param name="text">提示正文。</param>
+        /// <returns>供阅读器突出展示的提示内容块。</returns>
         public static HelpBlock Notice(string title, string text) => new HelpBlock(HelpBlockKind.Notice, title, text);
         /// <summary>创建外部链接，不自动访问网络。</summary>
+        /// <param name="title">链接显示文本。</param>
+        /// <param name="url">点击后打开的地址；此处不校验可达性。</param>
+        /// <returns>只保存显示文本与地址的链接块。</returns>
         public static HelpBlock Link(string title, string url) => new HelpBlock(HelpBlockKind.Link, title, "", url: url);
     }
 
@@ -178,6 +203,11 @@ namespace YLFramework.Editor.Help
 
         /// <summary>建立 XML 说明或模块的稀疏覆盖数据。</summary>
         /// <remarks>null 文本和数组按空值处理；保存传入数组的引用。作为模块覆盖时，空白说明不会清空 XML 内容。</remarks>
+        /// <param name="summary">实际提供的摘要。</param>
+        /// <param name="returns">返回值或属性值说明。</param>
+        /// <param name="remarks">实际提供的约束与备注。</param>
+        /// <param name="parameters">按参数名称关联的说明。</param>
+        /// <param name="typeParameters">按泛型类型参数名称关联的说明。</param>
         public HelpDocumentation(string summary, string returns, string remarks, HelpParameter[] parameters, HelpParameter[] typeParameters = null)
         {
             Summary = summary ?? "";
@@ -196,6 +226,8 @@ namespace YLFramework.Editor.Help
         /// <summary>实际提供的说明，不根据参数名称猜测。</summary>
         public readonly string Description;
         /// <summary>保存一个具名说明。</summary>
+        /// <param name="name">声明中的参数或类型参数名称；null 按空文本处理。</param>
+        /// <param name="description">实际说明；null 按空文本处理。</param>
         public HelpParameter(string name, string description)
         {
             Name = name ?? "";
@@ -220,20 +252,29 @@ namespace YLFramework.Editor.Help
             search.Split((char[])null, StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
         /// <summary>按权重评分：每个词都须命中任一字段（AND），返回总分；任一词未命中返回 -1。</summary>
-        /// <remarks>命中取字段权重加匹配等级（整体等于 +30、前缀 +20、包含 +10）；含点号的词先整体匹配，失败再按点拆分逐段 AND，并扣少量分值。</remarks>
+        /// <remarks>命中取字段权重加匹配等级（整体等于 +30、前缀 +20、包含 +10）；含点号的词同时比较整体与分段 AND 匹配，分段扣分后取较高值。</remarks>
         internal static int Score(IReadOnlyList<HelpSearchField> fields, string[] terms)
         {
-            if (terms == null || terms.Length == 0) return 0;
+            if (terms == null || terms.Length == 0)
+            {
+                return 0;
+            }
+
             var total = 0;
             foreach (var term in terms)
             {
                 var score = MatchTerm(fields, term);
-                if (score < 0) return -1;
+                if (score < 0)
+                {
+                    return -1;
+                }
+
                 total += score;
             }
             return total;
         }
 
+        /// <summary>为单个查询词取最佳分数；限定名允许各段分布在不同字段中，以最弱段得分扣分计入。</summary>
         private static int MatchTerm(IReadOnlyList<HelpSearchField> fields, string term)
         {
             var best = MatchSingle(fields, term);
@@ -246,28 +287,59 @@ namespace YLFramework.Editor.Help
                     foreach (var part in parts)
                     {
                         var partScore = MatchSingle(fields, part);
-                        if (partScore < 0) { split = -1; break; }
-                        if (partScore < split) split = partScore;
+                        if (partScore < 0)
+                        {
+                            split = -1;
+                            break;
+                        }
+                        if (partScore < split)
+                        {
+                            split = partScore;
+                        }
                     }
-                    if (split >= 0) best = Math.Max(best, Math.Max(1, split - SplitPenalty));
+                    if (split >= 0)
+                    {
+                        best = Math.Max(best, Math.Max(1, split - SplitPenalty));
+                    }
                 }
             }
             return best;
         }
 
+        /// <summary>在所有非空字段中按相等、前缀和子串等级取得最高得分；无匹配返回 -1。</summary>
         private static int MatchSingle(IReadOnlyList<HelpSearchField> fields, string term)
         {
             var best = -1;
             for (var index = 0; index < fields.Count; index++)
             {
                 var field = fields[index];
-                if (field.Text.Length == 0) continue;
+                if (field.Text.Length == 0)
+                {
+                    continue;
+                }
+
                 int bonus;
-                if (field.Text.Equals(term, StringComparison.OrdinalIgnoreCase)) bonus = ExactBonus;
-                else if (field.Text.StartsWith(term, StringComparison.OrdinalIgnoreCase)) bonus = PrefixBonus;
-                else if (field.Text.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0) bonus = ContainsBonus;
-                else continue;
-                if (field.Weight + bonus > best) best = field.Weight + bonus;
+                if (field.Text.Equals(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    bonus = ExactBonus;
+                }
+                else if (field.Text.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+                {
+                    bonus = PrefixBonus;
+                }
+                else if (field.Text.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    bonus = ContainsBonus;
+                }
+                else
+                {
+                    continue;
+                }
+
+                if (field.Weight + bonus > best)
+                {
+                    best = field.Weight + bonus;
+                }
             }
             return best;
         }
@@ -279,7 +351,10 @@ namespace YLFramework.Editor.Help
         internal const int BodyWeight = 70;
         internal const int DocWeight = 60;
         internal const int TechnicalWeight = 40;
-        private const int ExactBonus = 30, PrefixBonus = 20, ContainsBonus = 10, SplitPenalty = 10;
+        private const int ExactBonus = 30;
+        private const int PrefixBonus = 20;
+        private const int ContainsBonus = 10;
+        private const int SplitPenalty = 10;
     }
 
     /// <summary>一条带权重的可搜索字段；评分时按权重区分名称、说明与签名等来源。</summary>
@@ -288,6 +363,7 @@ namespace YLFramework.Editor.Help
         internal readonly string Text;
         internal readonly int Weight;
 
+        /// <summary>保存评分字段与来源权重，将 null 文本规范为空串。</summary>
         internal HelpSearchField(string text, int weight)
         {
             Text = text ?? "";

@@ -1,0 +1,14 @@
+{
+    "name": "YLFramework.UI.Acceptance",
+    "rootNamespace": "YLFramework.Core.Tests",
+    "references": ["YLFramework.Runtime", "UnityEngine.UI", "Unity.InputSystem"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_EDITOR || YL_UI_ACCEPTANCE"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
