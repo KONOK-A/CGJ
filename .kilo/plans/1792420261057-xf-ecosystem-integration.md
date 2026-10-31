@@ -456,6 +456,44 @@ B0不等于B9，定义为同时包含E0实现与该必要指纹纠正的最终�
 - 不重建Player；既有IL2CPP Low图形通过仅保留为§10.6对应源码快照的历史证据，不外推为去兼容Runtime本次重建。后续B接收的Player验证应绑定合并后新输入。
 - 精确排除用户3份原游戏FSM、`Assets/Test`及其meta、`AlternateContent.meta`和原§11/T2回执，全部保持现场与未提交状态；提交只包含A产品/回归/必要说明。原XF、Packages/ProjectSettings、共享Core/Foundation/Resource、轻量FSM及已有meta/GUID不变，不清理分支/worktree，不覆盖用户脏资产或场景。
 
+## 11. T2工作区创建回执（2026-10-19）
+
+本节承接用户后续明确的T2授权，仅创建三个独立Agent Manager Worktree和空闲会话，覆盖上文历史“尚未授权/尚未创建Worktree”的状态；不启动T3迁移，不批准D1-D6。该回执仅追加于主工作区原Plan，未提交，不复制到三个分支。
+
+### 11.1 基线及创建方式
+
+- 统一实际创建基线为 **`c88500aef6651f5b13ac933dd1f209ecb314e92d`**，父分支`integration/xf-yl`。创建前已实核主HEAD、父分支、本地origin跟踪及实时远端为同一B0；创建后主分支及三组HEAD仍保持该SHA，未从旧B9/默认分支或dirty文件拼接。
+- Agent Manager既有`defaultBaseBranch`为`integration/xf-yl`，三条新记录的`parentBranch`也均为该值、remote为origin；没有手改内部状态或全局配置。当前持久化结构未提供独立base-commit SHA字段，因此不伪称另有SHA记录，而以父分支当时的B0及三个实际Git HEAD双重核实起点。
+- 创建接口不提供自定义路径，故采用其正常`.kilo/worktrees/`生成路径，未创建`G:/Unity/WX/`。所有请求均省略初始prompt，不设模型/agent覆盖，不调用prompt/answer或Run/Setup；项目无Setup/Run脚本和根级env文件，标准Git LFS checkout钩子仅属正常版本检出。
+- 首次中文名称被原生接口规范成`a`。用户明确拒绝后授权删除重建；旧空会话`ses_eaae3ef6bffeSE2LKQbgmlDdMq`已通过原生stop移除，用户随后通过Agent Manager原生菜单删除本轮旧A卡片/工作树/分支，已实核三者消失后重建。未删除原UI或其他工作树，未手改JSON。最终采用与职责相关的语义名称，原生显示将连字符转为空格；以下按实际显示记录，不再将它们写成中文原样名称。
+
+### 11.2 最终卡片与会话
+
+三者完整HEAD均为上述B0；各自受管/未跟踪工作区干净、暂存区为空，未收到任何实施提示。
+
+| 角色 / 实际卡片名 | Worktree ID | 精确分支 | Session ID | 实核状态 |
+|---|---|---|---|---|
+| A 行为运动 / `xf ext behavior` | `wt-1792429797627-3` | `fusion/xf-ext-behavior` | `ses_eaadbc9f9ffeXvH9YWHk9E9gWF` | idle；clean；index empty |
+| B 配置数据 / `xf ext data` | `wt-1792429801790-4` | `fusion/xf-ext-data` | `ses_eaadbba1affePIIcNWYzlDqf1a` | idle；clean；index empty |
+| C 领域玩法 / `xf ext domain` | `wt-1792429805871-5` | `fusion/xf-ext-domain` | `ses_eaadbaa0dffemU84CfQ3LoXXDM` | idle；clean；index empty |
+
+实际路径：
+
+- A：`G:/Unity/Projects/CGJ2024/.kilo/worktrees/fusion-xf-ext-behavior-901d14f1ae336a53`
+- B：`G:/Unity/Projects/CGJ2024/.kilo/worktrees/fusion-xf-ext-data-14669bf18d117ed8`
+- C：`G:/Unity/Projects/CGJ2024/.kilo/worktrees/fusion-xf-ext-domain-1c975de3e2f7676b`
+
+A路径与被用户删除的首次目录相同，是原生重建结果；当前ID/会话为上表的新身份，不能再使用旧`wt-1792429263016-2`或旧session。
+
+### 11.3 逐个核验与保护终态
+
+- 已逐个执行实际目录的branch/HEAD、完整porcelain状态及cached diff核验；三个分支均无额外提交、无staged/unstaged/untracked文件。Plan确已随B0检出，三份Git blob均为`bcf38e535df57f375cd6f5db7c225e89af64f6f1`，未复制主工作区文件或本回执。
+- 三组均不存在`Library`、`Library/PackageCache`、`Temp`、`obj`；没有安装依赖、运行测试/构建、启动Unity或batchmode，也未调用Unity MCP。只读进程清单仍为原主Unity PID32168及其既有两个导入worker PID23608/25304，没有新Editor实例。
+- 原UI工作树仍为`fusion/ui-panel-redesign` / `09cc1df0116df1ed69ba43539e9f0cca01b9e9c5`，原会话保持idle；其开工前已有的`YLFramework.Analyzers.dll`修改未被覆盖。旧detached集成工作树亦保留。主分支未切换，原`AlternateContent.meta`仍未跟踪，未被复制/暂存/删除。
+- 本批没有Commit、Push、Merge、Rebase、Reset、Clean或Stash；除用户补充授权删除并重建本轮初次A外，没有删除其他分支/工作树。主工作区只保留本段允许的Plan追加及原用户meta，三个分支文件不修改。
+
+**最终状态：三个拓展融合工作区准备完成，会话空闲，尚未启动迁移。**
+
 ## 12. T3-B 主工作区接收（2026-10-20）
 
 ### 12.1 冻结与完整合并

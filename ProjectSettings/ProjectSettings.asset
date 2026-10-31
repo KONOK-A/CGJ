@@ -289,7 +289,99 @@ PlayerSettings:
   AndroidValidateAppBundleSize: 1
   AndroidAppBundleSizeToValidate: 150
   m_BuildTargetIcons: []
-  m_BuildTargetPlatformIcons: []
+  m_BuildTargetPlatformIcons:
+  - m_BuildTarget: Android
+    m_Icons:
+    - m_Textures: []
+      m_Width: 432
+      m_Height: 432
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 324
+      m_Height: 324
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 216
+      m_Height: 216
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 162
+      m_Height: 162
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 108
+      m_Height: 108
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 81
+      m_Height: 81
+      m_Kind: 2
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 192
+      m_Height: 192
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 144
+      m_Height: 144
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 96
+      m_Height: 96
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 72
+      m_Height: 72
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 48
+      m_Height: 48
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 36
+      m_Height: 36
+      m_Kind: 1
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 192
+      m_Height: 192
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 144
+      m_Height: 144
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 96
+      m_Height: 96
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 72
+      m_Height: 72
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 48
+      m_Height: 48
+      m_Kind: 0
+      m_SubKind: 
+    - m_Textures: []
+      m_Width: 36
+      m_Height: 36
+      m_Kind: 0
+      m_SubKind: 
   m_BuildTargetBatching: []
   m_BuildTargetShaderSettings: []
   m_BuildTargetGraphicsJobs: []
@@ -571,24 +663,24 @@ PlayerSettings:
   webGLMemoryGeometricGrowthCap: 96
   webGLPowerPreference: 2
   scriptingDefineSymbols:
-    Android: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    EmbeddedLinux: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    GameCoreScarlett: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    GameCoreXboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    LinuxHeadlessSimulation: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    Nintendo Switch: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    PS4: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    PS5: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    QNX: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    Server: UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    Stadia: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    Standalone: MOREMOUNTAINS_CORGIENGINE;MOREMOUNTAINS_INTERFACE;MOREMOUNTAINS_INVENTORYENGINE;DOTWEEN;ODIN_INSPECTOR;ODIN_INSPECTOR_3;ODIN_INSPECTOR_3_1;ODIN_INSPECTOR_3_2;ODIN_INSPECTOR_3_3;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    VisionOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    WebGL: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    Windows Store Apps: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    XboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    iPhone: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
-    tvOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_17
+    Android: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    EmbeddedLinux: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    GameCoreScarlett: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    GameCoreXboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    LinuxHeadlessSimulation: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Nintendo Switch: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    PS4: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    PS5: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    QNX: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Server: UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Stadia: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Standalone: MOREMOUNTAINS_CORGIENGINE;MOREMOUNTAINS_INTERFACE;MOREMOUNTAINS_INVENTORYENGINE;DOTWEEN;ODIN_INSPECTOR;ODIN_INSPECTOR_3;ODIN_INSPECTOR_3_1;ODIN_INSPECTOR_3_2;ODIN_INSPECTOR_3_3;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    VisionOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    WebGL: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    Windows Store Apps: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    XboxOne: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    iPhone: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
+    tvOS: DOTWEEN;UNITY_MCP_READY;UNITY_MCP_DEPS_30
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:
