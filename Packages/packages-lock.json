@@ -8,7 +8,7 @@
       "hash": "6cadd24d101f4cbd00cd80190106f6621132d24d"
     },
     "com.ivanmurzak.unity.mcp": {
-      "version": "1.5.0",
+      "version": "1.6.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
@@ -19,62 +19,62 @@
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.animation": {
-      "version": "2.0.2",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.5.0",
+        "com.ivanmurzak.unity.mcp": "1.6.0",
         "com.unity.modules.animation": "1.0.0"
       },
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.cinemachine": {
-      "version": "2.0.2",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.5.0",
+        "com.ivanmurzak.unity.mcp": "1.6.0",
         "com.unity.cinemachine": "3.1.6"
       },
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.inputsystem": {
-      "version": "2.0.2",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.5.0",
+        "com.ivanmurzak.unity.mcp": "1.6.0",
         "com.unity.inputsystem": "1.8.2"
       },
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.probuilder": {
-      "version": "2.0.2",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.5.0",
+        "com.ivanmurzak.unity.mcp": "1.6.0",
         "com.unity.probuilder": "5.2.4"
       },
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.tilemap": {
-      "version": "2.0.2",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.5.0",
+        "com.ivanmurzak.unity.mcp": "1.6.0",
         "com.unity.modules.tilemap": "1.0.0",
         "com.unity.2d.tilemap.extras": "3.1.3"
       },
       "url": "https://package.openupm.com"
     },
     "com.ivanmurzak.unity.mcp.timeline": {
-      "version": "2.0.2",
+      "version": "2.1.0",
       "depth": 0,
       "source": "registry",
       "dependencies": {
-        "com.ivanmurzak.unity.mcp": "1.5.0",
+        "com.ivanmurzak.unity.mcp": "1.6.0",
         "com.unity.timeline": "1.8.12"
       },
       "url": "https://package.openupm.com"
