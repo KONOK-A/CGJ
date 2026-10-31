@@ -51,7 +51,7 @@ Windows64 的 Mono 与 IL2CPP Low 已按适用范围验证资源、正式 UI/输
 | [`Integrations/HybridCLR/`](../Integrations/HybridCLR/) | 可选官方 HybridCLR 9.0.3 接入，独立导出；不自动接入原游戏 |
 | [`Tests/`](../Tests/) | EditMode / PlayMode 测试 |
 | [`Plugins/`](../Plugins/) | 仅含批准的官方 BouncyCastle 2.7.0 HKDF 依赖及 SOURCE 来源；不包含宿主商业插件 |
-| [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具（`YLFramework.prefab`、`UITips.prefab`、`ColorSelector.prefab`） |
+| [`Prefabs/`](../Prefabs/) | 自有 UI 模板与正式工具；完整清单与继承关系见 [UI 资产准备与迁移](Modules/UI.md#资产准备与迁移) |
 | [`Samples/`](../Samples/) | ResourceStartup 的显式启动、模拟/Bundle、内容加密与内置部署示例 |
 | `Documentation/` | 本文档目录 |
 

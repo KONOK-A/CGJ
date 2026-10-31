@@ -223,7 +223,7 @@ Action 使用 `YLFramework.Actions`（复数），Audio 使用 `YLFramework.Audi
 | [`Runtime/Foundation/Timing/TimerScope.cs`](../Runtime/Foundation/Timing/TimerScope.cs) | 独立命名与任务所有权范围；CancelAll 可复用，Dispose 永久关闭范围 |
 | [`Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs`](../Runtime/Foundation/Singleton/Mono/MonoSingletonPathAttribute.cs) | 为 Mono 单例指定运行时层级路径（如 `GameObjectPool`）；正式 UI 根不是 Mono 单例 |
 
-`Prefabs/YLFramework.prefab` 提供框架根与完整 UI 模板，`UITips.prefab` 是提示项，`ColorSelector.prefab` 是取色窗口。也可以不预放完整模板而按需使用默认 UI 根，配置与输入边界见 [UI](Modules/UI.md)。
+`Prefabs/YLFramework.prefab` 提供框架根与完整 UI 模板，预制体清单与 Variant 关系统一见 [UI 资产准备与迁移](Modules/UI.md#资产准备与迁移)。也可以不预放完整模板而按需使用默认 UI 根，配置与输入边界见 [UI](Modules/UI.md)。
 
 ## Editor 工具
 

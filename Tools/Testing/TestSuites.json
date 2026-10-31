@@ -199,7 +199,6 @@
       ],
       "playTests": [
         "Assets/YLFramework/Tests/PlayMode/Systems/StateMachine",
-        "Assets/YLFramework/Tests/PlayMode/Systems/Behavior",
         "Assets/YLFramework/Tests/PlayMode/Utilities/Overlap",
         "Assets/YLFramework/Tests/PlayMode/Utilities/CharacterController2D",
         "Assets/YLFramework/Tests/PlayMode/Utilities/MoveablePlatform"
