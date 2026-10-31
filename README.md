@@ -45,10 +45,16 @@
 | `Tools/` | 测试、格式、Analyzer 与专项验收工具，不是 Player 依赖 |
 | `ProjectSettings/` | 本开发宿主配置，不复制到消费方工程 |
 | `.kilo/plans/` | 源码维护任务和专项证据，不是产品安装流程或永久执行规则 |
-| `Library/`、`Temp/`、`obj/`、根 `.csproj` / `.slnx` | Unity / IDE 生成内容，不手工修补 |
+| `Library/`、`Temp/`、`obj/`、`UIElementsSchema/`、根 `.csproj` / `.slnx` | Unity / IDE 生成内容，不手工修补、不纳入 Git |
 | `Build/`、`AssetBundles/` | 构建或验收产物，按真实 owner 和发布合同管理 |
 
 旧测试夹具、可选集成和作者工具数据不能按日期或“没有 C# 引用”批量清理。Core 模块生成器仍使用 `Assets/YLFramework/Examples/Core/Modules` 作为输出；它不同于正式 `Samples`，不随默认包导出。默认导出的权威实现是 `Assets/YLFramework/Editor/Distribution/ExportUnityPackage.cs`，不是仓库所有文件的集合。
+
+源码主线为 `main`，变更通过短期分支和 PR 整合，阶段基线由 tag 保留。项目 `.kilo/` 策略和共享 VS Code 设置继续跟踪；Agent Manager 工作树、会话状态以及 `.mcp.json`、`.vscode/mcp.json`、`opencode.json` 的本机连接配置不跟踪，由开发者在本机工具中配置。
+
+商业 Editor Enhancers Bundle 由开发者通过自己的授权账户安装，不由公开源码仓库提供；取消跟踪时保留本机插件及其 `.meta`。这不影响不使用它们的框架开发，第三方依赖仍按各自许可处理。忽略规则和取消跟踪不删除已有 Git 历史，历史治理需要单独决策。
+
+源码开发宿主保留 DOTween Standard 的官方安装后布局，与商业 Editor Enhancers 分开处理。版本和来源以 [DOTween 依赖声明](Assets/YLFramework/Integrations/DOTween/Dependencies.json) 为准，原始供应商文件不做换行转换，版权及原始 readme 保留，另附 [Standard 许可](Assets/Plugins/Demigiant/DOTween-LICENSE.txt)；默认产品包仍不捆绑该 SDK，也不把它视为 MIT 或 DOTween Pro。
 
 ## 检查与测试
 
@@ -56,6 +62,7 @@
 
 ```powershell
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/CodeStyle/Format-YL.ps1 -Mode Check
+pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLGitHygiene.ps1
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Invoke-YLTests.ps1 -Action List
 ```
 
@@ -69,13 +76,15 @@ pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Invoke-YLTests.ps1 `
 
 Quick 是离线逻辑验证，不代表真实 Unity 生命周期。Daily、Special、包导入与 Player 各有明确前置，详见 [测试说明](Tools/Testing/README.md)。同一来源项目不启动第二个 Editor；CLI 可以使用其拥有的独立宿主，不接管当前编辑器。
 
+GitHub 的 `Repository Tooling (No Unity)` 检查 Git 索引卫生、C# 格式、Analyzer 的 .NET 构建测试及测试工具合同，不需要 Unity 安装或许可证，不代表框架 Unity 编译、EditMode、PlayMode 或 Player 验收通过。
+
 需要定位单个用例时可用 Unity Test Runner 或连接当前 Editor 的工具；不要另维护一套日常叶子名单。修改代码、测试声明或输入资产后重新发现选集，交付时读取本轮摘要、XML 和进程结果。
 
 ### 可选集成测试
 
 可选集成按自身依赖、宏和测试程序集显式准备，不因源码目录存在就视为已经接入。HybridCLR 首次检出或相关程序集重新编译后，先在非 Play 的 Editor 主线程调用 `YLFramework.Tests.Integrations.HybridCLR.HybridCLRTestFixtures.Prepare()`，再运行 loader / Module PlayMode 测试。
 
-该步骤从当前已编译程序集生成 `Tests/Integrations/HybridCLR/PlayMode/Resources/YLHybridCLRTests` 下的 bytes 与 manifest；这些是本机测试输入，不纳入 Git，不复用其他机器或旧程序集的快照。具体选装合同见 [HybridCLR](Assets/YLFramework/Integrations/HybridCLR/README.md)，原生 Player 验收另按测试工具声明执行。
+该步骤从当前已编译程序集生成 `Tests/Integrations/HybridCLR/PlayMode/Resources/YLHybridCLRTests` 下的 bytes 与 manifest；这些是本机测试输入，不纳入 Git，不复用其他机器或旧程序集的快照。该目录只跟踪身份 `.meta` 与 `.gitkeep`，生成内容由精确规则排除。具体选装合同见 [HybridCLR](Assets/YLFramework/Integrations/HybridCLR/README.md)，原生 Player 验收另按测试工具声明执行。
 
 ## 发行与贡献
 

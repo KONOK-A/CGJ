@@ -167,10 +167,13 @@ pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Invoke-YLTests.ps1 -
 
 ```powershell
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLTesting.ps1 -TemporaryRoot $env:TEMP
+pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLGitHygiene.ps1
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLQuick.ps1 -WorkspaceRoot $workspace -Unity $unity -Module Domain
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLUnity.ps1 -WorkspaceRoot $workspace -Unity $unity -Module Core
 pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLUnitySafety.ps1 -WorkspaceRoot $workspace -Unity $unity
 ```
+
+Git 卫生入口只读 Git 索引：拒绝本机缓存、连接配置、商业 Editor Enhancers、生成工程和 HybridCLR 本机输入被跟踪，检查已跟踪路径不命中忽略规则，并保留两个手维护 Analyzer SDK 项目。它不读取配置值、不清理资产，不把空目录 `.meta` 简单判为孤立文件，也不代表 Unity 编译或测试通过。
 
 安全回归在自有源码夹具中验证真实失败、增加叶子后拒旧选集、取消、进程清理与同宿主恢复。
 还会实际排除整个PlayMode程序集验证正式CLI拒绝“漏一整组模式”；owner、宿主回执/响应与轮换摘要先检查JSON字段类型，再比较身份，不允许布尔强转为合法字符串。
@@ -220,10 +223,12 @@ pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Tests/Test-YLDistrib
 - 两次新进程复用同一冻结Player，各有独立报告。缺少模块、C++工具链、已核实原生源、真实设备或任一阶段失败，均不改报通过；不自动安装外部工具链，不给Job清理或退出失败加版本豁免。
 - 这是一条Windows64、Release/Low stripping、固定SDK与已验证原生源的最小闭环，不覆盖热更V2替换/回滚、任意AOT泛型、全部裁剪级别、NativeInput、DSP、移动平台或未声明SDK。原生源许可证随本轮`NativeInput`保存；本地产物是验收证据，不是正式游戏发布包。
 
-## 未来 CI
+## CI 分层
 
-沿用同一CLI、模块声明和退出合同，不再维护另一套测试名单或结果解释器。
+`.github/workflows/dotnet.yml` 在 Windows runner 运行 Git 索引卫生、格式、Analyzer 的 .NET 构建测试及测试工具合同自检。此工具层不安装 Unity、不需要 Unity 许可证，也不等同于主体 Unity 编译、UTF 或 Player 验收。
+
+Unity 测试层仍沿用同一CLI、模块声明和退出合同，不再维护另一套测试名单或结果解释器。
 CI必须提供明确Editor/SDK/可选包与短的独占工作根；缺前置报告未运行，不安装未授权依赖或改报通过。
 上传本轮summary、selection、XML与必要脱敏日志；取消同样保留真实终态，不用上传成功替代测试成功。
 图形/OS/DSP、AOT/Player和可选SDK门保留各自前置，不能用普通无图形代理或纯逻辑门外推。
-当前提供可接入 CI 的本地入口，不内建远程 CI 服务、密钥或部署流程。
+当前远端工作流只执行工具层；Unity 安装、许可密钥和部署流程不内建，原生与 Player 前置仍须显式提供。
