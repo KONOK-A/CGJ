@@ -17,6 +17,7 @@ namespace YLFramework.Tests.Extensions.Equipment
         private EquipmentsConfig _root;
         private string _folder;
         private string _entries;
+        private string[] _absentParents = Array.Empty<string>();
         private static Type Controller => typeof(YLFramework.Editor.Common.SplitWindow).Assembly.GetType("YLFramework.Editor.Equipment.EquipmentsConfigController");
         private static object Call(string name, params object[] args)
         {
@@ -35,6 +36,8 @@ namespace YLFramework.Tests.Extensions.Equipment
         [SetUp]
         public void SetUp()
         {
+            _absentParents = new[] { "Assets/YLFrameworkData/Equipment", "Assets/YLFrameworkData" }
+                .Where(path => !Directory.Exists(path) && !File.Exists(path) && !File.Exists(path + ".meta")).ToArray();
             Assert.That(Controller, Is.Not.Null, "YL equipment authoring has not been migrated.");
             var parent = "Assets/YLFramework/Tests/Fixtures/Extensions";
             _folder = parent + "/EqAuthor-" + Guid.NewGuid().ToString("N");
@@ -48,6 +51,12 @@ namespace YLFramework.Tests.Extensions.Equipment
         [TearDown]
         public void TearDown()
         {
+            if (TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed)
+            {
+                Console.WriteLine("Preserved failed equipment fixture: " + _folder + " | " + _entries);
+                return;
+            }
+
             if (_root)
             {
                 _root.Equipments.Clear();
@@ -61,6 +70,26 @@ namespace YLFramework.Tests.Extensions.Equipment
             if (_folder != null)
             {
                 AssetDatabase.DeleteAsset(_folder);
+            }
+
+            foreach (var path in _absentParents)
+            {
+                if (Directory.Exists(path) && Directory.GetFileSystemEntries(path).Length == 0)
+                {
+                    Assert.That(AssetDatabase.DeleteAsset(path), Is.True, path);
+                }
+            }
+        }
+
+        [Test, Order(-1), Category("YL.Test.ParentCleanup")]
+        public void TearDownReturnsNewEmptyEquipmentParents()
+        {
+            Call("CreateEquipmentConfigData", typeof(EquipmentConfigData), _root);
+            TearDown();
+            foreach (var path in _absentParents)
+            {
+                Assert.That(Directory.Exists(path), Is.False, path);
+                Assert.That(File.Exists(path + ".meta"), Is.False, path + ".meta");
             }
         }
 

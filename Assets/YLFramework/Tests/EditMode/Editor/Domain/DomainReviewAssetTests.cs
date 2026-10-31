@@ -16,14 +16,16 @@ namespace YLFramework.Tests.Extensions.Domain
     public class DomainReviewAssetTests
     {
         private string _folder;
+        private string[] _absentParents = Array.Empty<string>();
         [SetUp]
         public void Setup()
         {
+            _absentParents = DomainTestAssets.CaptureAbsentParents();
             _folder = "Assets/DomainReviewFixture-" + Guid.NewGuid().ToString("N");
             DomainTestAssets.OwnPath(_folder);
             AssetDatabase.CreateFolder("Assets", System.IO.Path.GetFileName(_folder));
         }
-        [TearDown] public void Cleanup() => DomainTestAssets.DeleteFolder(_folder);
+        [TearDown] public void Cleanup() => DomainTestAssets.DeleteFolder(_folder, _absentParents);
 
         [TestCase("Skill")]
         [TestCase("Buff")]

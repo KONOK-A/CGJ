@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -14,11 +16,17 @@ namespace YLFramework.Tests.Extensions.Data
         private MultiLanguageConfigs _root;
         private LanguageConfig _english;
         private LanguageConfig _chinese;
+        private string[] _absentParents = Array.Empty<string>();
 
         [SetUp]
         public void SetUp()
         {
             const string Parent = "Assets/YLFramework/Tests/Fixtures/Extensions/Data/Localization";
+            _absentParents = new[]
+            {
+                Parent, "Assets/YLFramework/Tests/Fixtures/Extensions/Data", "Assets/YLFramework/Tests/Fixtures/Extensions",
+                "Assets/YLFramework/Tests/Fixtures", "Assets/YLFrameworkData/Localization", "Assets/YLFrameworkData"
+            }.Where(path => !Directory.Exists(path) && !File.Exists(path) && !File.Exists(path + ".meta")).ToArray();
             EnsureFolder(Parent);
             _path = Parent + "/Run-" + Guid.NewGuid().ToString("N") + ".asset";
             YLFramework.Tests.DataAssets.DataAcceptanceOwnership.Own(_path);
@@ -46,6 +54,12 @@ namespace YLFramework.Tests.Extensions.Data
                 Undo.ClearUndo(_chinese);
             }
 
+            if (TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed)
+            {
+                Console.WriteLine("Preserved failed localization fixture: " + _path + " | " + _languagesPath);
+                return;
+            }
+
             if (!string.IsNullOrEmpty(_languagesPath))
             {
                 AssetDatabase.DeleteAsset(_languagesPath);
@@ -54,6 +68,26 @@ namespace YLFramework.Tests.Extensions.Data
             if (!string.IsNullOrEmpty(_path))
             {
                 AssetDatabase.DeleteAsset(_path);
+            }
+
+            foreach (var path in _absentParents)
+            {
+                if (Directory.Exists(path) && Directory.GetFileSystemEntries(path).Length == 0)
+                {
+                    Assert.That(AssetDatabase.DeleteAsset(path), Is.True, path);
+                }
+            }
+        }
+
+        [Test, Order(-1), Category("YL.Test.ParentCleanup")]
+        public void TearDownReturnsNewEmptyAuthoringParents()
+        {
+            _english = LocalizationAuthoring.CreateLanguage(_root, SystemLanguage.English);
+            TearDown();
+            foreach (var path in _absentParents)
+            {
+                Assert.That(Directory.Exists(path), Is.False, path);
+                Assert.That(File.Exists(path + ".meta"), Is.False, path + ".meta");
             }
         }
 

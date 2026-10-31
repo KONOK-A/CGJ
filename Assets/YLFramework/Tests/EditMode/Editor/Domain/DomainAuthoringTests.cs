@@ -26,14 +26,38 @@ namespace YLFramework.Tests.Extensions.Domain
     public class DomainAuthoringTests
     {
         private string _folder;
+        private string[] _absentParents = Array.Empty<string>();
         [SetUp]
         public void Setup()
         {
+            _absentParents = DomainTestAssets.CaptureAbsentParents();
             _folder = "Assets/DomainFixture-" + Guid.NewGuid().ToString("N");
             DomainTestAssets.OwnPath(_folder);
             AssetDatabase.CreateFolder("Assets", System.IO.Path.GetFileName(_folder));
         }
-        [TearDown] public void Cleanup() => DomainTestAssets.DeleteFolder(_folder);
+        [TearDown] public void Cleanup() => DomainTestAssets.DeleteFolder(_folder, _absentParents);
+
+        [TestCase("Skill")]
+        [TestCase("Buff")]
+        [TestCase("Mission")]
+        [Order(-1), Category("YL.Test.ParentCleanup")]
+        public void CleanupReturnsNewEmptyGeneratedParents(string module)
+        {
+            var rootType = module == "Skill" ? typeof(SkillsConfig) : module == "Buff" ? typeof(BuffsConfig) : typeof(MissionsConfig);
+            var dataType = module == "Skill" ? typeof(SkillConfigData) : module == "Buff" ? typeof(BuffConfigData) : typeof(MissionConfigData);
+            var root = ScriptableObject.CreateInstance(rootType);
+            AssetDatabase.CreateAsset(root, _folder + "/Root.asset");
+            var controller = typeof(SkillsConfigController).Assembly.GetType("YLFramework.Editor." + module + "." +
+                (module == "Skill" ? "Skills" : module == "Buff" ? "Buffs" : "Missions") + "ConfigController");
+            controller.GetMethod("Create" + module + "ConfigData", new[] { typeof(Type), rootType })
+                .Invoke(null, new object[] { dataType, root });
+            Cleanup();
+            foreach (var path in _absentParents)
+            {
+                Assert.That(Directory.Exists(path), Is.False, path);
+                Assert.That(File.Exists(path + ".meta"), Is.False, path + ".meta");
+            }
+        }
 
         [Test]
         public void MissionParameterClipboardPrefixKeepsItsExistingProtocolIdentity()
@@ -504,6 +528,12 @@ namespace YLFramework.Tests.Extensions.Domain
 
     internal static class DomainTestAssets
     {
+        internal static string[] CaptureAbsentParents() => new[]
+        {
+            "Assets/YLFrameworkData/Skill/Skills", "Assets/YLFrameworkData/Buff/Buffs", "Assets/YLFrameworkData/Skill",
+            "Assets/YLFrameworkData/Buff", "Assets/YLFrameworkData/Mission", "Assets/YLFrameworkData"
+        }.Where(path => !Directory.Exists(path) && !File.Exists(path) && !File.Exists(path + ".meta")).ToArray();
+
         internal static void OwnPath(string path)
         {
             if (!SessionState.GetBool("YLFramework.Domain.MainAcceptance.Protection", false))
@@ -515,23 +545,36 @@ namespace YLFramework.Tests.Extensions.Domain
             entry.GetMethod("OwnPath").Invoke(null, new object[] { path });
         }
 
-        internal static void DeleteFolder(string folder)
+        internal static void DeleteFolder(string folder, string[] absentParents)
         {
-            if (!AssetDatabase.IsValidFolder(folder))
+            if (TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed)
             {
+                Console.WriteLine("Preserved failed domain fixture: " + folder);
                 return;
             }
-            // Unity删除父目录不会逐个调用子资产的OnWillDeleteAsset，先删除自己的配表根。
-            foreach (var guid in AssetDatabase.FindAssets("t:ScriptableObject", new[] { folder }))
+
+            if (AssetDatabase.IsValidFolder(folder))
             {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                var root = AssetDatabase.LoadMainAssetAtPath(path);
-                if (root is SkillsConfig || root is BuffsConfig || root is MissionsConfig)
+                // Unity删除父目录不会逐个调用子资产的OnWillDeleteAsset，先删除自己的配表根。
+                foreach (var guid in AssetDatabase.FindAssets("t:ScriptableObject", new[] { folder }))
                 {
-                    AssetDatabase.DeleteAsset(path);
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    var root = AssetDatabase.LoadMainAssetAtPath(path);
+                    if (root is SkillsConfig || root is BuffsConfig || root is MissionsConfig)
+                    {
+                        AssetDatabase.DeleteAsset(path);
+                    }
+                }
+                AssetDatabase.DeleteAsset(folder);
+            }
+
+            foreach (var path in absentParents)
+            {
+                if (Directory.Exists(path) && Directory.GetFileSystemEntries(path).Length == 0)
+                {
+                    Assert.That(AssetDatabase.DeleteAsset(path), Is.True, path);
                 }
             }
-            AssetDatabase.DeleteAsset(folder);
         }
     }
 }

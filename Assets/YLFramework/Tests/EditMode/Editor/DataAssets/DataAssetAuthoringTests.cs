@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -15,10 +16,12 @@ namespace YLFramework.Tests.DataAssets
         private string _folder;
         private string _childFolder;
         private ScriptableObjectConfigs _root;
+        private string[] _absentParents = Array.Empty<string>();
 
         [SetUp]
         public void SetUp()
         {
+            CaptureAbsentParents("Assets/YLFrameworkData/DataAssets", "Assets/YLFrameworkData");
             _folder = "Assets/__YLDataAssets_" + Guid.NewGuid().ToString("N");
             DataAcceptanceOwnership.Own(_folder);
             AssetDatabase.CreateFolder("Assets", _folder.Substring("Assets/".Length));
@@ -52,6 +55,91 @@ namespace YLFramework.Tests.DataAssets
             if (AssetDatabase.IsValidFolder(_childFolder))
             {
                 AssetDatabase.DeleteAsset(_childFolder);
+            }
+
+            foreach (var path in _absentParents)
+            {
+                if (Directory.Exists(path) && Directory.GetFileSystemEntries(path).Length == 0)
+                {
+                    Assert.That(AssetDatabase.DeleteAsset(path), Is.True, path);
+                }
+            }
+        }
+
+        private void CaptureAbsentParents(params string[] paths) => _absentParents = paths
+            .Where(path => !Directory.Exists(path) && !File.Exists(path) && !File.Exists(path + ".meta")).ToArray();
+
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(false, true)]
+        [Category("YL.Test.ParentCleanup")]
+        public void TearDownRemovesOnlyNewEmptyParentDirectories(bool existedBefore, bool containsForeignFile)
+        {
+            var scope = "Assets/__YLParentCleanup_" + Guid.NewGuid().ToString("N");
+            var parents = new[] { scope + "/Parent/Leaf", scope + "/Parent" };
+            var originalParents = _absentParents;
+            var passed = false;
+            Assert.That(AssetDatabase.CreateFolder("Assets", Path.GetFileName(scope)), Is.Not.Empty);
+            void CreateParents()
+            {
+                AssetDatabase.CreateFolder(scope, "Parent");
+                AssetDatabase.CreateFolder(parents[1], "Leaf");
+            }
+
+            try
+            {
+                if (existedBefore)
+                {
+                    CreateParents();
+                }
+
+                CaptureAbsentParents(parents);
+                if (!existedBefore)
+                {
+                    CreateParents();
+                }
+
+                var guids = parents.Select(AssetDatabase.AssetPathToGUID).ToArray();
+                var metadata = parents.Select(path => File.ReadAllBytes(path + ".meta")).ToArray();
+                var foreignFile = parents[0] + "/Keep.txt";
+                if (containsForeignFile)
+                {
+                    File.WriteAllText(foreignFile, "preserve foreign content");
+                    AssetDatabase.ImportAsset(foreignFile, ImportAssetOptions.ForceSynchronousImport);
+                }
+
+                TearDown();
+                var shouldRemain = existedBefore || containsForeignFile;
+                for (var index = 0; index < parents.Length; index++)
+                {
+                    var path = parents[index];
+                    Assert.That(Directory.Exists(path), Is.EqualTo(shouldRemain), path);
+                    Assert.That(File.Exists(path + ".meta"), Is.EqualTo(shouldRemain), path + ".meta");
+                    if (shouldRemain)
+                    {
+                        Assert.That(AssetDatabase.AssetPathToGUID(path), Is.EqualTo(guids[index]));
+                        CollectionAssert.AreEqual(metadata[index], File.ReadAllBytes(path + ".meta"));
+                    }
+                }
+
+                if (containsForeignFile)
+                {
+                    Assert.That(File.ReadAllText(foreignFile), Is.EqualTo("preserve foreign content"));
+                }
+
+                passed = true;
+            }
+            finally
+            {
+                _absentParents = originalParents;
+                if (passed)
+                {
+                    AssetDatabase.DeleteAsset(scope);
+                }
+                else
+                {
+                    Console.WriteLine("Preserved failed parent cleanup fixture: " + scope);
+                }
             }
         }
 
