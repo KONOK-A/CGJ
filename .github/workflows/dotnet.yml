@@ -2,9 +2,9 @@ name: YL Repository Checks
 
 on:
   push:
-    branches: [main, integration/xf-yl]
+    branches: [main]
   pull_request:
-    branches: [main, integration/xf-yl]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
