@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace YLFramework.Tests.Extensions.Behavior
 {
+    [Category("YL.Module.Behavior")]
     public class CharacterMotorOfflineTests
     {
         private static string Root => Environment.GetEnvironmentVariable("YL_BEHAVIOR_ROOT") ?? Directory.GetCurrentDirectory();

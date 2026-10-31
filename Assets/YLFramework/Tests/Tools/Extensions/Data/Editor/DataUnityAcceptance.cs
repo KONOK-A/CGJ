@@ -87,6 +87,8 @@ namespace YLFramework.Tests.DataBatch
         private static void BuildPlayer(ScriptingImplementation backend)
         {
             CheckProject();
+            Require(PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone).Split(';').Contains("YL_DATA_ACCEPTANCE"),
+                "The explicit Player host must enable YL_DATA_ACCEPTANCE; ordinary production builds must not include the probe.");
             var target = NamedBuildTarget.Standalone;
             var previousBackend = PlayerSettings.GetScriptingBackend(target);
             var previousStripping = PlayerSettings.GetManagedStrippingLevel(target);
@@ -186,7 +188,7 @@ namespace YLFramework.Tests.DataBatch
                 {
                     Require(File.Exists(Path.Combine(Path.GetDirectoryName(output), "GameAssembly.dll")), "Missing native IL2CPP output.");
                     Directory.CreateDirectory(Path.Combine(Output(), "managed-stripped"));
-                    foreach (string assembly in new[] { "YLFramework.Runtime", "Assembly-CSharp" })
+                    foreach (string assembly in new[] { "YLFramework.Runtime", typeof(DataPlayerProbe).Assembly.GetName().Name })
                     {
                         File.Copy(Path.Combine(stripped, assembly + ".dll"), Path.Combine(Output(), "managed-stripped", assembly + ".dll"));
                     }

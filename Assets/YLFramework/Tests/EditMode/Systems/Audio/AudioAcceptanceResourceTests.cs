@@ -14,6 +14,7 @@ using YLFramework.Tests.Resource;
 
 namespace YLFramework.Tests.Audio
 {
+    [Category("YL.Special.AudioSession")]
     public class AudioAcceptanceResourceTests
     {
         private const string Key = "YL.Audio86b.Acceptance.";

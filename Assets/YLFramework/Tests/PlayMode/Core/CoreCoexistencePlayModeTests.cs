@@ -14,6 +14,7 @@ namespace YLFramework.Core.Tests
     public class CoreCoexistencePlayModeTests
     {
         [UnityTest]
+        [Category("YL.Integration.LegacyXF")]
         public IEnumerator RetiredLogUtilLeavesNoGlobalCallbacksOrFileSideEffectsAndOriginalTypeStillCoexists()
         {
             Assert.That(typeof(Module).Assembly.GetType("YLFramework.Core.LogUtil"), Is.Null);

@@ -6,6 +6,7 @@ using YLFramework.StateMachine;
 
 namespace YLFramework.Tests.Extensions.Behavior
 {
+    [Category("YL.Module.Behavior")]
     public class DualFsmLegacyTests
     {
         [Test]

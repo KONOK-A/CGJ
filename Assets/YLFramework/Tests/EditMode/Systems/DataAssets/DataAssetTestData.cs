@@ -17,7 +17,7 @@ namespace YLFramework.Tests.DataAssets
                 return;
             }
 
-            var type = System.Type.GetType("YLFramework.Tests.DataBatch.DataMainAcceptance, Assembly-CSharp-Editor", true);
+            var type = System.Type.GetType("YLFramework.Tests.DataBatch.DataMainAcceptance, YLFramework.Tests.Tools.Editor", true);
             type.GetMethod("OwnTestPath").Invoke(null, new object[] { path });
         }
     }

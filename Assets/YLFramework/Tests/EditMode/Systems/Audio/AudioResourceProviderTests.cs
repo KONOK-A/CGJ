@@ -49,6 +49,7 @@ namespace YLFramework.Tests.Audio
         }
 
         [UnityTest]
+        [Category("YL.Special.AudioSession")]
         public IEnumerator ExplicitProviderCapturesAuthorityAndRejectsEndedSession()
         {
             new ResourceSessionTests().SetUp();
@@ -109,6 +110,7 @@ namespace YLFramework.Tests.Audio
         }
 
         [UnityTest]
+        [Category("YL.Special.AudioSession")]
         public IEnumerator ProgressObservesPendingResourceWithoutOwningCompletionAndObserverFailuresRelease()
         {
             new ResourceSessionTests().SetUp();

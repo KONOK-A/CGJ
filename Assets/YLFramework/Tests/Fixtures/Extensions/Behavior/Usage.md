@@ -61,14 +61,18 @@ T3-A已在A独立Worktree执行真实Unity与Mono代表验收，结果见末节�
 4. 在另获配置授权的工作区或独立接收工程选择Windows64及Mono或IL2CPP，再分别点`Build Release Mono Windows64`和`Build Release IL2CPP Windows64`，IL2CPP门明确选择Low，最终门用`BuildOptions.None`。另有Development菜单仅供诊断，不能替代Release门。工具核查当前设置但不自动切后端/裁剪；菜单输出新`Temp/Behavior.Acceptance/<backend>/<Release|Development>/<unique>`目录。
 5. 最终图形门以有窗口exe运行，传`-logFile <独占日志路径>`，不传`-batchmode/-nographics`；记录真实窗口、图形设备、PID、退出0和唯一`YL_BEHAVIOR_ACCEPTANCE result=PASS`，并要求`development=False`。无图形模式只作另列诊断，不能替代图形门。记录Unity版本、实际后端/裁剪、sourceGuid、状态及泛型事件计数、BuildReport与exe/log SHA。IL2CPP需另实测AOT/Low及状态类裁剪/无参构造，Mono通过不外推；自有状态按模板`[Preserve]`或自有link.xml保留。
 
-## 离线命令
+## 当前测试入口
 
-从本 worktree 根运行 `pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Behavior/Invoke-BehaviorOffline.ps1 -Mode All -Evidence <唯一名称>`。
-`Pure`只执行真实托管逻辑/静态契约的NUnit，不模拟Unity；`Legacy`用实际Runtime DLL执行轻量FSM只读回归，检测到缺Unity native icall即失败；`Compile`使用已安装Unity SDK的真实引用辅助编译Runtime、Editor profile、EditorTools、本组测试及独立Player消费者/生成器，不启动Unity。`All`连续执行全部离线门。
+从源码仓库根运行统一入口，必须显式提供已核实Editor与自有工作根：
 
-同一Evidence目录分别保留`pure-results.xml`和`legacy-results.xml`，不得把共享Runner最后写出的`results.xml`视作全部结果。源码契约、托管执行、辅助编译和主Unity/Player结果分别计数。
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Invoke-YLTests.ps1 -Action Run -Suite Quick -Module Behavior -Unity <Unity.exe> -WorkspaceRoot <自有工作根>
+pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Invoke-YLTests.ps1 -Action Run -Suite Daily -Module Behavior -Unity <Unity.exe> -WorkspaceRoot <自有工作根>
+```
 
-运行 `Tools/Behavior/Test-BehaviorBoundary.ps1 -Evidence <唯一名称>` 产生 `Temp/Behavior.Offline/<名称>/pending-meta.txt` 与逐文件 SHA/来源/保护区报告。来源和 SDK 引用留在临时证据，不提交二进制/缓存。所有新增脚本、目录和文本资产的 meta 由主 Unity 生成。
+Quick包含原纯逻辑与轻量FSM回归，真实NUnit执行；Daily在自有宿主进行实际物理/作者/双FSM生命周期测试，选集及每轮XML独立验证。无native支持、漏项、失败、未批准Skip、异常退出均不能改报成功。说明见 `Tools/Testing/README.md`，元数据由Unity生成并保持原GUID。
+
+旧Offline执行器和固定提交的边界门不再作为当前入口。下列A/BM26记录保留当时事实；它们的路径、PID、SHA与启动协议不是可重演的通用执行配方，不应恢复历史worktree或据旧结果外推当前Player通过。
 
 ## T3-A 独立验收
 

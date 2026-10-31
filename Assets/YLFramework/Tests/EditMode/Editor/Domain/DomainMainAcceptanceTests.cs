@@ -8,9 +8,10 @@ using UnityEngine;
 namespace YLFramework.Tests
 {
     [Explicit("主Editor专属保护验收，使用DomainMainAcceptance的Protection集合显式运行。")]
+    [Category("YL.Special.MainEditor")]
     public sealed class DomainMainAcceptanceTests
     {
-        private static Type Entry => Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, Assembly-CSharp-Editor", true);
+        private static Type Entry => Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, YLFramework.Tests.Tools.Editor", true);
 
         [Test]
         public void TestRunnerEntryUsesAnOwnedEmptySceneInsteadOfOriginalAutoRunHosts()
@@ -134,11 +135,11 @@ namespace YLFramework.Tests
         [TestCase("UnknownScope")]
         public void InvalidScopeIsRejectedBeforeAcquiringEditorOwnership(string scope)
         {
-            var entry = Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, Assembly-CSharp-Editor", true);
+            var entry = Type.GetType("YLFramework.Tests.DomainMain.DomainMainAcceptance, YLFramework.Tests.Tools.Editor", true);
             const string Key = "YLFramework.Domain.MainAcceptance";
             string output = SessionState.GetString(Key + ".Output", "");
             string settings = SessionState.GetString(Key + ".Settings", "");
-            int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
             bool reloadEnabled = EditorSettings.enterPlayModeOptionsEnabled;
             var reload = EditorSettings.enterPlayModeOptions;
 

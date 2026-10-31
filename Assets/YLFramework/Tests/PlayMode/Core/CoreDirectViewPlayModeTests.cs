@@ -3544,7 +3544,8 @@ namespace YLFramework.Core.Tests
             var low = Track(_module.LoadPanel<YLCoreSmokePanel>(prefab, root: root,
                 overrides: new PanelOverrides { Priority = int.MaxValue, CoversRoot = true }));
             var layeredPrefab = Template<YLCoreSmokePanel>("YLPolicy.UpperLayer", true);
-            var layer = SortingLayer.NameToID("Map");
+            var layer = SortingLayer.layers.FirstOrDefault(candidate =>
+                SortingLayer.GetLayerValueFromID(candidate.id) > SortingLayer.GetLayerValueFromID(0)).id;
             Assert.That(SortingLayer.GetLayerValueFromID(layer), Is.GreaterThan(SortingLayer.GetLayerValueFromID(0)),
                 "使用工程已有 SortingLayer，不修改 TagManager。");
             root.Canvas.renderMode = RenderMode.WorldSpace;

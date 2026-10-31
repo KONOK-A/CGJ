@@ -62,8 +62,8 @@ namespace YLFramework.Resource
         {
             get;
         }
-        /// <summary>发生失败的来源标识；无法确定时为 null。</summary>
-        public ResourceSourceId? Source
+        /// <summary>发生失败的资源来源标识；有意保留既有 API，不等同于基类异常的诊断来源字符串。</summary>
+        public new ResourceSourceId? Source
         {
             get;
         }

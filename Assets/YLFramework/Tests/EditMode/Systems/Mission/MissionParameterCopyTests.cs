@@ -7,6 +7,7 @@ using YLFramework.Mission;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
+    [Category("YL.Module.Domain")]
     public class MissionParameterCopyTests
     {
         [Test]

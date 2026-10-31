@@ -458,7 +458,7 @@ namespace YLFramework.Tests
                 Assert.That(recordsByPath.Keys.Any(p => Path.GetFileName(p).StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal)), Is.False);
                 Assert.That(recordsByPath.Keys.Any(p => new[] { "bcrypt.dll", "ncrypt.dll", "crypt32.dll" }.Contains(Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)), Is.False);
                 Assert.That(recordsByPath.Keys.Any(p => new[] { ".pfx", ".p12", ".key", ".pem" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase)), Is.False);
-                Assert.That(Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(Path.Combine(projectRoot,
+                Assert.That(TestDependencyGuard.IsApprovedBouncyCastleReference(Path.Combine(projectRoot,
                     FrameworkRoot + "/Plugins/BouncyCastle/BouncyCastle.Cryptography.dll")), Is.True);
                 var analyzerMeta = Encoding.UTF8.GetString(recordsByPath[AnalyzerPath].Meta);
                 Assert.That(analyzerMeta, Does.Contain("guid: 471f81c4273ee66429677df44cbd6960"));

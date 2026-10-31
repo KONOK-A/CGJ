@@ -32,6 +32,7 @@ namespace YLFramework.Tests
         }
 
         [Test]
+        [Category("YL.Module.SaveBcl")]
         public void DefaultJsonContractIsBareDictionaryAndReadsBack()
         {
             var source = new SerializedDictionary<string, int>();
@@ -44,6 +45,7 @@ namespace YLFramework.Tests
         }
 
         [Test]
+        [Category("YL.Module.SaveBcl")]
         public void NestedRecordUsesActualSaveSettingsWithoutChangingOrCallingSaveManager()
         {
             var source = new Record();
@@ -60,6 +62,7 @@ namespace YLFramework.Tests
         }
 
         [Test]
+        [Category("YL.Module.SaveBcl")]
         public void IntegerAndEnumKeysRoundTripAsJsonPropertyNames()
         {
             var integers = new SerializedDictionary<int, int> { { 0, 1 }, { -2, 3 } };
@@ -78,6 +81,7 @@ namespace YLFramework.Tests
         }
 
         [Test]
+        [Category("YL.Module.SaveBcl")]
         public void JsonDuplicateNamesAndConvertedKeysUseLastValueWhileBadInputThrows()
         {
             var restored = JsonConvert.DeserializeObject<SerializedDictionary<string, int>>("{\"a\":1,\"a\":2}");

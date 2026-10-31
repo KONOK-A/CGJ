@@ -21,6 +21,7 @@ namespace YLFramework.Tests.Actions
         private readonly List<GameObject> _roots = new List<GameObject>();
         private readonly List<AudioClip> _clips = new List<AudioClip>();
         private ActionRecycleDriver _previousRecycle;
+        private YLFramework.Update.UpdateManager _previousUpdateHost;
         private bool _ownsEnvironment;
         private bool _ownsActionSession;
 
@@ -31,6 +32,7 @@ namespace YLFramework.Tests.Actions
             _ownsActionSession = false;
             var canOwnActionSession = ActionFixtureSession.CanOwnUninitializedSession();
             _previousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _previousUpdateHost = Object.FindObjectOfType<YLFramework.Update.UpdateManager>(true);
             Assert.That(Object.FindObjectOfType<ActionGlobalHost>(true) == null, Is.True,
                 "This fixture must own its global coroutine host.");
             _ownsEnvironment = true;
@@ -144,6 +146,8 @@ namespace YLFramework.Tests.Actions
                     _ownsActionSession = false;
                 }
             }
+            yield return null;
+            ActionFixtureSession.ReleaseIdleUpdateHost(_previousUpdateHost);
             yield return null;
         }
 

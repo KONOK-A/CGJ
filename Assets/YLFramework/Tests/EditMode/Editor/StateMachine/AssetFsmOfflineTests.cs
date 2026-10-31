@@ -11,6 +11,7 @@ using YLFramework.Editor.StateMachine;
 
 namespace YLFramework.Tests.Extensions.Behavior
 {
+    [Category("YL.Module.Behavior")]
     public class AssetFsmOfflineTests
     {
         private static string Root => Environment.GetEnvironmentVariable("YL_BEHAVIOR_ROOT") ?? Directory.GetCurrentDirectory();
@@ -107,14 +108,16 @@ namespace YLFramework.Tests.Extensions.Behavior
         [Test]
         public void NewScriptCreationRejectsOccupiedPathWithoutChangingExistingBytes()
         {
-            string directory = Path.Combine(Root, "Temp", "Behavior.Offline", "WriterTest_" + Guid.NewGuid().ToString("N"));
+            string directory = Path.Combine(Environment.GetEnvironmentVariable("YL_TEST_OUTPUT_ROOT") ?? Path.GetTempPath(),
+                "WriterTest_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
             try
             {
                 string path = Path.Combine(directory, "Occupied.cs");
                 File.WriteAllText(path, "// Existing filename/type mismatch must not authorize an overwrite.\nclass DifferentType {}\n");
                 byte[] before = File.ReadAllBytes(path);
-                var writer = typeof(FsmEditorWindow).Assembly.GetType("YLFramework.Editor.StateMachine.FsmStateFileWriter", true);
+                var writer = AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetType("YLFramework.Editor.StateMachine.FsmStateFileWriter"))
+                    .Single(type => type != null);
                 var method = writer.GetMethod("TryWriteNew");
                 var args = new object[] { path, "class Replacement {}", null };
                 Assert.That(method.Invoke(null, args), Is.EqualTo(false));

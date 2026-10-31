@@ -6,6 +6,7 @@ using NUnit.Framework;
 
 namespace YLFramework.Tests.Extensions.Behavior
 {
+    [Category("YL.Module.Behavior")]
     public class OverlapOfflineTests
     {
         private static string Root => Environment.GetEnvironmentVariable("YL_BEHAVIOR_ROOT") ?? Directory.GetCurrentDirectory();

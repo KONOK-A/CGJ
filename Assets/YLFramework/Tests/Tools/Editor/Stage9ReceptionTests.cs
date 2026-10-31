@@ -587,13 +587,22 @@ public static class Stage9ReceptionTests
                 }
             }
             var validation = Path.Combine((string)Owner["Delivery"], Path.GetFileName(Project) + "-tests-input-validation-" + Run + ".json");
-            if (File.Exists(validation)) { throw new IOException("Never overwrite runner input validation."); }
+            if (File.Exists(validation))
+            {
+                throw new IOException("Never overwrite runner input validation.");
+            }
             File.WriteAllText(validation, new JObject
             {
-                ["Passed"] = true, ["OwnerSha256"] = currentBinding["OwnerSha256"], ["PackageSha256"] = currentBinding["PackageSha256"],
-                ["DiscoverySha256"] = FileHash(_discoveryPath), ["CompilationSha256"] = currentBinding["CompilationSha256"]
+                ["Passed"] = true,
+                ["OwnerSha256"] = currentBinding["OwnerSha256"],
+                ["PackageSha256"] = currentBinding["PackageSha256"],
+                ["DiscoverySha256"] = FileHash(_discoveryPath),
+                ["CompilationSha256"] = currentBinding["CompilationSha256"]
             }.ToString(Formatting.Indented));
-            if (string.IsNullOrEmpty(_profilePath) || Argument("-testPlatform") != "EditMode") { return; }
+            if (string.IsNullOrEmpty(_profilePath) || Argument("-testPlatform") != "EditMode")
+            {
+                return;
+            }
             var delivery = (string)Owner["Delivery"];
             var prefix = Path.GetFileName(Project) + "-tests-profile-";
             var name = Path.GetFileNameWithoutExtension(_profilePath);
@@ -768,7 +777,10 @@ public static class Stage9ReceptionTests
                 };
                 if (inputBinding != null)
                 {
-                    foreach (var property in inputBinding.Properties()) { proof[property.Name] = property.Value; }
+                    foreach (var property in inputBinding.Properties())
+                    {
+                        proof[property.Name] = property.Value;
+                    }
                 }
                 File.WriteAllText(output, proof.ToString(Formatting.Indented));
                 var completedApi = _api;
@@ -1014,8 +1026,10 @@ public static class Stage9ReceptionTests
 
     private static string ClassifierHash() => TextHash(new JObject
     {
-        ["HostOnly"] = JArray.FromObject(HostOnly), ["Historical"] = JArray.FromObject(Historical),
-        ["PlatformBound"] = JArray.FromObject(PlatformBound), ["Excel"] = JArray.FromObject(Excel)
+        ["HostOnly"] = JArray.FromObject(HostOnly),
+        ["Historical"] = JArray.FromObject(Historical),
+        ["PlatformBound"] = JArray.FromObject(PlatformBound),
+        ["Excel"] = JArray.FromObject(Excel)
     }.ToString(Formatting.None));
 
     private static JObject CaptureTestBinding(UnityEditor.Compilation.Assembly[] graph)
@@ -1029,18 +1043,35 @@ public static class Stage9ReceptionTests
             var directory = pending.Pop();
             foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
             {
-                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) { throw new IOException("Linked test input rejected: " + entry); }
-                if (Directory.Exists(entry)) { pending.Push(entry); continue; }
-                if (!new[] { ".cs", ".asmdef", ".asmref", ".rsp" }.Contains(Path.GetExtension(entry))) { continue; }
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new IOException("Linked test input rejected: " + entry);
+                }
+                if (Directory.Exists(entry))
+                {
+                    pending.Push(entry);
+                    continue;
+                }
+                if (!new[] { ".cs", ".asmdef", ".asmref", ".rsp" }.Contains(Path.GetExtension(entry)))
+                {
+                    continue;
+                }
                 paths.Add(entry.Substring(Project.Length + 1).Replace('\\', '/'));
-                if (File.Exists(entry + ".meta")) { paths.Add((entry + ".meta").Substring(Project.Length + 1).Replace('\\', '/')); }
+                if (File.Exists(entry + ".meta"))
+                {
+                    paths.Add((entry + ".meta").Substring(Project.Length + 1).Replace('\\', '/'));
+                }
             }
         }
-        foreach (var relative in new[] { "stage9-owner.json", "Packages/manifest.json", "Packages/packages-lock.json", "ProjectSettings/ProjectSettings.asset", "ProjectSettings/EditorSettings.asset" }) { paths.Add(relative); }
+        foreach (var relative in new[] { "stage9-owner.json", "Packages/manifest.json", "Packages/packages-lock.json", "ProjectSettings/ProjectSettings.asset", "ProjectSettings/EditorSettings.asset" })
+        {
+            paths.Add(relative);
+        }
         var files = new JArray(paths.Select(relative => new JObject { ["Path"] = relative, ["Sha256"] = FileHash(Path.Combine(Project, relative)) }));
         var assemblies = new JArray(graph.OrderBy(assembly => assembly.name, StringComparer.Ordinal).Select(assembly => new JObject
         {
-            ["Name"] = assembly.name, ["Defines"] = JArray.FromObject(assembly.defines.OrderBy(value => value, StringComparer.Ordinal)),
+            ["Name"] = assembly.name,
+            ["Defines"] = JArray.FromObject(assembly.defines.OrderBy(value => value, StringComparer.Ordinal)),
             ["Sources"] = JArray.FromObject(assembly.sourceFiles.Select(value => value.Replace('\\', '/')).OrderBy(value => value, StringComparer.Ordinal)),
             ["References"] = JArray.FromObject(assembly.assemblyReferences.Select(value => value.name).OrderBy(value => value, StringComparer.Ordinal)),
             ["OutputSha256"] = FileHash(assembly.outputPath)
@@ -1050,10 +1081,14 @@ public static class Stage9ReceptionTests
         var modern = defines.Contains("ENABLE_INPUT_SYSTEM");
         return new JObject
         {
-            ["OwnerSha256"] = FileHash(Path.Combine(Project, "stage9-owner.json")), ["PackageSha256"] = Owner["PackageSha256"],
-            ["InputFiles"] = files, ["CompilationSha256"] = TextHash(assemblies.ToString(Formatting.None)), ["ClassifierSha256"] = ClassifierHash(),
+            ["OwnerSha256"] = FileHash(Path.Combine(Project, "stage9-owner.json")),
+            ["PackageSha256"] = Owner["PackageSha256"],
+            ["InputFiles"] = files,
+            ["CompilationSha256"] = TextHash(assemblies.ToString(Formatting.None)),
+            ["ClassifierSha256"] = ClassifierHash(),
             ["InputMode"] = legacy ? (modern ? 2 : 0) : (modern ? 1 : -1),
-            ["EnterPlayModeOptionsEnabled"] = EditorSettings.enterPlayModeOptionsEnabled, ["EnterPlayModeOptions"] = EditorSettings.enterPlayModeOptions.ToString()
+            ["EnterPlayModeOptionsEnabled"] = EditorSettings.enterPlayModeOptionsEnabled,
+            ["EnterPlayModeOptions"] = EditorSettings.enterPlayModeOptions.ToString()
         };
     }
 

@@ -181,6 +181,10 @@ namespace YLFramework.Behavior.Acceptance
 
         internal static BuildReport Build(ScriptingImplementation expected, bool development, string outputDirectory = null)
         {
+            if (Array.IndexOf(PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone).Split(';'), "YL_BEHAVIOR_ACCEPTANCE") < 0)
+            {
+                throw new InvalidOperationException("The explicit Player host must enable YL_BEHAVIOR_ACCEPTANCE before building the probe.");
+            }
             if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64 || PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) != expected)
             {
                 throw new InvalidOperationException($"Select Windows64 and {expected} in the main Unity integration workspace first. This tool does not modify ProjectSettings.");

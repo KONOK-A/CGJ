@@ -280,7 +280,7 @@ namespace YLFramework.Actions
         internal static void ReleaseAll()
         {
             List<Exception> errors = null;
-            foreach (var host in FindObjectsOfType<ActionGlobalHost>(true))
+            foreach (var host in FindObjectsByType<ActionGlobalHost>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 try
                 {

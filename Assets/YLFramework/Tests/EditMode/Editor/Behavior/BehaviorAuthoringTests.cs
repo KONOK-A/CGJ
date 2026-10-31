@@ -1202,7 +1202,9 @@ namespace YLFramework.Tests.Extensions.Behavior
             public bool SendNativeGraphEvent(Event input)
             {
                 bool handled = false;
+                Debug.Log("[YL NativeInput] Sending " + input.type + ": button=" + input.button + ", key=" + input.keyCode);
                 InGraphContext(() => handled = SendEvent(input));
+                Debug.Log("[YL NativeInput] Dispatched " + input.type);
                 return handled;
             }
 
@@ -1291,13 +1293,17 @@ namespace YLFramework.Tests.Extensions.Behavior
         }
 
         [UnityTest]
+        [Category("YL.Special.NativeInput")]
         public IEnumerator NativeWindowMouseSelectionRoutesDeleteToTheSelectedNode()
         {
             var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
             try
             {
+                Debug.Log("[YL NativeInput] Opening selection window");
                 window.Initialize();
+                Debug.Log("[YL NativeInput] Selection graph initialized");
                 window.ShowUtility();
+                Debug.Log("[YL NativeInput] Selection utility shown");
                 window.position = new Rect(160, 120, 800, 500);
                 window.RestoreUserContextBetweenInputEvents();
                 for (int i = 0; i < 8; i++)
@@ -1306,6 +1312,7 @@ namespace YLFramework.Tests.Extensions.Behavior
                     yield return null;
                 }
                 var graph = window.Graph;
+                Debug.Log("[YL NativeInput] Selection window laid out");
                 var node = graph.GetNode("Idle");
                 var point = node.worldBound.center;
                 var previousFocus = new TextField { value = "Focus starts outside the graph" };
@@ -1335,6 +1342,7 @@ namespace YLFramework.Tests.Extensions.Behavior
         }
 
         [UnityTest]
+        [Category("YL.Special.NativeInput")]
         public IEnumerator NativeBackgroundRightClickOffersStateAndSubStateCreation()
         {
             var window = ScriptableObject.CreateInstance<GraphPreviewWindow>();
@@ -1366,6 +1374,9 @@ namespace YLFramework.Tests.Extensions.Behavior
                 {
                     actions = evt.menu.MenuItems().OfType<DropdownMenuAction>().ToList();
                     evt.PreventDefault();
+                    // Unity 6 的 PostDispatch 不再检查 PreventDefault；保留原动作，仅阻止阻塞式菜单显示。
+                    evt.menu.MenuItems().Clear();
+                    evt.StopImmediatePropagation();
                 });
                 window.Focus();
                 window.SendNativeGraphEvent(new Event { type = EventType.MouseDown, button = 1, clickCount = 1, mousePosition = point });

@@ -9,6 +9,7 @@ using YLFramework.Serialization;
 
 namespace YLFramework.Tests.Extensions.Data.Save
 {
+    [Category("YL.Module.SaveBcl")]
     public class SaveManagerFacadeTests
     {
         public class Record

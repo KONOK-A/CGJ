@@ -54,7 +54,7 @@ namespace YLFramework.Actions
         internal static void ReleaseOwnedInstance()
         {
             // 只销毁模块自行实例化的画布，保留场景中用户提供的对象。
-            foreach (var canvas in FindObjectsOfType<ScreenTransitionCanvas>(true))
+            foreach (var canvas in FindObjectsByType<ScreenTransitionCanvas>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 canvas.ReleaseHost(true);
             }

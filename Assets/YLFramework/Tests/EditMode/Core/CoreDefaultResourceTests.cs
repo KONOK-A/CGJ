@@ -19,6 +19,7 @@ namespace YLFramework.Core.Tests
 
         [TestCase("Canvas")]
         [TestCase("EventSystem")]
+        [Category("YL.Integration.LegacyXF")]
         public void DefaultResourcesHaveUniqueKeysAndIndependentIdentities(string name)
         {
             string key = "YLFramework/Core/" + name;
@@ -70,6 +71,7 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
+        [Category("YL.Integration.LegacyXF")]
         public void LightweightCanvasHasAnExplicitRootAndPreservesNativeScaleConfiguration()
         {
             string path = ResourceRoot + "YLFramework/Core/Canvas.prefab";

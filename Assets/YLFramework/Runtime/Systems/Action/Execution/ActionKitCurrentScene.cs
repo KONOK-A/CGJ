@@ -57,7 +57,7 @@ namespace YLFramework.Actions
         // Shutdown 专用：只释放模块自建的宿主（借用场景组件时保留组件本身），再清空单例与静态缓存。
         internal static void ReleaseOwnedInstances()
         {
-            foreach (var instance in FindObjectsOfType<ActionKitCurrentScene>(true))
+            foreach (var instance in FindObjectsByType<ActionKitCurrentScene>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 if (instance.OwnsHostGameObject)
                 {

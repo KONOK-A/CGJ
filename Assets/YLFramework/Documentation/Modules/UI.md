@@ -191,7 +191,7 @@ named/direct 解析到同一 Prefab 可共享 Single，但成功实例的租约�
 
 | 验证 | 入口与边界 |
 |---|---|
-| 离线源码检查 | `pwsh -NoProfile -File Tools/Verify-UIPanel.ps1 -Mode Pure`；另有 `PureCore`、`Runtime`、`Editor`、`EditorTools`、`CoreEditMode`、`CorePlayMode`、`CoreEditorTests`。`Syntax` 只解析 Acceptance 的 C#9 语法，不检查绑定。输出在当前 worktree `Temp/UI.Panel.Offline`，不替代 Unity 导入、原生行为或 Player |
+| 源码与日常测试 | `pwsh -NoLogo -NoProfile -NonInteractive -File Tools/Testing/Invoke-YLTests.ps1 -Action Run -Suite Daily -Module Core -Unity <Unity.exe> -WorkspaceRoot <自有工作根>`；Foundation同入口换模块。真实UTF发现、逐模式执行、XML和进程退出闭合；前置、逻辑层与显式专项见源码仓库 `Tools/Testing/README.md`。旧UIPanel辅助编译入口已退役，不能将编译当测试或Player结果 |
 | 资产迁移工具 | `Editor/Core/UIPanelAssetMigration.cs`，先预检再显式迁移，检查实际资产 diff、身份、重载和实例化 |
 | 真实场景与连续 Play | `Tests/Acceptance/Core/UIAcceptance.unity` 使用正式 Prefab；夹具在 `Tests/Fixtures/Core/`。每轮 READY 后按原入口 PrepareExit、真正停止 Play、VerifyExit；两轮之间不编译或重载 |
 | Windows64 IL2CPP | `YLFramework.Editor.UIPanelAcceptanceBuild.BuildWindows64IL2CPP()` 或菜单 `YLFramework/Core/UI Panel/构建 Windows64 IL2CPP 验收`；源码在 `Tests/EditMode/Editor/Core/UIPanelAcceptanceBuild.cs` |

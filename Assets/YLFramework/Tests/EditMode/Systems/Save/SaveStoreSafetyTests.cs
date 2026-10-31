@@ -10,6 +10,7 @@ using YLFramework.Save;
 
 namespace YLFramework.Tests.Extensions.Data.Save
 {
+    [Category("YL.Module.SaveBcl")]
     public class SaveStoreSafetyTests
     {
         public class Payload

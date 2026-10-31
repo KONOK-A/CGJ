@@ -33,7 +33,8 @@ $allowedRoots = @(
     'Tools/YLFramework.Analyzers/Analyzer',
     'Tools/YLFramework.Analyzers/Tests'
 )
-$allowedFiles = @('Tools/UIPanelOfflineRunner.cs')
+$allowedFiles = @('Tools/Testing/NUnitHost.cs', 'Tools/Testing/DistributionEntry.cs', 'Tools/Testing/PlayerSmoke.cs',
+    'Tools/Testing/HybridCLREntry.cs', 'Tools/Testing/HybridCLRSmoke.cs')
 $files = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
 function Test-AllowedPath {

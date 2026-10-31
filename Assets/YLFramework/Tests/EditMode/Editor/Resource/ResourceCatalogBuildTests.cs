@@ -13,6 +13,7 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.ResourceBuild
 {
+    [Category("YL.Module.Resource")]
     public class ResourceCatalogBuildTests
     {
         internal static ResourceCatalogDocument Create(ResourceBuildResult result, string app = "fixture-v1")

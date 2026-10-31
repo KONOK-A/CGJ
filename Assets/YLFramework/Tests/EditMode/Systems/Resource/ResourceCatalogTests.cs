@@ -7,8 +7,22 @@ using ResourceLocation = YLFramework.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.Resource
 {
+    [Category("YL.Module.Resource")]
     public class ResourceCatalogTests
     {
+        [Test]
+        public void ResourceSourceIdentityIsSeparateFromExceptionDiagnosticSource()
+        {
+            var address = new ResourceAddress("fixture", "Text/Message");
+            var cause = new InvalidOperationException("Original failure");
+            var error = new ResourceException(ResourceError.LoadFailed, "Resource failure", cause, address, ResourceSourceId.Resources);
+            ((Exception)error).Source = "Caller.Component";
+            Assert.That(error.Source, Is.EqualTo(ResourceSourceId.Resources));
+            Assert.That(((Exception)error).Source, Is.EqualTo("Caller.Component"));
+            Assert.That(error.Address, Is.EqualTo(address));
+            Assert.That(error.InnerException, Is.SameAs(cause));
+        }
+
         [Test]
         public void CatalogResolvesAliasesToOneEntryAndCopiesInputs()
         {

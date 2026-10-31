@@ -197,6 +197,7 @@ namespace YLFramework.Core.Tests
 
 #if ENABLE_LEGACY_INPUT_MANAGER
         [UnityTest]
+        [Category("YL.Integration.LegacyXF")]
         public IEnumerator ExistingXFEventSystemIsReusedWithoutTakingOwnershipOrChangingInput()
         {
             var originalPrefab = Resources.Load<GameObject>("XFGameFramework/EventSystem");
@@ -244,6 +245,7 @@ namespace YLFramework.Core.Tests
 #endif
 
         [UnityTest]
+        [Category("YL.Integration.LegacyXF")]
         public IEnumerator ExplicitRootsPreserveNativeConfigurationAndCoexistWithXFCanvas()
         {
             var originalPrefab = Resources.Load<GameObject>("XFGameFramework/Canvas");

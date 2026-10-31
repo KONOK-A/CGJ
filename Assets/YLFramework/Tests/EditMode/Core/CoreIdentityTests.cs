@@ -84,6 +84,7 @@ namespace YLFramework.Core.Tests
         }
 
         [Test]
+        [Category("YL.Integration.LegacyXF")]
         public void SerializedDictionaryHasOneFoundationOwnerAndLegacyTypesExit()
         {
             var foundation = typeof(CustomAsyncOperation<>).Assembly;

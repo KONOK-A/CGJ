@@ -9,6 +9,7 @@ using YLFramework.Events;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
+    [Category("YL.Module.Domain")]
     public class LoggerSessionTests
     {
         private Type SessionType => typeof(EventChannel).Assembly.GetType("YLFramework.Logging.LoggerSession");

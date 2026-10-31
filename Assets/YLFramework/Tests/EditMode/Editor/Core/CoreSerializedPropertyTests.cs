@@ -420,6 +420,7 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Test]
+        [Category("YL.Integration.CrossModuleAuthoring")]
         public void AcceptanceAuthoringFieldsKeepExactFormerNames()
         {
             var contracts = new[]
@@ -467,6 +468,7 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Test]
+        [Category("YL.Integration.CrossModuleAuthoring")]
         public void LegacyAcceptancePrefabKeepsReferencesAndIdentity()
         {
             var type = AppDomain.CurrentDomain.GetAssemblies()

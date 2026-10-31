@@ -43,7 +43,7 @@ namespace YLFramework.Actions
         // 模块级释放：销毁所有驱动器实例并清空缓存引用，不处理队列内容（Shutdown 会先 Drain）。
         internal static void ReleaseAll()
         {
-            foreach (var instance in FindObjectsOfType<ActionRecycleDriver>(true))
+            foreach (var instance in FindObjectsByType<ActionRecycleDriver>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
             {
                 instance.ReleaseHost();
             }

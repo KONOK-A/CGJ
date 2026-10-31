@@ -12,6 +12,7 @@ using YLFramework.Excel;
 namespace YLFramework.Tests.Extensions.Data
 {
     [TestFixture]
+    [Category("YL.Module.Excel")]
     public class ExcelAuthoringTests
     {
         public enum Mode : long

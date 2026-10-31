@@ -67,7 +67,7 @@ namespace YLFramework.Tests.ResourceBuild
                         },
                         additionalDefines = Array.Empty<string>()
                     };
-                    bool Allowed(string path) => YLFramework.Tests.Audio.AudioSourceIndependenceTests.IsAllowedReference(
+                    bool Allowed(string path) => TestDependencyGuard.IsAllowedReference(
                         path, EditorApplication.applicationContentsPath, ui, false, json);
                     var trusted = graph.allReferences.Select(Path.GetFullPath).Where(Allowed).ToArray();
                     builder.excludeReferences = builder.defaultReferences.Where(x => !trusted.Contains(Path.GetFullPath(x), StringComparer.OrdinalIgnoreCase)).ToArray();

@@ -624,6 +624,8 @@ namespace YLFramework.Tests.DomainMain
             {
                 Identity();
                 Require(!TestRunActive() && !EditorApplication.isPlayingOrWillChangePlaymode && !EditorUtility.scriptCompilationFailed && !BuildPipeline.isBuildingPlayer, "Unsafe build state.");
+                Require(PlayerSettings.GetScriptingDefineSymbolsForGroup(BuildTargetGroup.Standalone).Split(';').Contains("YL_DOMAIN_ACCEPTANCE"),
+                    "The explicit Player host must enable YL_DOMAIN_ACCEPTANCE; ordinary production builds must not include the probe.");
                 Require(BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64), "Windows64 build support unavailable.");
                 Require(PlayerSettings.GetIl2CppCompilerConfiguration(BuildTargetGroup.Standalone) == Il2CppCompilerConfiguration.Release, "The original compiler must be Release; do not insert an unrelated sparse compiler key.");
                 if (PlayerSettings.GetScriptingBackend(BuildTargetGroup.Standalone) != backend)
@@ -697,7 +699,7 @@ namespace YLFramework.Tests.DomainMain
                     Require(File.Exists(output + "/Player/GameAssembly.dll"), "Missing native IL2CPP output.");
                     string stripped = "Library/Bee/artifacts/WinPlayerBuildProgram/ManagedStripped";
                     Directory.CreateDirectory(output + "/managed-stripped");
-                    foreach (string assembly in new[] { "YLFramework.Runtime", "Assembly-CSharp" })
+                    foreach (string assembly in new[] { "YLFramework.Runtime", typeof(YLFramework.Tests.DomainAcceptance.DomainAcceptanceProbe).Assembly.GetName().Name })
                     {
                         File.Copy(stripped + "/" + assembly + ".dll", output + "/managed-stripped/" + assembly + ".dll");
                     }

@@ -121,12 +121,22 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [UnityTest]
+        [Category("YL.Integration.LegacyXF")]
         public IEnumerator MergedRuntimeHasActualUnityPositiveAndNegativeAnalyzerWitnesses()
             => CompileAnalyzerWitnesses(AssemblyBuilderFlags.EditorAssembly);
 
         [UnityTest]
+        [Category("YL.Integration.LegacyXF")]
         public IEnumerator MergedRuntimeHasActualUnityPlayerPositiveAndNegativeAnalyzerWitnesses()
             => CompileAnalyzerWitnesses(AssemblyBuilderFlags.DevelopmentBuild);
+
+        [UnityTest]
+        public IEnumerator FormalRuntimeHasActualUnityPositiveAndNegativeAnalyzerWitnesses()
+            => CompileAnalyzerWitnesses(AssemblyBuilderFlags.EditorAssembly, false);
+
+        [UnityTest]
+        public IEnumerator FormalRuntimeHasActualUnityPlayerPositiveAndNegativeAnalyzerWitnesses()
+            => CompileAnalyzerWitnesses(AssemblyBuilderFlags.DevelopmentBuild, false);
 
         [UnityTest]
         public IEnumerator NewUsageRulesHaveActualUnityPositiveAndNegativeWitnesses()
@@ -194,7 +204,7 @@ namespace YLFramework.Core.Editor.Tests
             }
         }
 
-        private static IEnumerator CompileAnalyzerWitnesses(AssemblyBuilderFlags flags)
+        private static IEnumerator CompileAnalyzerWitnesses(AssemblyBuilderFlags flags, bool legacy = true)
         {
             var editor = (flags & AssemblyBuilderFlags.EditorAssembly) != 0;
             var runtime = CompilationPipeline.GetAssemblies(editor ? AssembliesType.Editor : AssembliesType.Player)
@@ -238,7 +248,7 @@ namespace YLFramework.Core.Editor.Tests
                     var errors = messages.Where(message => message.type == CompilerMessageType.Error).ToArray();
                     // 故意违规同时触发原 XF 全局分析器；保留其 Error，不用关闭它来验收自有 Warning。
                     Assert.That(errors.Select(message => Regex.Match(message.message, @"\berror ([A-Z0-9_]+):").Groups[1].Value),
-                        Is.EquivalentTo(negative ? new[] { "MUST_CALL_BASE_ATTRIBUTE", "DISABLE_NEW", "PROTECTED_HIERARCHY_MODIFICATION",
+                        Is.EquivalentTo(negative && legacy ? new[] { "MUST_CALL_BASE_ATTRIBUTE", "DISABLE_NEW", "PROTECTED_HIERARCHY_MODIFICATION",
                             "METHOD_LOCAL_ONLY_TYPE", "RESTRICTED_CALL_ATTRIBUTE" } : Array.Empty<string>()),
                         string.Join("\n", errors.Select(message => message.message)));
                     Assert.That(messages.Any(message => message.message.Contains("AD0001")), Is.False);
@@ -246,7 +256,7 @@ namespace YLFramework.Core.Editor.Tests
                     Assert.That(diagnostics.All(message => message.type == CompilerMessageType.Warning), Is.True);
                     Assert.That(diagnostics.Select(message => Regex.Match(message.message, @"\bYL000[1-7]\b").Value),
                         Is.EquivalentTo(negative ? Enumerable.Range(1, 7).Select(id => "YL000" + id) : Array.Empty<string>()));
-                    Assert.That(File.Exists(output), Is.EqualTo(!negative));
+                    Assert.That(File.Exists(output), Is.EqualTo(!negative || !legacy));
                 }
             }
             finally
@@ -388,6 +398,7 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Test]
+        [Category("YL.Integration.LegacyXF")]
         public void CoreAudioHasRetiredWhileFormalRuntimeAndOriginalPackageKeepSeparateIdentities()
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -412,6 +423,7 @@ namespace YLFramework.Core.Editor.Tests
         }
 
         [Test]
+        [Category("YL.Integration.LegacyXF")]
         public void EditorFilesHaveIndependentImportedGuidsAndExcludePackageManagementAndDlls()
         {
             var package = PackageInfo.GetAllRegisteredPackages().Single(p => p.name == "com.xfkj.xfgameframework");

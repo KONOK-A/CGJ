@@ -126,7 +126,7 @@ namespace YLFramework.Actions
             {
                 // 不在业务回调栈内回收宿主，避免当前栈访问刚复用的动作或控制器。
                 _isShutdownPending = true;
-                foreach (var executor in UnityEngine.Object.FindObjectsOfType<MonoUpdateActionExecutor>(true))
+                foreach (var executor in UnityEngine.Object.FindObjectsByType<MonoUpdateActionExecutor>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
                 {
                     executor.StopAll();
                 }
@@ -178,7 +178,7 @@ namespace YLFramework.Actions
                     Cleanup(Architecture.OnDeinit);
                 }
 
-                foreach (var executor in UnityEngine.Object.FindObjectsOfType<MonoUpdateActionExecutor>(true))
+                foreach (var executor in UnityEngine.Object.FindObjectsByType<MonoUpdateActionExecutor>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
                 {
                     Cleanup(executor.StopAll);
                     executor.enabled = false;

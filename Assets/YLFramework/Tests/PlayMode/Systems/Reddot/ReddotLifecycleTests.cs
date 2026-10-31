@@ -4,6 +4,7 @@ using YLFramework.RedDots;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
+    [Category("YL.Module.Reddot")]
     public class ReddotLifecycleTests
     {
         [Test]

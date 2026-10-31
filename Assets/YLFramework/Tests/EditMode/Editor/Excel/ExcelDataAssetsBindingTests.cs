@@ -12,6 +12,7 @@ using YLFramework.Editor.DataAssets;
 namespace YLFramework.Tests.Extensions.Data
 {
     [TestFixture]
+    [Category("YL.Module.Excel")]
     public class ExcelDataAssetsBindingTests
     {
         private ScriptableObjectConfigs _root;

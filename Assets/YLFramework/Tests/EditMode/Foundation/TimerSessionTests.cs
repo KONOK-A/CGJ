@@ -20,6 +20,7 @@ using YLFramework.Update;
 namespace YLFramework.Foundation.Tests
 {
     // 使用真实 Enter/ExitPlayMode；不写 session/gate，也不调用模拟 reset。
+    [Category("YL.Special.Session")]
     public class TimerSessionTests
     {
         private const BindingFlags StaticPrivate = BindingFlags.Static | BindingFlags.NonPublic;

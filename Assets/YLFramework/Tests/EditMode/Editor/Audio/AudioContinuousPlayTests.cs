@@ -12,6 +12,7 @@ using YLFramework.Audio;
 
 namespace YLFramework.Tests.AudioSession
 {
+    [Category("YL.Special.AudioSession")]
     public class AudioContinuousPlayTests
     {
         private static readonly object _domainIdentity = new object();

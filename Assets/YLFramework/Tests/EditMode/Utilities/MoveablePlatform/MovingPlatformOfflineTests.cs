@@ -7,6 +7,7 @@ using UnityEngine;
 
 namespace YLFramework.Tests.Extensions.Behavior
 {
+    [Category("YL.Module.Behavior")]
     public class MovingPlatformOfflineTests
     {
         private static Type PathType

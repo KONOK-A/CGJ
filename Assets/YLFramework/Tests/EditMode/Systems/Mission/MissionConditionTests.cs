@@ -6,6 +6,7 @@ using YLFramework.Mission;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
+    [Category("YL.Module.Domain")]
     public class MissionConditionTests
     {
         private Type Find(string name)

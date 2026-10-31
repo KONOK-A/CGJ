@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.TestTools;
+using static YLFramework.Tests.TestDependencyGuard;
 
 namespace YLFramework.Tests.Audio
 {
@@ -87,7 +88,7 @@ namespace YLFramework.Tests.Audio
                 };
                 var json = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "Newtonsoft.Json.dll");
                 var contentCrypto = profile.compiledAssemblyReferences.Single(x => Path.GetFileName(x) == "BouncyCastle.Cryptography.dll");
-                Assert.That(Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(contentCrypto), Is.True);
+                Assert.That(TestDependencyGuard.IsApprovedBouncyCastleReference(contentCrypto), Is.True);
                 Assert.That(File.Exists(json), Is.True);
                 Assert.That(builder.defaultDefines.Contains("UNITY_EDITOR"), Is.EqualTo(editor));
                 var contents = EditorApplication.applicationContentsPath;
@@ -165,54 +166,5 @@ namespace YLFramework.Tests.Audio
             Assert.That(IsAllowedReference(ui, contents, ui, false), Is.True);
         }
 
-        internal static bool IsAllowedReference(string path, string unityContents, string ui, bool editor, string json = null)
-        {
-            var absolute = Path.GetFullPath(path);
-            if (Resource.FrameworkAssemblyIndependenceTests.IsApprovedBouncyCastleReference(absolute))
-            {
-                return true;
-            }
-
-            if (json != null && string.Equals(absolute, Path.GetFullPath(json), StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (string.Equals(absolute, Path.GetFullPath(ui), StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var name = Path.GetFileName(absolute);
-            if ((name == "UnityEngine.dll" || name.StartsWith("UnityEngine.", StringComparison.Ordinal)) && name != "UnityEngine.TestRunner.dll")
-            {
-                return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
-                    IsInsideFolder(absolute, Path.Combine(unityContents, "PlaybackEngines")) ||
-                    string.Equals(absolute, Path.GetFullPath(Path.Combine(unityContents, "Managed/UnityEngine.dll")), StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (editor && (name == "UnityEditor.dll" || name.StartsWith("UnityEditor.", StringComparison.Ordinal)) && name != "UnityEditor.TestRunner.dll")
-            {
-                // Unity 2022.3 的 Editor 模块与 Engine 模块同放在 Managed/UnityEngine，根 UnityEditor.dll 仅是 facade。
-                return IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEngine")) ||
-                    IsInsideFolder(absolute, Path.Combine(unityContents, "Managed/UnityEditor")) ||
-                    string.Equals(absolute, Path.GetFullPath(Path.Combine(unityContents, "Managed/UnityEditor.dll")), StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (name == "mscorlib.dll" || name == "netstandard.dll" || name == "Microsoft.CSharp.dll" || name == "System.dll" || name.StartsWith("System.", StringComparison.Ordinal))
-            {
-                return IsInsideFolder(absolute, Path.Combine(unityContents, "NetStandard")) ||
-                    IsInsideFolder(absolute, Path.Combine(unityContents, "UnityReferenceAssemblies")) ||
-                    IsInsideFolder(absolute, Path.Combine(unityContents, "MonoBleedingEdge/lib/mono"));
-            }
-
-            return false;
-        }
-
-        private static bool IsInsideFolder(string path, string folder)
-        {
-            var prefix = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            return Path.GetFullPath(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
-        }
     }
 }

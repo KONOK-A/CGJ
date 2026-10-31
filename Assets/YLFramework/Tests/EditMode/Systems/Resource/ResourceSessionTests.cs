@@ -13,6 +13,8 @@ using ResourceLocation = YLFramework.Resource.ResourceLocation;
 namespace YLFramework.Tests.Resource
 {
     // 正常 Domain Reload 的真实双 Play；不修改 ProjectSettings，也不运行原游戏场景。
+    [Category("YL.Module.Resource")]
+    [Category("YL.Special.ResourceSession")]
     public class ResourceSessionTests
     {
         private const string Key = "YL.Resource.8.1.Session.";
@@ -178,6 +180,8 @@ namespace YLFramework.Tests.Resource
         }
     }
 
+    [Category("YL.Module.Resource")]
+    [Category("YL.Special.ResourceSession")]
     public class ResourceSessionSafetyTests
     {
         [TestCase(false)]

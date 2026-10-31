@@ -15,6 +15,7 @@ namespace YLFramework.Tests.Extensions.Data
 {
     /// <summary>必须在主Unity运行；离线runner仅编译本类，不执行AssetDatabase或GUI。</summary>
     [TestFixture]
+    [Category("YL.Module.Excel")]
     public class ExcelAssetAuthoringTests
     {
         private string _assetFolder;

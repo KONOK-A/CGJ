@@ -15,6 +15,7 @@ using ResourceLocation = YLFramework.Resource.ResourceLocation;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
+    [Category("YL.Special.Session")]
     public class DomainTwoPlayTests
     {
         public sealed class SessionSkill : SkillBase

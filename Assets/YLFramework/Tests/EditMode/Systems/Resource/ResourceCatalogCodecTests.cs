@@ -11,6 +11,7 @@ using YLFramework.Resource;
 
 namespace YLFramework.Tests.ResourceBuild
 {
+    [Category("YL.Module.Resource")]
     public class ResourceCatalogCodecTests
     {
         private Type Codec => typeof(ResourceCatalog).Assembly.GetType("YLFramework.Resource.ResourceCatalogCodec");

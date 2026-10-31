@@ -17,6 +17,7 @@ using Object = UnityEngine.Object;
 
 namespace YLFramework.Tests.Audio
 {
+    [Category("YL.Special.AudioNative")]
     public class AudioResourceBundleTests
     {
         private const string Key = "YL.Audio86b.Native.";
@@ -293,6 +294,7 @@ namespace YLFramework.Tests.Audio
         }
 
         [UnityTest]
+        [Category("YL.Special.AudioSession")]
         public IEnumerator NativeCancelAudioShutdownRetryAndResourceExitDrainLateResults()
         {
             new ResourceSessionTests().SetUp();
@@ -348,6 +350,7 @@ namespace YLFramework.Tests.Audio
         }
 
         [UnityTest]
+        [Category("YL.Special.AudioSession")]
         public IEnumerator ProviderProgressReentrantExitNeverPublishesInvalidClip()
         {
             new ResourceSessionTests().SetUp();

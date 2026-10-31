@@ -21,6 +21,7 @@ namespace YLFramework.Tests.Actions
         private ActionGlobalHost _previousGlobal;
         private ActionKitCurrentScene _previousSceneHost;
         private ActionRecycleDriver _previousRecycle;
+        private YLFramework.Update.UpdateManager _previousUpdateHost;
         private float _previousTimeScale;
         private Scene _previousActiveScene;
         private bool _ownsActionSession;
@@ -35,6 +36,7 @@ namespace YLFramework.Tests.Actions
             _previousGlobal = Object.FindObjectOfType<ActionGlobalHost>(true);
             _previousSceneHost = Object.FindObjectOfType<ActionKitCurrentScene>(true);
             _previousRecycle = Object.FindObjectOfType<ActionRecycleDriver>(true);
+            _previousUpdateHost = Object.FindObjectOfType<YLFramework.Update.UpdateManager>(true);
             // Only self-owned executors may be destroyed before recycling this fixture's controllers.
             Assert.That(_previousGlobal == null, Is.True, "Run this fixture in an isolated test scene without an existing ActionKit global host; it will not modify another owner's executor.");
             Assert.That(_previousSceneHost == null, Is.True, "Run this fixture without an existing ActionKit current-scene host; it will not replace or destroy another owner's host.");
@@ -136,6 +138,8 @@ namespace YLFramework.Tests.Actions
                     _ownsActionSession = false;
                 }
             }
+            yield return null;
+            ActionFixtureSession.ReleaseIdleUpdateHost(_previousUpdateHost);
             yield return null;
         }
 

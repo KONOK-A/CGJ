@@ -7,6 +7,7 @@ using YLFramework.Skill;
 
 namespace YLFramework.Tests.Extensions.Domain
 {
+    [Category("YL.Module.Domain")]
     public class SkillBatchReentryTests
     {
         private sealed class Host : IEquippableSkill
